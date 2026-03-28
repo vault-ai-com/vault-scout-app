@@ -11,7 +11,7 @@ const statConfig = [
 
 const Dashboard = () => {
   const { data, isLoading, error } = useScoutDashboard();
-  const stats = data?.data ?? {};
+  const stats = (data?.data ?? {}) as Record<string, unknown>;
 
   return (
     <div className="p-4 md:p-6 space-y-6">

@@ -108,10 +108,38 @@ export const DiscoverResponseSchema = z.object({
 });
 export type DiscoverResponse = z.infer<typeof DiscoverResponseSchema>;
 
-export interface DashboardStats {
-  action: string;
-  data: Record<string, unknown>;
-}
+export const RecentAnalysisItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  analysis_type: z.string(),
+  overall_score: z.number(),
+  recommendation: z.string(),
+  completed_at: z.string(),
+});
+
+export const CriticalWatchlistItemSchema = z.object({
+  name: z.string(),
+  priority: z.string(),
+  status: z.string(),
+  deadline: z.string().nullable(),
+  notes: z.string().nullable(),
+});
+
+export const DashboardDataSchema = z.object({
+  total_players: z.number(),
+  total_analyses: z.number(),
+  watchlist_count: z.number(),
+  players_by_tier: z.record(z.number()).nullable(),
+  players_by_position: z.record(z.number()).nullable(),
+  recent_analyses: z.array(RecentAnalysisItemSchema).nullable(),
+  critical_watchlist: z.array(CriticalWatchlistItemSchema).nullable(),
+});
+
+export const DashboardStatsSchema = z.object({
+  action: z.string(),
+  data: DashboardDataSchema,
+});
+export type DashboardStats = z.infer<typeof DashboardStatsSchema>;
 
 // --- Report schemas ---
 export const ReportPlayerSchema = z.object({

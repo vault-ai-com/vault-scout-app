@@ -3,14 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   SearchResponseSchema,
   DiscoverResponseSchema,
+  DashboardStatsSchema,
   safeObject,
 } from "@/types/scout";
 import type { SearchResponse, DiscoverResponse, DashboardStats } from "@/types/scout";
 
-async function invokeScout<T>(functionName: string, body: Record<string, unknown>): Promise<T> {
+async function invokeScout(functionName: string, body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke(functionName, { body });
   if (error) throw new Error(error.message || "Edge function call failed");
-  return data as T;
+  return data;
 }
 
 export interface SearchParams {
@@ -28,7 +29,7 @@ export function useScoutSearch(params: SearchParams, enabled = true) {
   return useQuery<SearchResponse>({
     queryKey: ["scout-search", params],
     queryFn: async () => {
-      const raw = await invokeScout<unknown>("scout-search", { action: "search", ...params });
+      const raw = await invokeScout("scout-search", { action: "search", ...params });
       const parsed = safeObject(SearchResponseSchema, raw);
       if (!parsed) throw new Error("scout-search: unexpected response shape");
       return parsed;
@@ -40,7 +41,7 @@ export function useScoutSearch(params: SearchParams, enabled = true) {
 export function useScoutDiscover() {
   return useMutation<DiscoverResponse, Error, { criteria: string; position?: string; max_age?: number }>({
     mutationFn: async (vars) => {
-      const raw = await invokeScout<unknown>("scout-search", { action: "discover", ...vars });
+      const raw = await invokeScout("scout-search", { action: "discover", ...vars });
       const parsed = safeObject(DiscoverResponseSchema, raw);
       if (!parsed) throw new Error("scout-search discover: unexpected response shape");
       return parsed;
@@ -51,7 +52,12 @@ export function useScoutDiscover() {
 export function useScoutDashboard() {
   return useQuery<DashboardStats>({
     queryKey: ["scout-dashboard"],
-    queryFn: () => invokeScout<DashboardStats>("scout-search", { action: "dashboard" }),
+    queryFn: async () => {
+      const raw = await invokeScout("scout-search", { action: "dashboard" });
+      const parsed = safeObject(DashboardStatsSchema, raw);
+      if (!parsed) throw new Error("scout-search dashboard: unexpected response shape");
+      return parsed;
+    },
     staleTime: 60_000,
   });
 }
