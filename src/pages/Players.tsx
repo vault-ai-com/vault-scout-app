@@ -89,10 +89,11 @@ const Players = () => {
             <select id="filter-tier" value={tier} onChange={e => setTier(e.target.value)}
               className="px-3 py-1.5 rounded-lg text-xs bg-input border border-border text-foreground">
               <option value="">Alla</option>
+              <option value="world_class">Världsklass</option>
               <option value="elite">Elit</option>
-              <option value="established">Etablerad</option>
-              <option value="emerging">Talang</option>
-              <option value="prospect">Prospekt</option>
+              <option value="top_league">Topliga</option>
+              <option value="allsvenskan">Allsvenskan</option>
+              <option value="development">Talang</option>
             </select>
           </div>
           {(position || tier) && (

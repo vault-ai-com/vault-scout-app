@@ -8,10 +8,11 @@ interface PlayerCardProps {
 }
 
 const tierColors: Record<string, string> = {
+  world_class: "bg-purple-500/10 text-purple-400 border-purple-500/20",
   elite: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  established: "bg-primary/10 text-primary border-primary/20",
-  emerging: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  prospect: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+  top_league: "bg-primary/10 text-primary border-primary/20",
+  allsvenskan: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  development: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
 };
 
 export function PlayerCard({ player }: PlayerCardProps) {
@@ -27,7 +28,7 @@ export function PlayerCard({ player }: PlayerCardProps) {
             <h3 className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
               {player.name}
             </h3>
-            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${tierColors[player.tier] ?? tierColors.prospect}`}>
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${tierColors[player.tier] ?? tierColors.development}`}>
               {TIER_LABELS[player.tier] ?? player.tier}
             </span>
           </div>
@@ -35,11 +36,11 @@ export function PlayerCard({ player }: PlayerCardProps) {
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Trophy className="w-3 h-3" />
-              {player.position}
+              {player.position_primary}
             </span>
             <span className="flex items-center gap-1">
               <MapPin className="w-3 h-3" />
-              {player.club}
+              {player.current_club}
             </span>
           </div>
 
@@ -50,7 +51,7 @@ export function PlayerCard({ player }: PlayerCardProps) {
               <TrendingUp className="w-3 h-3" />
               {player.career_phase}
             </span>
-            {player.league && <span>{player.league}</span>}
+            {player.current_league && <span>{player.current_league}</span>}
           </div>
         </div>
       </div>

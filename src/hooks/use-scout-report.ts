@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ReportResponseSchema, safeObject } from "@/types/scout";
 import type { ReportResponse } from "@/types/scout";
 
 export function useGenerateReport() {
@@ -9,7 +10,9 @@ export function useGenerateReport() {
         body: { action: "generate", ...vars },
       });
       if (error) throw new Error(error.message || "Report generation failed");
-      return data as ReportResponse;
+      const parsed = safeObject(ReportResponseSchema, data);
+      if (!parsed) throw new Error("scout-report: unexpected response shape");
+      return parsed;
     },
   });
 }

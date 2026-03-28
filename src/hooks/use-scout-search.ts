@@ -1,5 +1,10 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  SearchResponseSchema,
+  DiscoverResponseSchema,
+  safeObject,
+} from "@/types/scout";
 import type { SearchResponse, DiscoverResponse, DashboardStats } from "@/types/scout";
 
 async function invokeScout<T>(functionName: string, body: Record<string, unknown>): Promise<T> {
@@ -22,14 +27,24 @@ export interface SearchParams {
 export function useScoutSearch(params: SearchParams, enabled = true) {
   return useQuery<SearchResponse>({
     queryKey: ["scout-search", params],
-    queryFn: () => invokeScout<SearchResponse>("scout-search", { action: "search", ...params }),
+    queryFn: async () => {
+      const raw = await invokeScout<unknown>("scout-search", { action: "search", ...params });
+      const parsed = safeObject(SearchResponseSchema, raw);
+      if (!parsed) throw new Error("scout-search: unexpected response shape");
+      return parsed;
+    },
     enabled: enabled && Object.values(params).some(v => v != null && v !== ""),
   });
 }
 
 export function useScoutDiscover() {
   return useMutation<DiscoverResponse, Error, { criteria: string; position?: string; max_age?: number }>({
-    mutationFn: (vars) => invokeScout<DiscoverResponse>("scout-search", { action: "discover", ...vars }),
+    mutationFn: async (vars) => {
+      const raw = await invokeScout<unknown>("scout-search", { action: "discover", ...vars });
+      const parsed = safeObject(DiscoverResponseSchema, raw);
+      if (!parsed) throw new Error("scout-search discover: unexpected response shape");
+      return parsed;
+    },
   });
 }
 
