@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Vault AI Scout — Dark-first Design System */
+    --background: 216 50% 12%;         /* #0B1D33 — Navy */
+    --foreground: 210 40% 96%;         /* #f1f5f9 */
+
+    --card: 216 45% 15%;              /* Slightly lighter navy */
+    --card-foreground: 210 40% 96%;
+
+    --popover: 216 45% 15%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 260 55% 50%;           /* #6C5CE7 — Vault Purple */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 216 30% 20%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 216 30% 20%;
+    --muted-foreground: 215 20% 60%;
+
+    --accent: 43 92% 55%;             /* #FDCB6E — Gold */
+    --accent-foreground: 216 50% 12%;
+
+    --destructive: 0 84% 60%;         /* Red */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 216 30% 22%;
+    --input: 216 30% 22%;
+    --ring: 260 55% 50%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar */
+    --sidebar-background: 216 55% 10%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 260 55% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 216 30% 18%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 216 30% 18%;
+    --sidebar-ring: 260 55% 50%;
+
+    /* Semantic */
+    --success: 160 84% 39%;           /* #00B894 */
+    --warning: 38 92% 50%;            /* #F59E0B */
+    --info: 260 55% 50%;              /* Purple */
+    --danger: 0 84% 60%;              /* Red */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
