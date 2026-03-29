@@ -80,7 +80,7 @@ export function PersonalityPanel({ profile, loading, error, onAnalyze }: Persona
           <button
             type="button"
             onClick={onAnalyze}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-primary/30 text-primary hover:bg-primary/10 btn-premium transition-colors"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10 btn-premium transition-colors"
           >
             Kör djupanalys
           </button>
@@ -89,7 +89,7 @@ export function PersonalityPanel({ profile, loading, error, onAnalyze }: Persona
 
       {loading && (
         <div className="flex items-center gap-2 py-4" role="status" aria-live="polite">
-          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <Loader2 className="w-4 h-4 animate-spin text-accent" />
           <span className="text-sm text-muted-foreground">Analyserar personlighet...</span>
         </div>
       )}

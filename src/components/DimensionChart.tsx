@@ -9,7 +9,7 @@ interface DimensionChartProps {
 function scoreColor(score: number | null): string {
   if (score == null) return "bg-zinc-600";
   if (score >= 8) return "bg-emerald-500";
-  if (score >= 6) return "bg-primary";
+  if (score >= 6) return "bg-accent";
   if (score >= 4) return "bg-amber-500";
   return "bg-red-500";
 }

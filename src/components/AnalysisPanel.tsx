@@ -39,7 +39,7 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
       <div className="flex flex-wrap gap-2">
         {analysisTypes.map((t) => (
           <button key={t.value} type="button" onClick={() => onAnalyze(t.value)} disabled={loading}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border/50 text-foreground hover:bg-primary/10 hover:border-primary/30 hover:text-primary btn-premium transition-colors disabled:opacity-50">
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border/50 text-foreground hover:bg-accent/10 hover:border-accent/30 hover:text-accent btn-premium transition-colors disabled:opacity-50">
             {t.label}
           </button>
         ))}
@@ -49,7 +49,7 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
       {loading && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           className="flex items-center gap-2 p-4 rounded-xl glass-premium" role="status" aria-live="polite">
-          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <Loader2 className="w-4 h-4 animate-spin text-accent" />
           <span className="text-sm text-muted-foreground">Analyserar spelare...</span>
         </motion.div>
       )}

@@ -111,25 +111,29 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // --- SEARCH (fuzzy ILIKE) ---
+    // --- SEARCH (pg_trgm fuzzy via RPC) ---
     if (action === "search") {
-      const query = (body.query ?? "").trim();
+      const rawQuery = (body.query ?? "").trim();
       const position = body.position ?? null;
       const tier = body.tier ?? null;
       const limit = Math.min(body.limit ?? 50, 100);
 
-      let q = sb.from("scout_players").select("*");
+      if (!rawQuery) return json({ action: "search", count: 0, players: [] });
 
-      if (query) {
-        q = q.or(`name.ilike.%${query}%,current_club.ilike.%${query}%,current_league.ilike.%${query}%,nationality.ilike.%${query}%`);
-      }
-      if (position) q = q.eq("position_primary", position);
-      if (tier) q = q.eq("tier", tier);
-
-      const { data, error } = await q.order("name").limit(limit);
+      const { data, error } = await sb.rpc("search_scout_players", {
+        p_query: rawQuery,
+        p_position: position,
+        p_tier: tier,
+        p_limit: limit,
+      });
       if (error) return json({ error: error.message }, 500);
 
-      const players = (data ?? []).map(mapPlayer);
+      // Strip internal scoring fields from RPC result
+      const players = (data ?? []).map((r: Record<string, unknown>) => {
+        const { name_sim, word_avg_sim, full_sim, ...player } = r;
+        return player;
+      });
+
       return json({ action: "search", count: players.length, players });
     }
 

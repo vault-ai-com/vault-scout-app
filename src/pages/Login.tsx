@@ -35,11 +35,11 @@ const Login = ({ onLogin }: LoginProps) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background overflow-hidden">
       {/* Ambient blobs */}
       <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)', filter: 'blur(80px)' }} />
+        style={{ background: 'radial-gradient(circle, hsl(var(--accent) / 0.12) 0%, transparent 70%)', filter: 'blur(80px)' }} />
       <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full pointer-events-none"
         style={{ background: 'radial-gradient(circle, hsl(var(--accent) / 0.12) 0%, transparent 70%)', filter: 'blur(80px)' }} />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.06) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+        style={{ background: 'radial-gradient(circle, hsl(var(--accent) / 0.06) 0%, transparent 70%)', filter: 'blur(60px)' }} />
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -53,9 +53,9 @@ const Login = ({ onLogin }: LoginProps) => {
             initial={{ scale: 0.8, opacity: 0.5 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-            className="mx-auto mb-5 w-[72px] h-[72px] rounded-2xl bg-primary flex items-center justify-center"
+            className="mx-auto mb-5 w-[72px] h-[72px] rounded-2xl bg-accent flex items-center justify-center"
           >
-            <Search className="w-8 h-8 text-primary-foreground" />
+            <Search className="w-8 h-8 text-accent-foreground" />
           </motion.div>
           <h1 className="text-xl font-bold text-foreground">Vault AI Scout</h1>
           <p className="text-sm mt-2 text-muted-foreground">
@@ -73,7 +73,7 @@ const Login = ({ onLogin }: LoginProps) => {
               </label>
               <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="namn@example.com" required autoFocus autoComplete="email"
-                className="w-full px-3 py-2.5 rounded-lg text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all bg-input border border-border text-foreground" />
+                className="w-full px-3 py-2.5 rounded-lg text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all bg-input border border-border text-foreground" />
             </div>
 
             <div>
@@ -83,7 +83,7 @@ const Login = ({ onLogin }: LoginProps) => {
               <div className="relative">
                 <input id="login-password" type={showPassword ? "text" : "password"} value={password}
                   onChange={e => setPassword(e.target.value)} required autoComplete="current-password"
-                  className="w-full px-3 py-2.5 pr-10 rounded-lg text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all bg-input border border-border text-foreground" />
+                  className="w-full px-3 py-2.5 pr-10 rounded-lg text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all bg-input border border-border text-foreground" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -103,7 +103,7 @@ const Login = ({ onLogin }: LoginProps) => {
 
             <button type="submit" disabled={loading || !email || !password}
               className="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(260 65% 60%))' }}>
+              style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(var(--success)))' }}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Logga in"}
             </button>
           </div>
@@ -112,8 +112,8 @@ const Login = ({ onLogin }: LoginProps) => {
         {/* Powered by */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8, duration: 0.5 }}>
           <div className="flex items-center justify-center gap-1.5 mt-6 opacity-40 hover:opacity-80 transition-opacity">
-            <Sparkles className="w-3 h-3 text-primary" />
-            <span className="text-[10px] font-medium uppercase tracking-wider text-primary/60">
+            <Sparkles className="w-3 h-3 text-accent" />
+            <span className="text-[10px] font-medium uppercase tracking-wider text-accent/60">
               Powered by Vault AI
             </span>
           </div>
