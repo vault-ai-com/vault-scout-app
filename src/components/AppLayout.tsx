@@ -2,7 +2,7 @@ import { Suspense, useLayoutEffect } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { LayoutDashboard, Users, LogOut, Search } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Search, MessageCircle } from "lucide-react";
 
 const InlineLoader = () => (
   <div className="flex-1 bg-background p-4 md:p-6 lg:p-8 space-y-4">
@@ -26,6 +26,7 @@ interface AppLayoutProps {
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/players", icon: Users, label: "Spelare" },
+  { to: "/chat", icon: MessageCircle, label: "Bosse AI" },
 ];
 
 const AppLayout = ({ onSignOut }: AppLayoutProps) => {

@@ -13,6 +13,7 @@ import NotFound from "./pages/NotFound";
 const Dashboard = lazyRetry(() => import("./pages/Dashboard"));
 const Players = lazyRetry(() => import("./pages/Players"));
 const PlayerDetail = lazyRetry(() => import("./pages/PlayerDetail"));
+const BosseChat = lazyRetry(() => import("./pages/BosseChat"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +51,7 @@ const AppRoutes = () => {
         <Route path="/" element={<ErrorBoundary fallbackMessage="Dashboard kunde inte laddas."><Dashboard /></ErrorBoundary>} />
         <Route path="/players" element={<ErrorBoundary fallbackMessage="Spelarlistan kunde inte laddas."><Players /></ErrorBoundary>} />
         <Route path="/players/:id" element={<ErrorBoundary fallbackMessage="Spelarprofilen kunde inte laddas."><PlayerDetail /></ErrorBoundary>} />
+        <Route path="/chat" element={<ErrorBoundary fallbackMessage="Chatten kunde inte laddas."><BosseChat /></ErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
