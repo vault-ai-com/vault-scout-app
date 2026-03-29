@@ -62,8 +62,8 @@ export { safeArray, safeObject };
 export const DimensionScoreSchema = z.object({
   dimension_id: z.string(),
   dimension_name: z.string(),
-  score: z.number().nullable(),
-  evidence: z.string(),
+  score: z.number().min(0).max(10).nullable(),
+  evidence: z.string().min(1),
 });
 export type DimensionScore = z.infer<typeof DimensionScoreSchema>;
 
@@ -71,14 +71,14 @@ export type AnalysisType = "full_scout" | "quick_scan" | "match_review" | "trans
 export type Recommendation = "SIGN" | "MONITOR" | "PASS" | "INSUFFICIENT_DATA";
 
 export const AnalysisResultSchema = z.object({
-  overall_score: z.number(),
-  confidence: z.number(),
-  summary: z.string(),
-  strengths: z.array(z.string()),
-  weaknesses: z.array(z.string()),
-  risk_factors: z.array(z.string()),
+  overall_score: z.number().min(0).max(10),
+  confidence: z.number().min(0).max(1),
+  summary: z.string().min(1),
+  strengths: z.array(z.string().min(1)).min(1),
+  weaknesses: z.array(z.string().min(1)),
+  risk_factors: z.array(z.string().min(1)),
   recommendation: z.enum(["SIGN", "MONITOR", "PASS", "INSUFFICIENT_DATA"]),
-  dimension_scores: z.array(DimensionScoreSchema),
+  dimension_scores: z.array(DimensionScoreSchema).min(1),
 });
 export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
 
@@ -173,9 +173,9 @@ export const PersonalityProfileSchema = z.object({
   tactical_understanding: PersonalityDimensionSchema,
   ambition_level: PersonalityDimensionSchema,
   career_motivation: PersonalityDimensionSchema,
-  stress_archetype: z.string(),
-  coaching_approach: z.array(z.string()),
-  integration_risks: z.array(z.string()),
+  stress_archetype: z.string().min(1),
+  coaching_approach: z.array(z.string().min(1)).min(1).max(7),
+  integration_risks: z.array(z.string().min(1)).min(1).max(6),
   confidence_score: z.number().min(0).max(1),
 });
 export type PersonalityProfile = z.infer<typeof PersonalityProfileSchema>;

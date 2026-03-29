@@ -30,15 +30,16 @@ const DIMENSION_KEYS = [
 ] as const;
 
 function ScoreBar({ score, label, evidence }: { score: number; label: string; evidence: string }) {
-  const pct = (score / 10) * 100;
+  const clamped = Math.min(10, Math.max(1, score));
+  const pct = (clamped / 10) * 100;
   const color =
-    score >= 7 ? "bg-emerald-500" : score >= 4 ? "bg-amber-500" : "bg-red-500";
+    clamped >= 7 ? "bg-emerald-500" : clamped >= 4 ? "bg-amber-500" : "bg-red-500";
 
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-foreground">{label}</span>
-        <span className="text-xs font-bold text-foreground">{score.toFixed(1)}</span>
+        <span className="text-xs font-bold text-foreground">{clamped.toFixed(1)}</span>
       </div>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         <motion.div
@@ -142,7 +143,7 @@ export function PersonalityPanel({ profile, loading, error, onAnalyze }: Persona
           {/* Confidence */}
           <div className="text-right">
             <span className="text-[10px] text-muted-foreground">
-              Konfidens {(profile.confidence_score * 100).toFixed(0)}%
+              Konfidens {Math.min(100, Math.max(0, profile.confidence_score * 100)).toFixed(0)}%
             </span>
           </div>
         </motion.div>

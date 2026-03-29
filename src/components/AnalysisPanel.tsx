@@ -78,9 +78,9 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
               );
             })()}
             <div className="text-right">
-              <div className="text-2xl font-bold text-foreground">{result.overall_score.toFixed(1)}</div>
+              <div className="text-2xl font-bold text-foreground">{Math.min(10, Math.max(0, result.overall_score)).toFixed(1)}</div>
               <div className="text-[10px] text-muted-foreground">
-                Konfidens {(result.confidence * 100).toFixed(0)}%
+                Konfidens {Math.min(100, Math.max(0, result.confidence * 100)).toFixed(0)}%
               </div>
             </div>
           </div>

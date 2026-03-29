@@ -37,7 +37,7 @@ export function DimensionChart({ scores }: DimensionChartProps) {
                 />
               </div>
               <span className="text-xs font-semibold w-6 text-right text-foreground">
-                {dim.score != null ? dim.score.toFixed(1) : "—"}
+                {dim.score != null ? Math.min(10, Math.max(0, dim.score)).toFixed(1) : "—"}
               </span>
             </div>
             {dim.evidence && (
