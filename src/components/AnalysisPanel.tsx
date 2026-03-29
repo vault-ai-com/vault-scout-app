@@ -77,10 +77,14 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
                 </span>
               );
             })()}
-            <div className="text-right">
-              <div className="text-2xl font-extrabold stat-gold">{Math.min(10, Math.max(0, result.overall_score)).toFixed(1)}</div>
-              <div className="text-[10px] text-muted-foreground">
-                Konfidens {Math.min(100, Math.max(0, result.confidence * 100)).toFixed(0)}%
+            <div className="flex items-center gap-2">
+              <div className={`w-14 h-14 rounded-full border-2 flex flex-col items-center justify-center ${
+                result.overall_score >= 7 ? "border-emerald-500/60" : result.overall_score >= 4 ? "border-amber-500/60" : "border-red-500/60"
+              }`}>
+                <span className="text-lg font-extrabold stat-gold leading-none">{Math.min(10, Math.max(0, result.overall_score)).toFixed(1)}</span>
+                <span className="text-[8px] text-muted-foreground leading-none mt-0.5">
+                  {Math.min(100, Math.max(0, result.confidence * 100)).toFixed(0)}%
+                </span>
               </div>
             </div>
           </div>
@@ -102,23 +106,25 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="rounded-xl p-4 glass-premium card-accent-left-green">
               <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Styrkor</h3>
-              <ul className="space-y-1">
+              <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.strengths.map((s, i) => (
-                  <li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5">
+                  <motion.li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5"
+                    variants={{ hidden: { opacity: 0, x: -6 }, visible: { opacity: 1, x: 0 } }}>
                     <span className="text-emerald-400 mt-0.5">+</span> {s}
-                  </li>
+                  </motion.li>
                 ))}
-              </ul>
+              </motion.ul>
             </div>
             <div className="rounded-xl p-4 glass-premium card-accent-left-red">
               <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Svagheter</h3>
-              <ul className="space-y-1">
+              <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.weaknesses.map((w, i) => (
-                  <li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5">
+                  <motion.li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5"
+                    variants={{ hidden: { opacity: 0, x: -6 }, visible: { opacity: 1, x: 0 } }}>
                     <span className="text-red-400 mt-0.5">−</span> {w}
-                  </li>
+                  </motion.li>
                 ))}
-              </ul>
+              </motion.ul>
             </div>
           </div>
 
@@ -126,13 +132,14 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
           {result.risk_factors.length > 0 && (
             <div className="rounded-xl p-4 glass-premium card-accent-left-gold">
               <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Riskfaktorer</h3>
-              <ul className="space-y-1">
+              <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.risk_factors.map((r, i) => (
-                  <li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5">
+                  <motion.li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5"
+                    variants={{ hidden: { opacity: 0, x: -6 }, visible: { opacity: 1, x: 0 } }}>
                     <AlertTriangle className="w-3 h-3 text-amber-400 mt-0.5 flex-shrink-0" /> {r}
-                  </li>
+                  </motion.li>
                 ))}
-              </ul>
+              </motion.ul>
             </div>
           )}
         </motion.div>

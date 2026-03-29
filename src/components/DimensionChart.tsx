@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { DIMENSION_LABELS } from "@/types/scout";
 import type { DimensionScore } from "@/types/scout";
 
@@ -19,21 +20,32 @@ export function DimensionChart({ scores }: DimensionChartProps) {
   }
 
   return (
-    <div className="space-y-2">
+    <motion.div
+      className="space-y-2"
+      initial="hidden"
+      animate="visible"
+      variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
+    >
       {scores.map((dim) => {
         const pct = dim.score != null ? Math.max(0, Math.min(100, dim.score * 10)) : 0;
         const label = DIMENSION_LABELS[dim.dimension_id] ?? dim.dimension_name;
 
         return (
-          <div key={dim.dimension_id} className="group">
+          <motion.div
+            key={dim.dimension_id}
+            className="group"
+            variants={{ hidden: { opacity: 0, x: -8 }, visible: { opacity: 1, x: 0 } }}
+          >
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground w-36 flex-shrink-0 truncate" title={label}>
                 {label}
               </span>
               <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${scoreColor(dim.score)}`}
-                  style={{ width: `${pct}%` }}
+                <motion.div
+                  className={`h-full rounded-full ${scoreColor(dim.score)}`}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
                 />
               </div>
               <span className="text-xs font-bold w-6 text-right text-foreground">
@@ -45,9 +57,9 @@ export function DimensionChart({ scores }: DimensionChartProps) {
                 {dim.evidence}
               </p>
             )}
-          </div>
+          </motion.div>
         );
       })}
-    </div>
+    </motion.div>
   );
 }
