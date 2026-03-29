@@ -50,7 +50,7 @@ const Dashboard = () => {
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{stat.label}</span>
               <div className="w-8 h-8 rounded-lg icon-premium flex items-center justify-center">
-                <stat.icon className="w-4 h-4 text-primary" />
+                <stat.icon className="w-4 h-4 text-accent" />
               </div>
             </div>
             {isLoading ? (
@@ -86,9 +86,9 @@ const Dashboard = () => {
             <Link to={action.to}
               className="block rounded-xl glass-premium gradient-accent-top card-interactive p-5 md:p-6 group">
               <div className="w-10 h-10 rounded-xl icon-premium flex items-center justify-center mb-3">
-                <action.icon className="w-4 h-4 text-primary" />
+                <action.icon className="w-4 h-4 text-accent" />
               </div>
-              <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">{action.label}</h3>
+              <h3 className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors">{action.label}</h3>
               <p className="text-xs text-muted-foreground mt-1">{action.desc}</p>
             </Link>
           </motion.div>

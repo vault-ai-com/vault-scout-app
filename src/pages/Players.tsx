@@ -52,14 +52,14 @@ const Players = () => {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
           <input type="text" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Sök spelare, position, klubb..." aria-label="Sök spelare"
-            className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary/30 transition-all glass-premium text-foreground placeholder:text-muted-foreground/60" />
+            className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:border-accent/30 transition-all glass-premium text-foreground placeholder:text-muted-foreground/60" />
         </div>
         <button type="submit" disabled={!query.trim() || loading}
-          className="px-5 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground btn-premium disabled:opacity-50 shadow-lg shadow-primary/20">
+          className="px-5 py-3 rounded-xl text-sm font-semibold bg-accent text-accent-foreground btn-premium disabled:opacity-50 shadow-lg shadow-accent/20">
           Sök
         </button>
         <button type="button" onClick={handleDiscover} disabled={!query.trim() || loading}
-          className="flex items-center gap-1.5 px-4 py-3 rounded-xl text-sm font-semibold border border-primary/30 text-primary hover:bg-primary/10 btn-premium disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-3 rounded-xl text-sm font-semibold border border-accent/30 text-accent hover:bg-accent/10 btn-premium disabled:opacity-50"
           title="AI-sökning: beskriv vad du letar efter">
           <Sparkles className="w-3.5 h-3.5" />
           AI
@@ -108,8 +108,8 @@ const Players = () => {
 
       {/* AI reasoning */}
       {discover.data?.reasoning && (
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/10 text-xs text-primary/80">
-          <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-accent/5 border border-accent/10 text-xs text-accent/80">
+          <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-accent" />
           <span>{discover.data.reasoning}</span>
         </div>
       )}
@@ -117,7 +117,7 @@ const Players = () => {
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
-          <Loader2 className="w-5 h-5 animate-spin text-primary" />
+          <Loader2 className="w-5 h-5 animate-spin text-accent" />
           <span className="sr-only">Söker spelare...</span>
         </div>
       )}
@@ -153,7 +153,7 @@ const Players = () => {
           className="rounded-xl glass-premium">
           <div className="flex flex-col items-center justify-center py-16 md:py-20 text-center">
             <div className="w-16 h-16 rounded-2xl icon-premium flex items-center justify-center mb-5">
-              <Users className="w-7 h-7 text-primary" />
+              <Users className="w-7 h-7 text-accent" />
             </div>
             <p className="text-base font-semibold text-foreground mb-2">Sök efter spelare</p>
             <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">

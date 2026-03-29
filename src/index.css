@@ -33,24 +33,24 @@
 
     --border: 216 30% 22%;
     --input: 216 30% 22%;
-    --ring: 260 55% 50%;
+    --ring: 43 92% 55%;               /* Gold ring */
 
     --radius: 0.75rem;
 
     /* Sidebar */
     --sidebar-background: 216 55% 10%;
     --sidebar-foreground: 210 40% 96%;
-    --sidebar-primary: 260 55% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 43 92% 55%;    /* Gold nav accent */
+    --sidebar-primary-foreground: 216 50% 12%;
     --sidebar-accent: 216 30% 18%;
     --sidebar-accent-foreground: 210 40% 96%;
     --sidebar-border: 216 30% 18%;
-    --sidebar-ring: 260 55% 50%;
+    --sidebar-ring: 43 92% 55%;       /* Gold ring */
 
     /* Semantic */
     --success: 160 84% 39%;           /* #00B894 */
-    --warning: 38 92% 50%;            /* #F59E0B */
-    --info: 260 55% 50%;              /* Purple */
+    --warning: 38 92% 50%;            /* #F39C12 */
+    --info: 210 60% 50%;              /* Blue info */
     --danger: 0 84% 60%;              /* Red */
   }
 }
@@ -155,7 +155,7 @@ textarea:focus-visible {
   .card-interactive:hover {
     transform: translateY(-2px);
     box-shadow: 0 10px 40px -12px hsl(var(--background) / 0.5),
-      0 0 0 1px hsl(var(--primary) / 0.15);
+      0 0 0 1px hsl(var(--accent) / 0.12);
   }
   .card-interactive:active {
     transform: scale(0.995) translateY(0);
@@ -173,7 +173,7 @@ textarea:focus-visible {
     left: 0;
     right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent 0%, hsl(var(--primary) / 0.5) 30%, hsl(var(--accent) / 0.4) 70%, transparent 100%);
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--accent) / 0.5) 30%, hsl(var(--success) / 0.3) 70%, transparent 100%);
   }
 
   /* Sidebar premium background */
@@ -181,16 +181,16 @@ textarea:focus-visible {
     background: linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(216 55% 7%) 100%);
   }
 
-  /* Active nav indicator (Buddy-style left border) */
+  /* Active nav indicator (gold left border) */
   .nav-active {
     background: hsl(var(--sidebar-accent));
-    box-shadow: inset 3px 0 0 0 hsl(var(--primary));
+    box-shadow: inset 3px 0 0 0 hsl(var(--accent));
   }
 
-  /* Premium icon container */
+  /* Premium icon container (gold/green glow) */
   .icon-premium {
-    background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.05));
-    box-shadow: 0 0 20px -4px hsl(var(--primary) / 0.2);
+    background: linear-gradient(135deg, hsl(var(--accent) / 0.12), hsl(var(--success) / 0.06));
+    box-shadow: 0 0 20px -4px hsl(var(--accent) / 0.15);
   }
 
   /* Gold stat numbers (Vault Design System: dark bg = gold stats) */
@@ -201,18 +201,18 @@ textarea:focus-visible {
     background-clip: text;
   }
 
-  /* Section tag (Vault pitch-style) */
+  /* Section tag (Vault pitch-style — accent-light on dark bg) */
   .section-tag {
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 3px;
     text-transform: uppercase;
-    color: hsl(var(--primary) / 0.7);
+    color: hsl(var(--accent));
   }
 
   /* Left-border accent card (from Vault pitch design) */
   .card-accent-left {
-    border-left: 3px solid hsl(var(--primary));
+    border-left: 3px solid hsl(var(--accent));
   }
   .card-accent-left-gold {
     border-left: 3px solid hsl(var(--accent));
@@ -280,7 +280,7 @@ textarea:focus-visible {
     transition: box-shadow 0.2s cubic-bezier(0.23, 1, 0.32, 1);
   }
   .shadow-card-interactive:hover {
-    box-shadow: 0 4px 16px -4px hsl(var(--background) / 0.5), 0 0 0 1px hsl(var(--primary) / 0.1);
+    box-shadow: 0 4px 16px -4px hsl(var(--background) / 0.5), 0 0 0 1px hsl(var(--accent) / 0.1);
   }
 
   /* Badge system */

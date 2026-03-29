@@ -40,9 +40,9 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
     <div className="min-h-screen bg-background relative overflow-x-hidden">
       {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none" aria-hidden="true">
-        <div className="absolute -top-24 -left-24 w-80 h-80 bg-primary/[0.06] rounded-full blur-[120px]" />
-        <div className="absolute top-1/2 right-0 w-96 h-96 bg-accent/[0.03] rounded-full blur-[140px]" />
-        <div className="absolute -bottom-32 left-1/3 w-72 h-72 bg-primary/[0.04] rounded-full blur-[100px]" />
+        <div className="absolute -top-24 -left-24 w-80 h-80 bg-accent/[0.04] rounded-full blur-[120px]" />
+        <div className="absolute top-1/2 right-0 w-96 h-96 bg-success/[0.03] rounded-full blur-[140px]" />
+        <div className="absolute -bottom-32 left-1/3 w-72 h-72 bg-accent/[0.03] rounded-full blur-[100px]" />
       </div>
 
       <a href="#main-content"
@@ -54,8 +54,8 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
       <aside className="fixed inset-y-0 left-0 z-30 hidden md:flex w-[220px] flex-col border-r border-border/30 sidebar-glass">
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 h-16 border-b border-border/20">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20">
-            <Search className="w-4.5 h-4.5 text-primary-foreground" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-success/70 flex items-center justify-center shadow-lg shadow-accent/20">
+            <Search className="w-4.5 h-4.5 text-accent-foreground" />
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-bold text-sidebar-foreground tracking-tight">Vault Scout</span>
@@ -70,7 +70,7 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? 'nav-active text-sidebar-primary'
+                    ? 'nav-active text-accent'
                     : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                 }`
               }>
@@ -95,8 +95,8 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
         {/* Mobile header */}
         <header className="md:hidden sticky top-0 z-20 h-14 flex items-center justify-between px-4 border-b border-border/30 bg-background/90 backdrop-blur-xl">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-md shadow-primary/20">
-              <Search className="w-3.5 h-3.5 text-primary-foreground" />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent to-success/70 flex items-center justify-center shadow-md shadow-accent/20">
+              <Search className="w-3.5 h-3.5 text-accent-foreground" />
             </div>
             <span className="text-sm font-bold text-foreground tracking-tight">Vault Scout</span>
           </div>
@@ -128,12 +128,12 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
           <NavLink key={item.to} to={item.to} end={item.to === "/"}
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 px-5 py-1.5 rounded-xl transition-all duration-200 relative ${
-                isActive ? 'text-primary' : 'text-muted-foreground'
+                isActive ? 'text-accent' : 'text-muted-foreground'
               }`
             }>
             {({ isActive }) => (
               <>
-                {isActive && <div className="absolute -top-1 w-8 h-[3px] bg-primary rounded-full" />}
+                {isActive && <div className="absolute -top-1 w-8 h-[3px] bg-accent rounded-full" />}
                 <item.icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
                 <span className="text-[10px] font-semibold">{item.label}</span>
               </>

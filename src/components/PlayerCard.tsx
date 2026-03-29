@@ -29,13 +29,14 @@ export function PlayerCard({ player }: PlayerCardProps) {
       className="block rounded-xl p-4 glass-premium gradient-accent-top card-interactive group">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl icon-premium flex items-center justify-center flex-shrink-0">
-          <User className="w-[18px] h-[18px] text-primary" />
+          <User className="w-[18px] h-[18px] text-accent" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+            <h3 className="text-sm font-semibold text-foreground truncate group-hover:text-accent transition-colors">
               {player.name}
             </h3>
+
             <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${TIER_COLORS[player.tier] ?? TIER_COLORS.development}`}>
               {TIER_LABELS[player.tier] ?? player.tier}
             </span>
