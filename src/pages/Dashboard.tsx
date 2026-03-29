@@ -84,7 +84,7 @@ const Dashboard = () => {
             initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.3 + i * 0.06, ease: [0.25, 0.46, 0.45, 0.94] }}>
             <Link to={action.to}
-              className="block rounded-xl glass-premium card-interactive p-5 md:p-6 group">
+              className="block rounded-xl glass-premium gradient-accent-top card-interactive p-5 md:p-6 group">
               <div className="w-10 h-10 rounded-xl icon-premium flex items-center justify-center mb-3">
                 <action.icon className="w-4 h-4 text-primary" />
               </div>
