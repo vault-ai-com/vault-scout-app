@@ -4,9 +4,10 @@ import {
   SearchResponseSchema,
   DiscoverResponseSchema,
   DashboardStatsSchema,
+  GetPlayerResponseSchema,
   safeObject,
 } from "@/types/scout";
-import type { SearchResponse, DiscoverResponse, DashboardStats } from "@/types/scout";
+import type { SearchResponse, DiscoverResponse, DashboardStats, GetPlayerResponse } from "@/types/scout";
 
 async function invokeScout(functionName: string, body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke(functionName, { body });
@@ -46,6 +47,20 @@ export function useScoutDiscover() {
       if (!parsed) throw new Error("scout-search discover: unexpected response shape");
       return parsed;
     },
+  });
+}
+
+export function useGetPlayer(playerId: string | undefined) {
+  return useQuery<GetPlayerResponse>({
+    queryKey: ["scout-player", playerId],
+    queryFn: async () => {
+      const raw = await invokeScout("scout-search", { action: "get_player", player_id: playerId });
+      const parsed = safeObject(GetPlayerResponseSchema, raw);
+      if (!parsed) throw new Error("scout-search get_player: unexpected response shape");
+      return parsed;
+    },
+    enabled: !!playerId,
+    staleTime: 5 * 60_000,
   });
 }
 

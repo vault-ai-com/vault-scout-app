@@ -1,11 +1,29 @@
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Search, TrendingUp, Users, BarChart3, Loader2, AlertTriangle } from "lucide-react";
+import { Search, TrendingUp, Users, AlertTriangle } from "lucide-react";
 import { useScoutDashboard } from "@/hooks/use-scout-search";
+
+function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: number }) {
+  const [display, setDisplay] = useState(0);
+  const raf = useRef(0);
+  useEffect(() => {
+    const start = performance.now();
+    const from = 0;
+    const step = (now: number) => {
+      const t = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(from + (value - from) * ease));
+      if (t < 1) raf.current = requestAnimationFrame(step);
+    };
+    raf.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf.current);
+  }, [value, duration]);
+  return <>{display}</>;
+}
 
 const statConfig = [
   { key: "total_players", label: "Spelare", icon: Users, fallback: "0" },
   { key: "total_analyses", label: "Analyser", icon: Search, fallback: "0" },
-  { key: "total_reports", label: "Rapporter", icon: BarChart3, fallback: "0" },
   { key: "watchlist_count", label: "Bevakade", icon: TrendingUp, fallback: "0" },
 ];
 
@@ -26,16 +44,16 @@ const Dashboard = () => {
           <motion.div key={stat.key}
             initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: i * 0.05 }}
-            className="rounded-2xl p-5 bg-card border border-border hover:border-primary/20 transition-colors">
+            className="rounded-2xl p-5 bg-card border border-border hover:border-primary/20 card-interactive">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-muted-foreground">{stat.label}</span>
               <stat.icon className="w-4 h-4 text-muted-foreground/50" />
             </div>
             {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              <div className="h-8 w-24 rounded-lg skeleton-shimmer" />
             ) : (
-              <div className="text-2xl font-bold text-foreground">
-                {String(stats[stat.key] ?? stat.fallback)}
+              <div className="text-2xl font-bold text-foreground tabular-nums">
+                <AnimatedNumber value={Number(stats[stat.key]) || 0} />
               </div>
             )}
           </motion.div>

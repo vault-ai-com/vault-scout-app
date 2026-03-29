@@ -6,13 +6,13 @@ import { LayoutDashboard, Users, LogOut, Search } from "lucide-react";
 
 const InlineLoader = () => (
   <div className="flex-1 bg-background p-4 md:p-6 space-y-4">
-    <div className="h-8 w-48 rounded-xl bg-muted animate-pulse" />
+    <div className="h-8 w-48 rounded-xl skeleton-shimmer" />
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {[0, 1, 2, 3].map(i => (
         <div key={i} className="rounded-2xl p-5 bg-card border border-border">
-          <div className="h-3 w-20 rounded bg-muted animate-pulse mb-3" />
-          <div className="h-8 w-24 rounded bg-muted animate-pulse mb-2" />
-          <div className="h-3 w-16 rounded bg-muted animate-pulse" />
+          <div className="h-3 w-20 rounded skeleton-shimmer mb-3" />
+          <div className="h-8 w-24 rounded skeleton-shimmer mb-2" />
+          <div className="h-3 w-16 rounded skeleton-shimmer" />
         </div>
       ))}
     </div>
@@ -104,7 +104,7 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
           <ErrorBoundary>
             <AnimatePresence mode="wait">
               <motion.div key={pathname}
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}>
                 <Suspense fallback={<InlineLoader />}>
                   <Outlet />

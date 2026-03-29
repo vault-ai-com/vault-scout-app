@@ -58,6 +58,15 @@ export type ScoutPlayer = z.infer<typeof ScoutPlayerSchema>;
 
 export { safeArray, safeObject };
 
+// --- GetPlayer response schema ---
+export const GetPlayerResponseSchema = z.object({
+  action: z.string(),
+  player: ScoutPlayerSchema.extend({
+    profile_data: z.record(z.unknown()).nullable().optional(),
+  }),
+});
+export type GetPlayerResponse = z.infer<typeof GetPlayerResponseSchema>;
+
 // --- DimensionScore + Analysis schemas ---
 export const DimensionScoreSchema = z.object({
   dimension_id: z.string(),
@@ -207,6 +216,8 @@ export const DIMENSION_LABELS: Record<string, string> = {
   "DIM-12": "Social profil",
   "DIM-13": "Fysisk hållbarhet",
   "DIM-14": "Marknadsvärde",
+  "DIM-15": "Impulskontroll",
+  "DIM-16": "Drivkraft",
 };
 
 export const TIER_LABELS: Record<string, string> = {
@@ -215,6 +226,14 @@ export const TIER_LABELS: Record<string, string> = {
   top_league: "Topliga",
   allsvenskan: "Allsvenskan",
   development: "Talang",
+};
+
+export const TIER_COLORS: Record<string, string> = {
+  world_class: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  elite: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  top_league: "bg-primary/10 text-primary border-primary/20",
+  allsvenskan: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  development: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
 };
 
 export const RECOMMENDATION_COLORS: Record<Recommendation, string> = {
