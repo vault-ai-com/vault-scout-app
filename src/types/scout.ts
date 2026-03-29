@@ -157,21 +157,23 @@ export const ReportResponseSchema = z.object({
 export type ReportResponse = z.infer<typeof ReportResponseSchema>;
 
 // --- Labels & colors ---
+// Aligned with Knowledge Bank football_dimensions (KB source of truth)
+// Industry-grounded: StatsBomb 360, Wyscout Index, CIES, InStat
 export const DIMENSION_LABELS: Record<string, string> = {
-  "DIM-01": "Positionsmedvetenhet",
-  "DIM-02": "Taktisk flexibilitet",
-  "DIM-03": "Beslutfattande",
-  "DIM-04": "Bollkontroll",
-  "DIM-05": "Passningsregister",
-  "DIM-06": "Avslut & kreativitet",
-  "DIM-07": "Atletisk profil",
-  "DIM-08": "Duellstyrka",
-  "DIM-09": "Skaderesistens",
-  "DIM-10": "Lugn under press",
-  "DIM-11": "Ledarskap & mentalitet",
-  "DIM-12": "Lagpassning",
-  "DIM-13": "Utvecklingskurva",
-  "DIM-14": "Marknad & kontrakt",
+  "DIM-01": "Taktisk intelligens",
+  "DIM-02": "Teknisk kvalitet",
+  "DIM-03": "Fysisk kapacitet",
+  "DIM-04": "Mental styrka",
+  "DIM-05": "Ledarskap",
+  "DIM-06": "Kreativitet",
+  "DIM-07": "Defensivt bidrag",
+  "DIM-08": "Offensivt bidrag",
+  "DIM-09": "Speluppbyggnad",
+  "DIM-10": "Set pieces",
+  "DIM-11": "Anpassningsförmåga",
+  "DIM-12": "Social profil",
+  "DIM-13": "Fysisk hållbarhet",
+  "DIM-14": "Marknadsvärde",
 };
 
 export const TIER_LABELS: Record<string, string> = {
