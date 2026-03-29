@@ -84,12 +84,14 @@ interface SendMessageArgs {
 export function useSendMessage() {
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const qc = useQueryClient();
 
   const send = useCallback(async ({ message, sessionId, playerId }: SendMessageArgs): Promise<string> => {
     setStreaming(true);
     setStreamContent("");
+    setError(null);
     abortRef.current = new AbortController();
 
     try {
@@ -103,7 +105,7 @@ export function useSendMessage() {
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6eXpvaGZsbGZmcGdjdHNsYndrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MjU4MzEsImV4cCI6MjA4MzIwMTgzMX0.N1HiX0zrhikFletxPh7o_hXFkkeMtOPIWVkZUR50I1U",
         },
         body: JSON.stringify({ message, session_id: sessionId, player_id: playerId }),
         signal: abortRef.current.signal,
@@ -134,16 +136,18 @@ export function useSendMessage() {
           const payload = line.slice(6).trim();
           if (payload === "[DONE]") continue;
 
+          let evt: { type?: string; delta?: { text?: string }; error?: string };
           try {
-            const evt = JSON.parse(payload);
-            if (evt.type === "content_block_delta" && evt.delta?.text) {
-              fullContent += evt.delta.text;
-              setStreamContent(fullContent);
-            } else if (evt.type === "error") {
-              throw new Error(evt.error || "Stream error");
-            }
+            evt = JSON.parse(payload);
           } catch {
-            // Skip unparseable lines
+            // Skip unparseable SSE lines
+            continue;
+          }
+          if (evt.type === "content_block_delta" && evt.delta?.text) {
+            fullContent += evt.delta.text;
+            setStreamContent(fullContent);
+          } else if (evt.type === "error") {
+            throw new Error(evt.error || "Stream error");
           }
         }
       }
@@ -153,6 +157,15 @@ export function useSendMessage() {
       qc.invalidateQueries({ queryKey: ["bosse-chat-sessions"] });
 
       return fullContent;
+    } catch (err) {
+      // Intentional abort is not an error
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setStreamContent("");
+        return "";
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      throw err;
     } finally {
       setStreaming(false);
       abortRef.current = null;
@@ -163,5 +176,5 @@ export function useSendMessage() {
     abortRef.current?.abort();
   }, []);
 
-  return { send, abort, streaming, streamContent };
+  return { send, abort, streaming, streamContent, error };
 }

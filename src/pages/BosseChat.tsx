@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  MessageCircle, Plus, Send, Trash2, Loader2, ArrowLeft, User, Bot, X,
+  MessageCircle, Plus, Send, Trash2, Loader2, ArrowLeft, User, Bot, X, AlertTriangle,
 } from "lucide-react";
 import {
   useChatSessions, useChatMessages, useCreateSession, useDeleteSession, useSendMessage,
@@ -33,7 +33,7 @@ const BosseChat = () => {
   const { data: messages = [], isLoading: loadingMessages } = useChatMessages(activeSessionId);
   const createSession = useCreateSession();
   const deleteSession = useDeleteSession();
-  const { send, streaming, streamContent, abort } = useSendMessage();
+  const { send, streaming, streamContent, abort, error } = useSendMessage();
 
   // Auto-scroll on new messages or streaming
   useEffect(() => {
@@ -73,7 +73,12 @@ const BosseChat = () => {
     }
 
     setInput("");
-    await send({ message: text, sessionId });
+    if (inputRef.current) inputRef.current.style.height = "44px";
+    try {
+      await send({ message: text, sessionId });
+    } catch {
+      setInput(text);
+    }
   }, [input, streaming, activeSessionId, createSession, send]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -88,10 +93,8 @@ const BosseChat = () => {
     setSidebarOpen(false);
   }, []);
 
-  const allMessages = [...messages];
-
   return (
-    <div className="flex h-[calc(100vh-56px)] md:h-screen relative">
+    <div className="flex h-[calc(100vh-56px-64px)] md:h-screen relative">
       {/* Mobile sidebar overlay */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -117,7 +120,7 @@ const BosseChat = () => {
             </div>
             <span className="text-sm font-bold text-foreground">Bosse AI</span>
           </div>
-          <button type="button" onClick={() => setSidebarOpen(false)} className="md:hidden p-1.5 rounded-lg hover:bg-card transition-colors">
+          <button type="button" onClick={() => setSidebarOpen(false)} className="md:hidden p-2.5 rounded-lg hover:bg-card transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
@@ -138,9 +141,11 @@ const BosseChat = () => {
             </div>
           )}
           {sessions.map((s) => (
-            <button type="button" key={s.id}
+            <div key={s.id}
+              role="button" tabIndex={0}
               onClick={() => selectSession(s)}
-              className={`group w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-200 ${
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectSession(s); } }}
+              className={`group w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-sm transition-all duration-200 cursor-pointer ${
                 activeSessionId === s.id
                   ? "nav-active text-primary"
                   : "text-muted-foreground hover:bg-card/50 hover:text-foreground"
@@ -154,7 +159,7 @@ const BosseChat = () => {
                 aria-label="Ta bort konversation">
                 <Trash2 className="w-3 h-3" />
               </button>
-            </button>
+            </div>
           ))}
           {!loadingSessions && sessions.length === 0 && (
             <p className="text-xs text-muted-foreground/50 text-center py-6">Inga konversationer ännu</p>
@@ -166,7 +171,7 @@ const BosseChat = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Chat header */}
         <div className="flex items-center gap-3 px-4 h-14 border-b border-border/20 glass shrink-0">
-          <button type="button" onClick={() => setSidebarOpen(true)} className="md:hidden p-1.5 rounded-lg hover:bg-card transition-colors">
+          <button type="button" onClick={() => setSidebarOpen(true)} className="md:hidden p-2.5 rounded-lg hover:bg-card transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center">
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </button>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center shadow-md">
@@ -177,14 +182,14 @@ const BosseChat = () => {
             <span className="text-[10px] text-muted-foreground/60">AI Scout Advisor</span>
           </div>
           {streaming && (
-            <button type="button" onClick={abort} className="ml-auto text-xs text-muted-foreground hover:text-destructive transition-colors">
+            <button type="button" onClick={abort} className="ml-auto text-xs text-muted-foreground hover:text-destructive transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center px-2">
               Avbryt
             </button>
           )}
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4" role="log" aria-live="polite">
           {!activeSessionId && !streaming && (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-primary/10 flex items-center justify-center">
@@ -211,7 +216,7 @@ const BosseChat = () => {
             </div>
           )}
 
-          {allMessages.map((msg) => (
+          {messages.map((msg) => (
             <motion.div key={msg.id}
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -251,7 +256,7 @@ const BosseChat = () => {
           )}
 
           {streaming && !streamContent && (
-            <div className="flex gap-3 justify-start">
+            <div className="flex gap-3 justify-start" role="status" aria-live="polite" aria-label="Bosse skriver...">
               <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center shrink-0 mt-0.5">
                 <Bot className="w-3.5 h-3.5 text-background" />
               </div>
@@ -266,13 +271,28 @@ const BosseChat = () => {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Error banner */}
+        {error && (
+          <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {/* Input area */}
         {(activeSessionId || sessions.length === 0) && (
-          <div className="border-t border-border/20 p-3 md:p-4 glass shrink-0">
+          <div className="border-t border-border/20 p-3 md:p-4 glass shrink-0" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
             <div className="flex items-end gap-2 max-w-3xl mx-auto">
+              <label htmlFor="bosse-chat-input" className="sr-only">Meddelande</label>
               <textarea ref={inputRef}
+                id="bosse-chat-input"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  const el = e.target;
+                  el.style.height = "auto";
+                  el.style.height = Math.min(el.scrollHeight, 128) + "px";
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder="Skriv ett meddelande..."
                 disabled={streaming}
