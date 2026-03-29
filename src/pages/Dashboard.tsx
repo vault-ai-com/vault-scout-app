@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Search, TrendingUp, Users, AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Search, TrendingUp, Users, AlertTriangle, MessageCircle } from "lucide-react";
 import { useScoutDashboard } from "@/hooks/use-scout-search";
 
 function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: number }) {
@@ -72,20 +73,27 @@ const Dashboard = () => {
         </motion.div>
       )}
 
-      {/* Recent activity */}
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="rounded-xl glass-premium p-5 md:p-6">
-        <h2 className="text-sm font-semibold text-foreground mb-6">Senaste aktivitet</h2>
-        <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center">
-          <div className="w-14 h-14 rounded-2xl icon-premium flex items-center justify-center mb-4">
-            <Search className="w-6 h-6 text-primary" />
-          </div>
-          <p className="text-base font-semibold text-foreground mb-2">Börja scouta</p>
-          <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-            Sök efter spelare, analysera prestationer och generera rapporter med AI-driven scouting.
-          </p>
-        </div>
-      </motion.div>
+      {/* Quick actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+        {[
+          { to: "/players", icon: Search, label: "Sök spelare", desc: "Hitta och analysera spelare" },
+          { to: "/bosse", icon: MessageCircle, label: "Prata med Bosse", desc: "Fråga AI-scouten" },
+          { to: "/players", icon: TrendingUp, label: "Bevakningslista", desc: "Dina bevakade spelare" },
+        ].map((action, i) => (
+          <motion.div key={action.to + action.label}
+            initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 + i * 0.06, ease: [0.25, 0.46, 0.45, 0.94] }}>
+            <Link to={action.to}
+              className="block rounded-xl glass-premium card-interactive p-5 md:p-6 group">
+              <div className="w-10 h-10 rounded-xl icon-premium flex items-center justify-center mb-3">
+                <action.icon className="w-4 h-4 text-primary" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">{action.label}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{action.desc}</p>
+            </Link>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 };

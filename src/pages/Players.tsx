@@ -127,8 +127,13 @@ const Players = () => {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
           <p className="text-xs text-muted-foreground">{players.length} spelare hittade</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {players.map((player) => (
-              <PlayerCard key={player.id} player={player} />
+            {players.map((player, i) => (
+              <motion.div key={player.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: Math.min(i * 0.04, 0.3), ease: [0.25, 0.46, 0.45, 0.94] }}>
+                <PlayerCard player={player} />
+              </motion.div>
             ))}
           </div>
         </motion.div>

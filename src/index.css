@@ -67,6 +67,52 @@
   }
 }
 
+/* --- Premium touch & interaction foundation (ISP Port) --- */
+html {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+button, [role="button"], a, [role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button, [role="button"], [role="tab"], nav {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Button press micro-interaction */
+button:not([disabled]),
+[role="button"]:not([disabled]) {
+  transition: transform 60ms ease, opacity 120ms ease, box-shadow 200ms ease,
+              background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+button:not([disabled]):active,
+[role="button"]:not([disabled]):active {
+  transform: scale(0.97);
+}
+
+/* Focus ring: buttons & links (a11y baseline) */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Input focus centralized */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
@@ -203,6 +249,162 @@
   .btn-premium:active {
     transform: scale(0.98);
   }
+
+  /* Hover utilities */
+  .hover-row {
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+  .hover-row:hover {
+    background: hsl(var(--muted));
+  }
+  .hover-lift {
+    transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-1px);
+  }
+  .hover-scale {
+    transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .hover-scale:hover {
+    transform: scale(1.02);
+  }
+  .hover-scale:active {
+    transform: scale(0.98);
+  }
+
+  /* Shadow system */
+  .shadow-card-interactive {
+    box-shadow: 0 1px 3px hsl(var(--background) / 0.3);
+    transition: box-shadow 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .shadow-card-interactive:hover {
+    box-shadow: 0 4px 16px -4px hsl(var(--background) / 0.5), 0 0 0 1px hsl(var(--primary) / 0.1);
+  }
+
+  /* Badge system */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 0.5rem;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+  }
+  .badge-primary {
+    background: hsl(var(--primary) / 0.1);
+    color: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.2);
+  }
+  .badge-gold {
+    background: hsl(var(--accent) / 0.1);
+    color: hsl(var(--accent));
+    border: 1px solid hsl(var(--accent) / 0.2);
+  }
+  .badge-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: hsl(var(--success) / 0.1);
+    color: hsl(var(--success));
+    border: 1px solid hsl(var(--success) / 0.2);
+  }
+  .badge-live::before {
+    content: '';
+    display: inline-block;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: hsl(var(--success));
+    animation: pulse-soft 2s ease-in-out infinite;
+  }
+
+  /* Score circle */
+  .score-circle {
+    position: relative;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: hsl(var(--accent));
+    background: hsl(var(--accent) / 0.08);
+    transition: all 200ms ease-out;
+  }
+  .score-circle:hover {
+    background: hsl(var(--accent) / 0.12);
+    box-shadow: 0 0 24px -4px hsl(var(--accent) / 0.3);
+  }
+
+  /* Success animations */
+  @keyframes success-pop {
+    0% { transform: scale(0.8); opacity: 0; }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes checkmark-draw {
+    0% { stroke-dashoffset: 24; }
+    100% { stroke-dashoffset: 0; }
+  }
+  .animate-success-pop {
+    animation: success-pop 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  /* Entrance animations */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes skeleton-reveal {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .animate-slide-up {
+    animation: slideUp 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .skeleton-reveal {
+    animation: skeleton-reveal 0.2s ease-out both;
+  }
+
+  /* Pulse for badges */
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Mobile safe area */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+  .pb-mobile-nav {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Scrollbar hide */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Reduced motion */
@@ -220,4 +422,19 @@
     transform: none;
     box-shadow: none;
   }
+}
+
+/* Prevent iOS Safari auto-zoom on input focus */
+@media screen and (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  nav, [data-sidebar], header { display: none !important; }
+  body, .min-h-screen { background: white !important; color: black !important; }
+  .rounded-xl { box-shadow: none !important; border: 1px solid #e5e5e5 !important; }
+  main { padding: 0 !important; }
 }

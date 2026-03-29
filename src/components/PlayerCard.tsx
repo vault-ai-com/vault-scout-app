@@ -4,6 +4,15 @@ import { useIsOnWatchlist, useToggleWatchlist } from "@/hooks/use-scout-watchlis
 import type { ScoutPlayer } from "@/types/scout";
 import { TIER_LABELS, TIER_COLORS } from "@/types/scout";
 
+const phaseLabels: Record<string, string> = {
+  emergence: "Genombrott",
+  development: "Utveckling",
+  peak: "Topp",
+  prime: "Prime",
+  decline: "Avtagande",
+  veteran: "Veteran",
+};
+
 interface PlayerCardProps {
   player: ScoutPlayer;
 }
@@ -20,7 +29,7 @@ export function PlayerCard({ player }: PlayerCardProps) {
       className="block rounded-xl p-4 glass-premium card-interactive group">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl icon-premium flex items-center justify-center flex-shrink-0">
-          <User className="w-4.5 h-4.5 text-primary" />
+          <User className="w-[18px] h-[18px] text-primary" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -48,9 +57,14 @@ export function PlayerCard({ player }: PlayerCardProps) {
             <span>{player.nationality}</span>
             <span className="flex items-center gap-1">
               <TrendingUp className="w-3 h-3" />
-              {player.career_phase}
+              {phaseLabels[player.career_phase] ?? player.career_phase}
             </span>
             {player.current_league && <span>{player.current_league}</span>}
+            {player.market_value != null && (
+              <span className="badge-gold text-[10px]">
+                €{(player.market_value / 1_000_000).toFixed(1)}M
+              </span>
+            )}
           </div>
         </div>
       </div>
