@@ -157,6 +157,38 @@ export const ReportResponseSchema = z.object({
 });
 export type ReportResponse = z.infer<typeof ReportResponseSchema>;
 
+// --- Personality Profile schemas (BPA-fotboll, separat från dimension_scores) ---
+export const PersonalityDimensionSchema = z.object({
+  name: z.string(),
+  score: z.number().min(1).max(10),
+  evidence: z.string(),
+});
+export type PersonalityDimension = z.infer<typeof PersonalityDimensionSchema>;
+
+export const PersonalityProfileSchema = z.object({
+  decision_tempo: PersonalityDimensionSchema,
+  risk_appetite: PersonalityDimensionSchema,
+  structure_need: PersonalityDimensionSchema,
+  team_orientation: PersonalityDimensionSchema,
+  tactical_understanding: PersonalityDimensionSchema,
+  ambition_level: PersonalityDimensionSchema,
+  career_motivation: PersonalityDimensionSchema,
+  stress_archetype: z.string(),
+  coaching_approach: z.array(z.string()),
+  integration_risks: z.array(z.string()),
+  confidence_score: z.number().min(0).max(1),
+});
+export type PersonalityProfile = z.infer<typeof PersonalityProfileSchema>;
+
+export const PersonalityResponseSchema = z.object({
+  success: z.boolean(),
+  player_id: z.string(),
+  profile: PersonalityProfileSchema,
+  duration_ms: z.number(),
+  cache_hit: z.boolean().optional(),
+});
+export type PersonalityResponse = z.infer<typeof PersonalityResponseSchema>;
+
 // --- Labels & colors ---
 // Aligned with Knowledge Bank football_dimensions (KB source of truth)
 // Industry-grounded: StatsBomb 360, Wyscout Index, CIES, InStat

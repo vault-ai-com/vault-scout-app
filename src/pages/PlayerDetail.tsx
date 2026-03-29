@@ -4,16 +4,20 @@ import { motion } from "framer-motion";
 import { ArrowLeft, User, FileText, Loader2 } from "lucide-react";
 import { useAnalyzePlayer } from "@/hooks/use-scout-analyze";
 import { useGenerateReport } from "@/hooks/use-scout-report";
+import { usePersonalityAnalysis } from "@/hooks/use-scout-personality";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
-import type { AnalysisType, AnalysisResult } from "@/types/scout";
+import { PersonalityPanel } from "@/components/PersonalityPanel";
+import type { AnalysisType, AnalysisResult, PersonalityProfile } from "@/types/scout";
 
 const PlayerDetail = () => {
   const { id } = useParams<{ id: string }>();
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [personalityProfile, setPersonalityProfile] = useState<PersonalityProfile | null>(null);
 
   const analyze = useAnalyzePlayer();
   const report = useGenerateReport();
+  const personality = usePersonalityAnalysis();
 
   const handleAnalyze = useCallback((type: AnalysisType) => {
     if (!id) return;
@@ -27,6 +31,18 @@ const PlayerDetail = () => {
       },
     );
   }, [id, analyze]);
+
+  const handlePersonality = useCallback(() => {
+    if (!id) return;
+    personality.mutate(
+      { player_id: id },
+      {
+        onSuccess: (data) => {
+          setPersonalityProfile(data.profile);
+        },
+      },
+    );
+  }, [id, personality]);
 
   const handleReport = useCallback(() => {
     if (!id) return;
@@ -84,6 +100,16 @@ const PlayerDetail = () => {
           error={analyze.error?.message ?? null}
           onAnalyze={handleAnalyze}
         />
+
+        {/* Personality panel — separate async analysis */}
+        {analysisResult && (
+          <PersonalityPanel
+            profile={personalityProfile}
+            loading={personality.isPending}
+            error={personality.error?.message ?? null}
+            onAnalyze={handlePersonality}
+          />
+        )}
 
         {/* Report error */}
         {report.error && (
