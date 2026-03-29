@@ -86,6 +86,7 @@ export const AnalysisResponseSchema = z.object({
   success: z.boolean(),
   analysis_id: z.string(),
   duration_ms: z.number(),
+  cache_hit: z.boolean().optional(),
   result: AnalysisResultSchema,
 });
 export type AnalysisResponse = z.infer<typeof AnalysisResponseSchema>;
