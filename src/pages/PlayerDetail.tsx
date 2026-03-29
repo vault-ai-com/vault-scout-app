@@ -14,6 +14,7 @@ import { useGenerateReport } from "@/hooks/use-scout-report";
 import { usePersonalityAnalysis } from "@/hooks/use-scout-personality";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { PersonalityPanel } from "@/components/PersonalityPanel";
+import { ComparablePlayersPanel } from "@/components/ComparablePlayersPanel";
 import { TIER_LABELS, TIER_COLORS } from "@/types/scout";
 import type { AnalysisType, AnalysisResult, PersonalityProfile } from "@/types/scout";
 
@@ -238,6 +239,13 @@ const PlayerDetail = () => {
             error={personality.error?.message ?? null}
             onAnalyze={handlePersonality}
           />
+        </motion.div>
+      )}
+
+      {/* Comparable players */}
+      {player && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <ComparablePlayersPanel player={player} />
         </motion.div>
       )}
 
