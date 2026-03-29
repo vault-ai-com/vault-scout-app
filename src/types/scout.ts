@@ -174,6 +174,46 @@ export const PersonalityDimensionSchema = z.object({
 });
 export type PersonalityDimension = z.infer<typeof PersonalityDimensionSchema>;
 
+export const CompositeArchetypeSchema = z.enum([
+  "COMPLETE_PROFESSIONAL",
+  "HIGH_PERFORMING_SOLO",
+  "SILENT_LEADER",
+  "COACHABLE_RAW_TALENT",
+  "TOXIC_HIGH_PERFORMER",
+  "MENTALITY_MONSTER",
+  "RELIABLE_SOLDIER",
+]);
+export type CompositeArchetype = z.infer<typeof CompositeArchetypeSchema>;
+
+export const DataSourceQualitySchema = z.enum(["PUBLIC_ONLY", "MIXED", "VERIFIED"]);
+export type DataSourceQuality = z.infer<typeof DataSourceQualitySchema>;
+
+export const ARCHETYPE_LABELS: Record<CompositeArchetype, string> = {
+  COMPLETE_PROFESSIONAL: "Komplett Proffs",
+  HIGH_PERFORMING_SOLO: "Högpresterande Solist",
+  SILENT_LEADER: "Tyst Ledare",
+  COACHABLE_RAW_TALENT: "Formbar Råtalang",
+  TOXIC_HIGH_PERFORMER: "Toxic Stjärna",
+  MENTALITY_MONSTER: "Mentalitetsmonster",
+  RELIABLE_SOLDIER: "Pålitlig Soldat",
+};
+
+export const ARCHETYPE_COLORS: Record<CompositeArchetype, string> = {
+  COMPLETE_PROFESSIONAL: "bg-primary/10 text-primary border-primary/20",
+  HIGH_PERFORMING_SOLO: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  SILENT_LEADER: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20",
+  COACHABLE_RAW_TALENT: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  TOXIC_HIGH_PERFORMER: "bg-red-500/10 text-red-400 border-red-500/20",
+  MENTALITY_MONSTER: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  RELIABLE_SOLDIER: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+};
+
+export const DATA_SOURCE_LABELS: Record<DataSourceQuality, string> = {
+  PUBLIC_ONLY: "Publika källor",
+  MIXED: "Blandade källor",
+  VERIFIED: "Verifierade källor",
+};
+
 export const PersonalityProfileSchema = z.object({
   decision_tempo: PersonalityDimensionSchema,
   risk_appetite: PersonalityDimensionSchema,
@@ -186,6 +226,9 @@ export const PersonalityProfileSchema = z.object({
   coaching_approach: z.array(z.string().min(1)).min(1).max(7),
   integration_risks: z.array(z.string().min(1)).min(1).max(6),
   confidence_score: z.number().min(0).max(1),
+  composite_archetype: CompositeArchetypeSchema.optional(),
+  confidence_reasoning: z.string().optional(),
+  data_source_quality: DataSourceQualitySchema.optional(),
 });
 export type PersonalityProfile = z.infer<typeof PersonalityProfileSchema>;
 
