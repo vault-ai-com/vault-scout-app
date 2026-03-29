@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { User, MapPin, Trophy, TrendingUp } from "lucide-react";
+import { User, MapPin, Trophy, TrendingUp, Star } from "lucide-react";
+import { useIsOnWatchlist, useToggleWatchlist } from "@/hooks/use-scout-watchlist";
 import type { ScoutPlayer } from "@/types/scout";
 import { TIER_LABELS, TIER_COLORS } from "@/types/scout";
 
@@ -8,7 +9,13 @@ interface PlayerCardProps {
 }
 
 export function PlayerCard({ player }: PlayerCardProps) {
+  const { data: watchlistData } = useIsOnWatchlist(player.id);
+  const isOnWatchlist = watchlistData?.isOnWatchlist ?? false;
+  const watchlistId = watchlistData?.watchlistId ?? null;
+  const toggleWatchlist = useToggleWatchlist();
+
   return (
+    <div className="relative">
     <Link to={`/players/${player.id}`}
       className="block rounded-xl p-4 glass-premium card-interactive group">
       <div className="flex items-start gap-3">
@@ -48,5 +55,15 @@ export function PlayerCard({ player }: PlayerCardProps) {
         </div>
       </div>
     </Link>
+    <button
+      type="button"
+      onClick={() => toggleWatchlist.mutate({ playerId: player.id, isOnWatchlist, watchlistId })}
+      disabled={toggleWatchlist.isPending}
+      aria-label={isOnWatchlist ? "Ta bort från bevakningslista" : "Lägg till i bevakningslista"}
+      className="absolute top-2 right-2 p-1.5 rounded-lg text-muted-foreground/40 hover:text-amber-400 transition-colors disabled:opacity-30 z-10"
+    >
+      <Star className={`w-3.5 h-3.5 ${isOnWatchlist ? "fill-amber-400 text-amber-400" : ""}`} />
+    </button>
+    </div>
   );
 }

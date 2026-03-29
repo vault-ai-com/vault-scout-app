@@ -4,9 +4,11 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft, User, FileText, Loader2, Trophy, MapPin,
   TrendingUp, Calendar, Ruler, Weight, Footprints,
-  ChevronRight,
+  ChevronRight, Star, GitCompare,
 } from "lucide-react";
 import { useGetPlayer } from "@/hooks/use-scout-search";
+import { useIsOnWatchlist, useToggleWatchlist } from "@/hooks/use-scout-watchlist";
+import { NotesPanel } from "@/components/NotesPanel";
 import { useAnalyzePlayer } from "@/hooks/use-scout-analyze";
 import { useGenerateReport } from "@/hooks/use-scout-report";
 import { usePersonalityAnalysis } from "@/hooks/use-scout-personality";
@@ -40,6 +42,10 @@ function StatPill({ icon: Icon, label, value }: { icon: typeof Trophy; label: st
 const PlayerDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { data: playerData, isLoading: loadingPlayer } = useGetPlayer(id);
+  const { data: watchlistData } = useIsOnWatchlist(id ?? "");
+  const isOnWatchlist = watchlistData?.isOnWatchlist ?? false;
+  const watchlistId = watchlistData?.watchlistId ?? null;
+  const toggleWatchlist = useToggleWatchlist();
   const player = playerData?.player ?? null;
 
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
@@ -161,14 +167,37 @@ const PlayerDetail = () => {
               </div>
             </div>
 
-            {/* Report button */}
-            {analysisResult && (
-              <button type="button" onClick={handleReport} disabled={report.isPending}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary text-primary-foreground btn-premium disabled:opacity-50 shadow-lg shadow-primary/20">
-                {report.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                Rapport
+            {/* Action buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => id && toggleWatchlist.mutate({ playerId: id, isOnWatchlist, watchlistId })}
+                disabled={toggleWatchlist.isPending}
+                aria-label={isOnWatchlist ? "Ta bort från bevakningslista" : "Lägg till i bevakningslista"}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 ${
+                  isOnWatchlist
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+                    : "bg-card/60 text-muted-foreground border-border/40 hover:text-amber-400 hover:border-amber-500/30"
+                }`}
+              >
+                <Star className={`w-4 h-4 ${isOnWatchlist ? "fill-amber-400" : ""}`} />
+                {isOnWatchlist ? "Bevakar" : "Bevaka"}
               </button>
-            )}
+              <Link
+                to={`/comparison?ids=${id}`}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold border border-border/40 bg-card/60 text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+              >
+                <GitCompare className="w-4 h-4" />
+                Jämför
+              </Link>
+              {analysisResult && (
+                <button type="button" onClick={handleReport} disabled={report.isPending}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary text-primary-foreground btn-premium disabled:opacity-50 shadow-lg shadow-primary/20">
+                  {report.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  Rapport
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Player stats pills */}
@@ -210,6 +239,11 @@ const PlayerDetail = () => {
             onAnalyze={handlePersonality}
           />
         </motion.div>
+      )}
+
+      {/* Notes panel */}
+      {player && id && (
+        <NotesPanel playerId={id} />
       )}
 
       {/* Report error */}

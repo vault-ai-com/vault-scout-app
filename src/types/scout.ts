@@ -242,3 +242,53 @@ export const RECOMMENDATION_COLORS: Record<Recommendation, string> = {
   PASS: "text-red-400 bg-red-500/10 border-red-500/20",
   INSUFFICIENT_DATA: "text-zinc-400 bg-zinc-500/10 border-zinc-500/20",
 };
+
+// --- Scout Notes schema ---
+export const ScoutNoteSchema = z.object({
+  id: z.string(),
+  player_id: z.string(),
+  title: z.string().nullable().optional(),
+  content: z.string(),
+  created_by: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type ScoutNote = z.infer<typeof ScoutNoteSchema>;
+
+// --- Watchlist Entry schema (full DB row + optional player join) ---
+export const WatchlistEntrySchema = z.object({
+  id: z.string(),
+  player_id: z.string(),
+  priority: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  target_position: z.string().nullable().optional(),
+  max_budget_eur: z.number().nullable().optional(),
+  deadline: z.string().nullable().optional(),
+  tags: z.array(z.string()).nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  created_by: z.string().nullable().optional(),
+  scout_players: z.object({
+    id: z.string(),
+    name: z.string(),
+    position_primary: z.string(),
+    tier: z.string(),
+    current_club: z.string(),
+  }).nullable().optional(),
+});
+export type WatchlistEntry = z.infer<typeof WatchlistEntrySchema>;
+
+// --- Comparison Entry schema ---
+export const ComparisonEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  player_ids: z.array(z.string()),
+  comparison_type: z.string().nullable().optional(),
+  result_data: z.record(z.unknown()).nullable().optional(),
+  winner_player_id: z.string().nullable().optional(),
+  summary: z.string().nullable().optional(),
+  created_at: z.string(),
+  created_by: z.string().nullable().optional(),
+});
+export type ComparisonEntry = z.infer<typeof ComparisonEntrySchema>;
