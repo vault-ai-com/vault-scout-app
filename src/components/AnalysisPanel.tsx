@@ -39,7 +39,7 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
       <div className="flex flex-wrap gap-2">
         {analysisTypes.map((t) => (
           <button key={t.value} type="button" onClick={() => onAnalyze(t.value)} disabled={loading}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-foreground hover:bg-card hover:border-primary/30 transition-colors disabled:opacity-50">
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border/50 text-foreground hover:bg-primary/10 hover:border-primary/30 hover:text-primary btn-premium transition-colors disabled:opacity-50">
             {t.label}
           </button>
         ))}
@@ -48,7 +48,7 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
       {/* Loading */}
       {loading && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className="flex items-center gap-2 p-4 rounded-xl bg-card border border-border" role="status" aria-live="polite">
+          className="flex items-center gap-2 p-4 rounded-xl glass-premium" role="status" aria-live="polite">
           <Loader2 className="w-4 h-4 animate-spin text-primary" />
           <span className="text-sm text-muted-foreground">Analyserar spelare...</span>
         </motion.div>
@@ -78,7 +78,7 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
               );
             })()}
             <div className="text-right">
-              <div className="text-2xl font-bold text-foreground">{Math.min(10, Math.max(0, result.overall_score)).toFixed(1)}</div>
+              <div className="text-2xl font-extrabold stat-gold">{Math.min(10, Math.max(0, result.overall_score)).toFixed(1)}</div>
               <div className="text-[10px] text-muted-foreground">
                 Konfidens {Math.min(100, Math.max(0, result.confidence * 100)).toFixed(0)}%
               </div>
@@ -86,13 +86,13 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
           </div>
 
           {/* Summary */}
-          <div className="rounded-xl p-4 bg-card border border-border">
+          <div className="rounded-xl p-4 glass-premium">
             <p className="text-sm text-foreground/90 leading-relaxed">{result.summary}</p>
           </div>
 
           {/* Dimension chart */}
-          <div className="rounded-xl p-4 bg-card border border-border">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          <div className="rounded-xl p-4 glass-premium">
+            <h3 className="section-tag mb-3">
               Dimensionsanalys
             </h3>
             <DimensionChart scores={result.dimension_scores} />
@@ -100,7 +100,7 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
 
           {/* Strengths & Weaknesses */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="rounded-xl p-4 bg-card border border-border">
+            <div className="rounded-xl p-4 glass-premium card-accent-left-green">
               <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Styrkor</h3>
               <ul className="space-y-1">
                 {result.strengths.map((s, i) => (
@@ -110,7 +110,7 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
                 ))}
               </ul>
             </div>
-            <div className="rounded-xl p-4 bg-card border border-border">
+            <div className="rounded-xl p-4 glass-premium card-accent-left-red">
               <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Svagheter</h3>
               <ul className="space-y-1">
                 {result.weaknesses.map((w, i) => (
@@ -124,7 +124,7 @@ export function AnalysisPanel({ result, loading, error, onAnalyze }: AnalysisPan
 
           {/* Risk factors */}
           {result.risk_factors.length > 0 && (
-            <div className="rounded-xl p-4 bg-card border border-border">
+            <div className="rounded-xl p-4 glass-premium card-accent-left-gold">
               <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Riskfaktorer</h3>
               <ul className="space-y-1">
                 {result.risk_factors.map((r, i) => (

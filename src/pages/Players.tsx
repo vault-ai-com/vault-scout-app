@@ -39,32 +39,33 @@ const Players = () => {
   const noResults = !loading && (activeQuery || discover.data) && !hasResults;
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <h1 className="text-xl font-bold text-foreground">Spelare</h1>
-        <p className="text-sm text-muted-foreground mt-1">Sök och analysera spelare</p>
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <span className="section-tag">Spelare</span>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1 tracking-tight">Sök och analysera</h1>
+        <p className="text-sm text-muted-foreground mt-1">Hitta spelare med AI-driven sökning</p>
       </motion.div>
 
       {/* Search bar */}
       <form onSubmit={handleSearch} className="flex gap-2">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
           <input type="text" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Sök spelare, position, klubb..." aria-label="Sök spelare"
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all bg-card border border-border text-foreground placeholder:text-muted-foreground" />
+            className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary/30 transition-all glass-premium text-foreground placeholder:text-muted-foreground/60" />
         </div>
         <button type="submit" disabled={!query.trim() || loading}
-          className="px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
+          className="px-5 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground btn-premium disabled:opacity-50 shadow-lg shadow-primary/20">
           Sök
         </button>
         <button type="button" onClick={handleDiscover} disabled={!query.trim() || loading}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-3 rounded-xl text-sm font-semibold border border-primary/30 text-primary hover:bg-primary/10 btn-premium disabled:opacity-50"
           title="AI-sökning: beskriv vad du letar efter">
           <Sparkles className="w-3.5 h-3.5" />
           AI
         </button>
         <button type="button" onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-border text-foreground hover:bg-card transition-colors">
+          className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-card/50 transition-all">
           <Filter className="w-4 h-4" />
         </button>
       </form>
@@ -72,7 +73,7 @@ const Players = () => {
       {/* Filters */}
       {showFilters && (
         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-          className="flex flex-wrap gap-3 p-4 rounded-xl bg-card border border-border">
+          className="flex flex-wrap gap-3 p-4 rounded-xl glass-premium">
           <div>
             <label htmlFor="filter-position" className="block text-[10px] font-medium text-muted-foreground mb-1">Position</label>
             <select id="filter-position" value={position} onChange={e => setPosition(e.target.value)}
@@ -143,14 +144,14 @@ const Players = () => {
 
       {/* Empty state */}
       {!activeQuery && !discover.data && !loading && (
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}
-          className="rounded-2xl p-5 bg-card border border-border">
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <Users className="w-6 h-6 text-primary" />
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="rounded-xl glass-premium">
+          <div className="flex flex-col items-center justify-center py-16 md:py-20 text-center">
+            <div className="w-16 h-16 rounded-2xl icon-premium flex items-center justify-center mb-5">
+              <Users className="w-7 h-7 text-primary" />
             </div>
-            <p className="text-sm font-medium text-foreground mb-1">Sök efter spelare</p>
-            <p className="text-xs text-muted-foreground max-w-xs">
+            <p className="text-base font-semibold text-foreground mb-2">Sök efter spelare</p>
+            <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
               Använd sökfältet ovan eller klicka AI för en intelligent sökning.
             </p>
           </div>

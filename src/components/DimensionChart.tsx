@@ -30,13 +30,13 @@ export function DimensionChart({ scores }: DimensionChartProps) {
               <span className="text-xs text-muted-foreground w-36 flex-shrink-0 truncate" title={label}>
                 {label}
               </span>
-              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${scoreColor(dim.score)}`}
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="text-xs font-semibold w-6 text-right text-foreground">
+              <span className="text-xs font-bold w-6 text-right text-foreground">
                 {dim.score != null ? Math.min(10, Math.max(0, dim.score)).toFixed(1) : "—"}
               </span>
             </div>

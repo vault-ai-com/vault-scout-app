@@ -10,9 +10,9 @@ interface PlayerCardProps {
 export function PlayerCard({ player }: PlayerCardProps) {
   return (
     <Link to={`/players/${player.id}`}
-      className="block rounded-2xl p-4 bg-card border border-border hover:border-primary/30 card-interactive group">
+      className="block rounded-xl p-4 glass-premium card-interactive group">
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-xl icon-premium flex items-center justify-center flex-shrink-0">
           <User className="w-4.5 h-4.5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">

@@ -41,7 +41,7 @@ function ScoreBar({ score, label, evidence }: { score: number; label: string; ev
         <span className="text-xs font-medium text-foreground">{label}</span>
         <span className="text-xs font-bold text-foreground">{clamped.toFixed(1)}</span>
       </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
+      <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
@@ -56,9 +56,9 @@ function ScoreBar({ score, label, evidence }: { score: number; label: string; ev
 
 export function PersonalityPanel({ profile, loading, error, onAnalyze }: PersonalityPanelProps) {
   return (
-    <div className="rounded-xl p-4 bg-card border border-border space-y-4">
+    <div className="rounded-xl p-6 md:p-8 glass-premium card-accent-left space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        <h3 className="section-tag flex items-center gap-1.5">
           <Brain className="w-3.5 h-3.5" />
           Psykologisk profil
         </h3>
@@ -66,7 +66,7 @@ export function PersonalityPanel({ profile, loading, error, onAnalyze }: Persona
           <button
             type="button"
             onClick={onAnalyze}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-primary/30 text-primary hover:bg-primary/10 btn-premium transition-colors"
           >
             Kör djupanalys
           </button>
@@ -105,7 +105,7 @@ export function PersonalityPanel({ profile, loading, error, onAnalyze }: Persona
           </div>
 
           {/* Stress archetype */}
-          <div className="rounded-lg p-3 bg-muted/50 border border-border">
+          <div className="rounded-lg p-3 bg-card/60 border border-border/30 backdrop-blur-sm">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
               Stressarketyp
             </span>

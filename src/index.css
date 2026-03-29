@@ -83,33 +83,141 @@
   background: hsl(var(--muted-foreground));
 }
 
-/* --- Premium utility classes (ISP/Buddy-inspired) --- */
+/* --- Premium utility classes (Vault Command Buddy-inspired) --- */
 @layer utilities {
+  /* Glass effects */
   .glass {
-    background: hsl(var(--card) / 0.6);
+    background: hsl(var(--card) / 0.8);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+  }
+  .glass-premium {
+    background: linear-gradient(135deg, hsl(var(--card) / 0.9) 0%, hsl(var(--card) / 0.7) 100%);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border: 1px solid hsl(var(--border) / 0.5);
   }
   .glass-border {
     border: 1px solid hsl(var(--border) / 0.5);
   }
+
+  /* Premium card interactions */
   .card-interactive {
-    transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
-      box-shadow 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+    transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+    will-change: transform, box-shadow;
   }
   .card-interactive:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4),
-      0 0 0 1px hsl(var(--primary) / 0.1);
+    box-shadow: 0 10px 40px -12px hsl(var(--background) / 0.5),
+      0 0 0 1px hsl(var(--primary) / 0.15);
   }
+  .card-interactive:active {
+    transform: scale(0.995) translateY(0);
+  }
+
+  /* Gradient accent line (top of cards) */
+  .gradient-accent-top {
+    position: relative;
+    overflow: hidden;
+  }
+  .gradient-accent-top::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--primary) / 0.5) 30%, hsl(var(--accent) / 0.4) 70%, transparent 100%);
+  }
+
+  /* Sidebar premium background */
+  .sidebar-glass {
+    background: linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(216 55% 7%) 100%);
+  }
+
+  /* Active nav indicator (Buddy-style left border) */
+  .nav-active {
+    background: hsl(var(--sidebar-accent));
+    box-shadow: inset 3px 0 0 0 hsl(var(--primary));
+  }
+
+  /* Premium icon container */
+  .icon-premium {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.05));
+    box-shadow: 0 0 20px -4px hsl(var(--primary) / 0.2);
+  }
+
+  /* Gold stat numbers (Vault Design System: dark bg = gold stats) */
+  .stat-gold {
+    background: linear-gradient(135deg, hsl(var(--accent)), hsl(43 92% 45%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Section tag (Vault pitch-style) */
+  .section-tag {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: hsl(var(--primary) / 0.7);
+  }
+
+  /* Left-border accent card (from Vault pitch design) */
+  .card-accent-left {
+    border-left: 3px solid hsl(var(--primary));
+  }
+  .card-accent-left-gold {
+    border-left: 3px solid hsl(var(--accent));
+  }
+  .card-accent-left-green {
+    border-left: 3px solid hsl(var(--success));
+  }
+  .card-accent-left-red {
+    border-left: 3px solid hsl(var(--destructive));
+  }
+
+  /* Premium shimmer */
   .skeleton-shimmer {
     background: linear-gradient(
       90deg,
-      hsl(var(--muted)) 25%,
-      hsl(var(--muted-foreground) / 0.08) 50%,
-      hsl(var(--muted)) 75%
+      hsl(var(--card)) 0%,
+      hsl(var(--muted) / 0.5) 20%,
+      hsl(var(--muted) / 0.8) 40%,
+      hsl(var(--muted) / 0.5) 60%,
+      hsl(var(--card)) 80%,
+      hsl(var(--card)) 100%
     );
     background-size: 200% 100%;
-    animation: shimmer 2s infinite linear;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  /* Premium button press */
+  .btn-premium {
+    transition: all 0.15s ease-out;
+  }
+  .btn-premium:hover {
+    transform: scale(1.02);
+  }
+  .btn-premium:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Disable hover lift on touch devices */
+@media (hover: none) {
+  .card-interactive:hover {
+    transform: none;
+    box-shadow: none;
   }
 }

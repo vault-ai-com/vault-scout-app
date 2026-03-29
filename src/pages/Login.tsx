@@ -34,10 +34,12 @@ const Login = ({ onLogin }: LoginProps) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background overflow-hidden">
       {/* Ambient blobs */}
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.12) 0%, transparent 70%)', filter: 'blur(60px)' }} />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, hsl(var(--accent) / 0.10) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)', filter: 'blur(80px)' }} />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, hsl(var(--accent) / 0.12) 0%, transparent 70%)', filter: 'blur(80px)' }} />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.06) 0%, transparent 70%)', filter: 'blur(60px)' }} />
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}

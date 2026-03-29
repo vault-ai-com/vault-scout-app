@@ -32,27 +32,30 @@ const Dashboard = () => {
   const stats = (data?.data ?? {}) as Record<string, unknown>;
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}>
+        <span className="section-tag">Scouting</span>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1 tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">Överblick av din scoutingaktivitet</p>
       </motion.div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
         {statConfig.map((stat, i) => (
           <motion.div key={stat.key}
             initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: i * 0.05 }}
-            className="rounded-2xl p-5 bg-card border border-border hover:border-primary/20 card-interactive">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-muted-foreground">{stat.label}</span>
-              <stat.icon className="w-4 h-4 text-muted-foreground/50" />
+            transition={{ duration: 0.4, delay: i * 0.08, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="rounded-xl glass-premium gradient-accent-top card-interactive p-5 md:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{stat.label}</span>
+              <div className="w-8 h-8 rounded-lg icon-premium flex items-center justify-center">
+                <stat.icon className="w-4 h-4 text-primary" />
+              </div>
             </div>
             {isLoading ? (
-              <div className="h-8 w-24 rounded-lg skeleton-shimmer" />
+              <div className="h-10 w-28 rounded-lg skeleton-shimmer" />
             ) : (
-              <div className="text-2xl font-bold text-foreground tabular-nums">
+              <div className="text-3xl md:text-4xl font-extrabold tabular-nums stat-gold">
                 <AnimatedNumber value={Number(stats[stat.key]) || 0} />
               </div>
             )}
@@ -62,22 +65,23 @@ const Dashboard = () => {
 
       {/* Error */}
       {error && (
-        <div role="alert" className="flex items-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          <AlertTriangle className="w-4 h-4" />
+        <motion.div role="alert" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
+          className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {error instanceof Error ? error.message : "Kunde inte ladda dashboard"}
-        </div>
+        </motion.div>
       )}
 
       {/* Recent activity */}
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}
-        className="rounded-2xl p-5 bg-card border border-border">
-        <h2 className="text-sm font-semibold text-foreground mb-4">Senaste aktivitet</h2>
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-            <Search className="w-5 h-5 text-primary" />
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="rounded-xl glass-premium p-5 md:p-6">
+        <h2 className="text-sm font-semibold text-foreground mb-6">Senaste aktivitet</h2>
+        <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center">
+          <div className="w-14 h-14 rounded-2xl icon-premium flex items-center justify-center mb-4">
+            <Search className="w-6 h-6 text-primary" />
           </div>
-          <p className="text-sm font-medium text-foreground mb-1">Börja scouta</p>
-          <p className="text-xs text-muted-foreground max-w-xs">
+          <p className="text-base font-semibold text-foreground mb-2">Börja scouta</p>
+          <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
             Sök efter spelare, analysera prestationer och generera rapporter med AI-driven scouting.
           </p>
         </div>
