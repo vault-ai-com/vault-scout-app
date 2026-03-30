@@ -4,3 +4,7 @@ dist
 *.local
 .vite
 .DS_Store
+playwright-report/
+test-results/
+.auth/
+.env.test
