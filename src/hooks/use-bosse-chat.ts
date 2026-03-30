@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 import { ChatSessionSchema, ChatMessageSchema, safeChatArray } from "@/types/chat";
 import type { ChatSession, ChatMessage } from "@/types/chat";
 
@@ -98,14 +101,14 @@ export function useSendMessage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const url = `${import.meta.env.VITE_SUPABASE_URL ?? "https://czyzohfllffpgctslbwk.supabase.co"}/functions/v1/scout-bosse-chat`;
+      const url = `${SUPABASE_URL}/functions/v1/scout-bosse-chat`;
 
       const res = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6eXpvaGZsbGZmcGdjdHNsYndrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MjU4MzEsImV4cCI6MjA4MzIwMTgzMX0.N1HiX0zrhikFletxPh7o_hXFkkeMtOPIWVkZUR50I1U",
+          "apikey": SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ message, session_id: sessionId, player_id: playerId }),
         signal: abortRef.current.signal,
