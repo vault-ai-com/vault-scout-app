@@ -52,6 +52,9 @@ export const ScoutPlayerSchema = z.object({
   preferred_foot: z.string().optional().nullable(),
   height_cm: z.number().optional().nullable(),
   weight_kg: z.number().optional().nullable(),
+  latest_score: z.number().optional().nullable(),
+  latest_recommendation: z.string().optional().nullable(),
+  latest_analysis_date: z.string().optional().nullable(),
 });
 
 export type ScoutPlayer = z.infer<typeof ScoutPlayerSchema>;

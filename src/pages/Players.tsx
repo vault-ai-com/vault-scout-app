@@ -39,10 +39,9 @@ const Players = () => {
   const [position, setPosition] = useState("");
   const [tier, setTier] = useState("");
 
-  // Structured search
+  // Structured search — always enabled (empty query returns all players)
   const { data: searchData, isLoading: searching } = useScoutSearch(
-    { query: activeQuery, position: position || undefined, tier: tier || undefined },
-    activeQuery.length > 0,
+    { query: activeQuery || undefined, position: position || undefined, tier: tier || undefined },
   );
 
   // AI discover
@@ -120,7 +119,7 @@ const Players = () => {
   const players: ScoutPlayer[] = discover.data?.players ?? searchData?.players ?? [];
   const loading = searching || discover.isPending;
   const hasResults = players.length > 0;
-  const noResults = !loading && (activeQuery || discover.data) && !hasResults;
+  const noResults = !loading && !hasResults;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8">
@@ -229,22 +228,6 @@ const Players = () => {
           <p className="text-sm text-muted-foreground">Inga spelare matchade din sökning.</p>
           <p className="text-xs text-muted-foreground/70 mt-1">Prova ett bredare sökord eller använd AI-sökning.</p>
         </div>
-      )}
-
-      {/* Empty state */}
-      {!activeQuery && !discover.data && !loading && (
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="rounded-xl glass-premium">
-          <div className="flex flex-col items-center justify-center py-16 md:py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl icon-premium flex items-center justify-center mb-5">
-              <Users className="w-7 h-7 text-accent" />
-            </div>
-            <p className="text-base font-semibold text-foreground mb-2">Sök efter spelare</p>
-            <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-              Använd sökfältet ovan eller klicka AI för en intelligent sökning.
-            </p>
-          </div>
-        </motion.div>
       )}
 
       {/* Error */}

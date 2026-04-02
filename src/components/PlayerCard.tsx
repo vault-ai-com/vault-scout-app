@@ -1,8 +1,14 @@
 import { Link } from "react-router-dom";
-import { User, MapPin, Trophy, TrendingUp, Star } from "lucide-react";
+import { User, MapPin, Trophy, TrendingUp, Star, CheckCircle2 } from "lucide-react";
 import { useIsOnWatchlist, useToggleWatchlist } from "@/hooks/use-scout-watchlist";
 import type { ScoutPlayer } from "@/types/scout";
 import { TIER_LABELS, TIER_COLORS } from "@/types/scout";
+
+const recColors: Record<string, string> = {
+  SIGN: "text-emerald-400",
+  MONITOR: "text-amber-400",
+  PASS: "text-red-400",
+};
 
 const phaseLabels: Record<string, string> = {
   EMERGENCE: "Genombrott",
@@ -40,6 +46,12 @@ export function PlayerCard({ player }: PlayerCardProps) {
             <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${TIER_COLORS[player.tier] ?? TIER_COLORS.development}`}>
               {TIER_LABELS[player.tier] ?? player.tier}
             </span>
+            {player.latest_score != null && (
+              <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${recColors[player.latest_recommendation ?? ""] ?? "text-muted-foreground"}`}>
+                <CheckCircle2 className="w-3 h-3" />
+                {player.latest_score.toFixed(1)}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">

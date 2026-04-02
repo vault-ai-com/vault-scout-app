@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, TrendingUp, Users, AlertTriangle, MessageCircle } from "lucide-react";
+import { Search, TrendingUp, Users, AlertTriangle, MessageCircle, CheckCircle2, Clock } from "lucide-react";
 import { useScoutDashboard } from "@/hooks/use-scout-search";
 
 function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: number }) {
@@ -31,6 +31,10 @@ const statConfig = [
 const Dashboard = () => {
   const { data, isLoading, error } = useScoutDashboard();
   const stats = (data?.data ?? {}) as Record<string, unknown>;
+  const recentAnalyses = (Array.isArray(stats.recent_analyses) ? stats.recent_analyses : []) as Array<{
+    id: string; name: string; analysis_type: string; overall_score: number | null;
+    recommendation: string | null; completed_at: string | null;
+  }>;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8">
@@ -70,6 +74,46 @@ const Dashboard = () => {
           className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {error instanceof Error ? error.message : "Kunde inte ladda dashboard"}
+        </motion.div>
+      )}
+
+      {/* Recent analyses */}
+      {!isLoading && recentAnalyses.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Clock className="w-4 h-4 text-accent" />
+              Senaste analyser
+            </h2>
+            <Link to="/players" className="text-xs text-accent hover:underline">Visa alla spelare</Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {recentAnalyses.map((a, i) => (
+              <motion.div key={a.id}
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.25 + i * 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="rounded-xl glass-premium p-4 card-interactive">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-foreground truncate">{a.name}</span>
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${
+                    a.recommendation === "SIGN" ? "text-emerald-400" :
+                    a.recommendation === "MONITOR" ? "text-amber-400" :
+                    "text-red-400"
+                  }`}>
+                    <CheckCircle2 className="w-3 h-3" />
+                    {a.recommendation}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="stat-gold font-bold">{a.overall_score?.toFixed(1) ?? "—"}</span>
+                  <span>{a.analysis_type === "full_scout" ? "Full" : a.analysis_type}</span>
+                  <span>{a.completed_at ? new Date(a.completed_at).toLocaleDateString("sv-SE") : ""}</span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </motion.div>
       )}
 

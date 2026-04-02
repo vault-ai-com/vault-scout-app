@@ -36,7 +36,7 @@ export function useScoutSearch(params: SearchParams, enabled = true) {
       if (!parsed) throw new Error("scout-search: unexpected response shape");
       return parsed;
     },
-    enabled: enabled && Object.values(params).some(v => v != null && v !== ""),
+    enabled,
   });
 }
 
