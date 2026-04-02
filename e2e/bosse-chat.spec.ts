@@ -1,14 +1,15 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Bosse Chat", () => {
-  test("shows chat landing page", async ({ page }) => {
+  test("shows chat page with session sidebar", async ({ page }) => {
     await page.goto("chat");
 
-    await expect(page.locator("h2:has-text('Prata med Bosse')")).toBeVisible();
+    // Sidebar header and new conversation button are always visible on desktop
+    await expect(page.locator("text=Bosse AI")).toBeVisible();
+    await expect(page.locator('button:has-text("Ny konversation")')).toBeVisible();
+
+    // Chat header shows Bosse Andersson
     await expect(page.locator("text=Bosse Andersson")).toBeVisible();
-    await expect(
-      page.locator('button:has-text("Starta konversation")'),
-    ).toBeVisible();
   });
 
   test("create new session and send message with SSE response", async ({
@@ -16,11 +17,11 @@ test.describe("Bosse Chat", () => {
   }) => {
     await page.goto("chat");
 
-    // Start a new conversation
-    await page.click('button:has-text("Starta konversation")');
+    // Start a new conversation via sidebar button
+    await page.click('button:has-text("Ny konversation")');
 
-    // Wait for session to be created and input to appear
-    const input = page.locator("#bosse-chat-input");
+    // Wait for textarea input to appear (auto-focus on session select)
+    const input = page.locator("textarea");
     await expect(input).toBeVisible({ timeout: 15_000 });
 
     // Send a message

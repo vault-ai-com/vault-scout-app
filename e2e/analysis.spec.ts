@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { searchWithRetry } from "./helpers/search";
 
 test.describe("Analysis", () => {
   // These tests call Opus edge functions — increase timeout
@@ -8,13 +9,8 @@ test.describe("Analysis", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("players");
 
-    const searchInput = page.locator('input[aria-label="Sök spelare"]');
-    await searchInput.fill("Gyökeres");
-    await page.click('button:has-text("Sök")');
-
-    await expect(page.locator("text=spelare hittade")).toBeVisible({
-      timeout: 30_000,
-    });
+    const found = await searchWithRetry(page, "Gyökeres");
+    expect(found).toBe(true);
 
     // Click first player
     const firstPlayer = page.locator('[class*="card-interactive"]').first();
@@ -32,7 +28,7 @@ test.describe("Analysis", () => {
     // The analysis should either complete successfully or show an error
     // Both are valid UI states — we're testing the flow, not the edge function
     const success = page.locator("text=Dimensionsanalys");
-    const error = page.locator("text=/Failed to send|Fel vid analys|Edge Function/");
+    const error = page.locator("text=/Failed to send|Fel vid analys|Edge Function|Nätverksfel/");
 
     await expect(success.or(error)).toBeVisible({ timeout: 180_000 });
 

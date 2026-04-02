@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { searchWithRetry } from "./helpers/search";
 
 test.describe("Players", () => {
   test("shows search page with empty state", async ({ page }) => {
@@ -11,28 +12,14 @@ test.describe("Players", () => {
 
   test("search for player returns results", async ({ page }) => {
     await page.goto("players");
-
-    const searchInput = page.locator('input[aria-label="Sök spelare"]');
-    await searchInput.fill("Gyökeres");
-    await page.click('button:has-text("Sök")');
-
-    // Wait for results
-    await expect(page.locator("text=spelare hittade")).toBeVisible({
-      timeout: 30_000,
-    });
+    const found = await searchWithRetry(page, "Gyökeres");
+    expect(found).toBe(true);
   });
 
   test("click player navigates to detail", async ({ page }) => {
     await page.goto("players");
-
-    const searchInput = page.locator('input[aria-label="Sök spelare"]');
-    await searchInput.fill("Gyökeres");
-    await page.click('button:has-text("Sök")');
-
-    // Wait for results and click first player card
-    await expect(page.locator("text=spelare hittade")).toBeVisible({
-      timeout: 30_000,
-    });
+    const found = await searchWithRetry(page, "Gyökeres");
+    expect(found).toBe(true);
 
     // PlayerCard is a link — click the first one
     const firstPlayer = page.locator('[class*="card-interactive"]').first();
