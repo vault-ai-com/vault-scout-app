@@ -146,7 +146,7 @@ async function handleGenerate(body: Record<string, unknown>): Promise<Response> 
 
   // Fetch dimension scores
   const { data: scores } = await db.from("scout_scores").select("*")
-    .eq("analysis_id", analysis.id).order("dimension", { ascending: true });
+    .eq("analysis_id", analysis.id).order("dimension_id", { ascending: true });
 
   // Optional: comparable players
   let comparisons: unknown[] = [];
@@ -159,7 +159,7 @@ async function handleGenerate(body: Record<string, unknown>): Promise<Response> 
   // Claude prompt
   const systemPrompt = `You are a world-class football scout analyst for Vault AI Scout.
 Generate a professional scouting report. Be specific, data-driven, and decisive.
-Use the dimension scores (0-100) to ground your analysis.
+Use the dimension scores (0-10) to ground your analysis.
 Return valid JSON with: overview(string), strengths(string[3-5]), weaknesses(string[2-4]),
 dimensions([{name,score,comment}]), transfer_recommendation({verdict:"SIGN"|"MONITOR"|"PASS",
 confidence:1-10,reasoning,estimated_value_eur}), risk_assessment({level:"LOW"|"MEDIUM"|"HIGH",
@@ -171,9 +171,9 @@ Position: ${player.position_primary} | Age: ${playerAge ?? "unknown"} | Club: ${
 League: ${player.current_league} | Nationality: ${player.nationality}
 Tier: ${player.tier} | Phase: ${player.career_phase}
 Analysis: ${analysis.summary ?? "N/A"}
-Detail: ${JSON.stringify(analysis.analysis_json ?? {})}
+Detail: ${JSON.stringify(analysis.analysis_data ?? {})}
 Scores:
-${(scores ?? []).map((s: Record<string, unknown>) => `- ${s.dimension}: ${s.score}/100`).join("\n")}
+${(scores ?? []).map((s: Record<string, unknown>) => `- ${s.dimension_name}: ${s.score}/10`).join("\n")}
 ${comparisons.length > 0 ? `\nComparables:\n${comparisons.map((c: Record<string, unknown>) => `- ${c.name} (${c.current_club}, ${c.current_league}, age ${computeAge(c.date_of_birth) ?? "?"})`).join("\n")}` : ""}
 Generate the scouting report JSON.`;
 
@@ -274,7 +274,7 @@ dimension_comparison([{dimension,scores:{player_name:score}}])}`;
     const s = pd.scores as Record<string, unknown>[];
     return `${p.name} (${p.position_primary}, ${p.current_club}, ${p.current_league}, tier ${p.tier})
 Analysis: ${a?.summary ?? "N/A"}
-Scores: ${s.map(x => `${x.dimension}:${x.score}`).join(", ") || "N/A"}`;
+Scores: ${s.map(x => `${x.dimension_name}:${x.score}`).join(", ") || "N/A"}`;
   }).join("\n\n");
 
   let compareData: Record<string, unknown>;

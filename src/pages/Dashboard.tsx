@@ -77,7 +77,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
         {[
           { to: "/players", icon: Search, label: "Sök spelare", desc: "Hitta och analysera spelare" },
-          { to: "/bosse", icon: MessageCircle, label: "Prata med Bosse", desc: "Fråga AI-scouten" },
+          { to: "/chat", icon: MessageCircle, label: "Prata med Bosse", desc: "Fråga AI-scouten" },
           { to: "/players", icon: TrendingUp, label: "Bevakningslista", desc: "Dina bevakade spelare" },
         ].map((action, i) => (
           <motion.div key={action.to + action.label}

@@ -5,12 +5,12 @@ import type { ScoutPlayer } from "@/types/scout";
 import { TIER_LABELS, TIER_COLORS } from "@/types/scout";
 
 const phaseLabels: Record<string, string> = {
-  emergence: "Genombrott",
-  development: "Utveckling",
-  peak: "Topp",
-  prime: "Prime",
-  decline: "Avtagande",
-  veteran: "Veteran",
+  EMERGENCE: "Genombrott",
+  DEVELOPMENT: "Utveckling",
+  PRIME_EARLY: "Tidig prime",
+  PEAK: "Peak",
+  MATURITY: "Mognad",
+  TWILIGHT: "Avslut",
 };
 
 interface PlayerCardProps {

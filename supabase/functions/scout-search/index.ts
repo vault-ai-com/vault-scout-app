@@ -1,16 +1,32 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const ALLOWED_ORIGINS = [
+  "https://vaultai.se",
+  "https://www.vaultai.se",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:5174",
+  "https://vault-scout-app.vercel.app",
+];
 
-function json(data: unknown, status = 200) {
+function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
+  const origin =
+    requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
+      ? requestOrigin
+      : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+function json(data: unknown, status = 200, origin: string | null = null) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(origin), "Content-Type": "application/json" },
   });
 }
 
@@ -44,7 +60,29 @@ function mapPlayer(row: Record<string, unknown>) {
 }
 
 Deno.serve(async (req: Request) => {
+  const reqOrigin = req.headers.get("Origin");
+  const corsHeaders = getCorsHeaders(reqOrigin);
+
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  // JWT authentication
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return json({ error: "Missing or invalid Authorization header" }, 401, reqOrigin);
+  }
+  try {
+    const _supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const authClient = createClient(_supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authErr } = await authClient.auth.getUser();
+    if (authErr || !user) {
+      return json({ error: "Unauthorized" }, 401, reqOrigin);
+    }
+  } catch {
+    return json({ error: "Authentication failed" }, 401, reqOrigin);
+  }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -108,7 +146,7 @@ Deno.serve(async (req: Request) => {
           recent_analyses: recentAnalyses,
           critical_watchlist: critWatchlist.length > 0 ? critWatchlist : null,
         },
-      });
+      }, 200, reqOrigin);
     }
 
     // --- SEARCH (pg_trgm fuzzy via RPC) ---
@@ -118,7 +156,7 @@ Deno.serve(async (req: Request) => {
       const tier = body.tier ?? null;
       const limit = Math.min(body.limit ?? 50, 100);
 
-      if (!rawQuery) return json({ action: "search", count: 0, players: [] });
+      if (!rawQuery) return json({ action: "search", count: 0, players: [] }, 200, reqOrigin);
 
       const { data, error } = await sb.rpc("search_scout_players", {
         p_query: rawQuery,
@@ -126,7 +164,7 @@ Deno.serve(async (req: Request) => {
         p_tier: tier,
         p_limit: limit,
       });
-      if (error) return json({ error: error.message }, 500);
+      if (error) return json({ error: error.message }, 500, reqOrigin);
 
       // Strip internal scoring fields from RPC result
       const players = (data ?? []).map((r: Record<string, unknown>) => {
@@ -134,19 +172,19 @@ Deno.serve(async (req: Request) => {
         return player;
       });
 
-      return json({ action: "search", count: players.length, players });
+      return json({ action: "search", count: players.length, players }, 200, reqOrigin);
     }
 
     // --- GET PLAYER ---
     if (action === "get_player") {
       const playerId = body.player_id;
-      if (!playerId) return json({ error: "player_id required" }, 400);
+      if (!playerId) return json({ error: "player_id required" }, 400, reqOrigin);
 
       const { data, error } = await sb.from("scout_players").select("*").eq("id", playerId).single();
-      if (error || !data) return json({ error: "Player not found" }, 404);
+      if (error || !data) return json({ error: "Player not found" }, 404, reqOrigin);
 
       const player = { ...mapPlayer(data), profile_data: data.profile_data ?? null };
-      return json({ action: "get_player", player });
+      return json({ action: "get_player", player }, 200, reqOrigin);
     }
 
     // --- DISCOVER (keyword-based) ---
@@ -183,11 +221,11 @@ Deno.serve(async (req: Request) => {
         reasoning: criteria ? `Sökte efter: ${criteria}` : null,
         count: players.length,
         players,
-      });
+      }, 200, reqOrigin);
     }
 
-    return json({ error: `Unknown action: ${action}` }, 400);
+    return json({ error: `Unknown action: ${action}` }, 400, reqOrigin);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : "Internal error" }, 500);
+    return json({ error: err instanceof Error ? err.message : "Internal error" }, 500, reqOrigin);
   }
 });

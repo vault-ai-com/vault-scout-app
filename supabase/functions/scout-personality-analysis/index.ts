@@ -4,11 +4,27 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const VERSION = "v22-model-fix";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const ALLOWED_ORIGINS = [
+  "https://vaultai.se",
+  "https://www.vaultai.se",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:5174",
+  "https://vault-scout-app.vercel.app",
+];
+
+function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
+  const origin =
+    requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
+      ? requestOrigin
+      : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
 
 // 7 composite archetypes (closed taxonomy, v6)
 const ARCHETYPES = [
@@ -72,6 +88,9 @@ function computeConfidence(
 }
 
 Deno.serve(async (req: Request) => {
+  const reqOrigin = req.headers.get("Origin");
+  const corsHeaders = getCorsHeaders(reqOrigin);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -144,11 +163,8 @@ Deno.serve(async (req: Request) => {
     if (playerErr || !player) {
       return respond({
         success: false,
-        error: 'PLAYER_NOT_FOUND_V21',
-        db_error: playerErr ? JSON.stringify(playerErr) : 'NO_ROWS',
+        error: 'Player not found',
         player_id,
-        serviceKeyLen: serviceKey.length,
-        supabaseUrlLen: supabaseUrl.length,
       }, 404);
     }
 
