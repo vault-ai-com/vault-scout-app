@@ -5,7 +5,7 @@ test.describe("Bosse Chat", () => {
     await page.goto("chat");
 
     // Sidebar header and new conversation button are always visible on desktop
-    await expect(page.locator("text=Bosse AI")).toBeVisible();
+    await expect(page.locator("text=Bosse AI").first()).toBeVisible();
     await expect(page.locator('button:has-text("Ny konversation")')).toBeVisible();
 
     // Chat header shows Bosse Andersson

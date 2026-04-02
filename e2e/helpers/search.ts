@@ -16,8 +16,8 @@ export async function searchWithRetry(page: Page, query: string, maxRetries = 2)
 
     if (attempt < maxRetries) {
       console.warn(`[searchWithRetry] "${query}" returned 0 results, retrying (${attempt + 1}/${maxRetries})`);
-      await searchInput.clear();
-      await page.waitForTimeout(1000);
+      await page.goto("players");
+      await page.waitForTimeout(1500);
     }
   }
   console.warn(`[searchWithRetry] "${query}" failed after ${maxRetries + 1} attempts`);
