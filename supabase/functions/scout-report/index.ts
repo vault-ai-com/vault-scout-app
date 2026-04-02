@@ -162,13 +162,22 @@ async function handleGenerate(body: Record<string, unknown>): Promise<Response> 
   }
 
   // Claude prompt
-  const systemPrompt = `You are a world-class football scout analyst for Vault AI Scout.
-Generate a professional scouting report. Be specific, data-driven, and decisive.
-Use the dimension scores (0-10) to ground your analysis.
-Return valid JSON with: overview(string), strengths(string[3-5]), weaknesses(string[2-4]),
-dimensions([{name,score,comment}]), transfer_recommendation({verdict:"SIGN"|"MONITOR"|"PASS",
-confidence:1-10,reasoning,estimated_value_eur}), risk_assessment({level:"LOW"|"MEDIUM"|"HIGH",
-factors:string[]}), development_notes(string).`;
+  const systemPrompt = `Du är en världsledande fotbollsscout-analytiker för Vault AI Scout.
+Generera en professionell scoutingrapport på SVENSKA. Var specifik, datadriven och beslutsam.
+Använd dimensionspoängen (0-10) för att grunda din analys.
+
+Dimensionsramverk (DIM-01→DIM-16):
+Taktisk (22%): DIM-01 Positionell medvetenhet, DIM-02 Taktisk flexibilitet, DIM-03 Pressing & återerövring
+Teknisk (27%): DIM-04 Bollkontroll & första touch, DIM-05 Passningskvalitet, DIM-06 Skotteffektivitet, DIM-07 Dribbling & 1v1
+Fysisk (18%): DIM-08 Sprint & acceleration, DIM-09 Uthållighet, DIM-10 Styrka & duellspel
+Mental (23%): DIM-11 Beslutsfattande under press, DIM-12 Mental motståndskraft, DIM-15 Impulskontroll, DIM-16 Drivkraft
+Social/Kontext (10%): DIM-13 Ledarskap & kommunikation, DIM-14 Klubb & ligaanpassning
+
+Returnera valid JSON med: overview(string), strengths(string[3-5]), weaknesses(string[2-4]),
+dimensions([{name,score,comment}] — använd de svenska dimensionsnamnen ovan),
+transfer_recommendation({verdict:"SIGN"|"MONITOR"|"PASS",confidence:1-10,reasoning,estimated_value_eur}),
+risk_assessment({level:"LOW"|"MEDIUM"|"HIGH",factors:string[]}), development_notes(string).
+Allt på svenska.`;
 
   const playerAge = computeAge(player.date_of_birth);
   const userPrompt = `Player: ${player.name}
@@ -268,11 +277,12 @@ async function handleCompare(body: Record<string, unknown>): Promise<Response> {
     playerData.push({ player: p, analysis, scores });
   }
 
-  const systemPrompt = `You are a world-class football scout analyst for Vault AI Scout.
-Generate a ${compType.replace(/_/g, " ")} comparison. Be specific, use dimension scores.
-Return valid JSON: {summary(string), rankings([{player_name,rank,overall_score,rationale}]),
+  const systemPrompt = `Du är en världsledande fotbollsscout-analytiker för Vault AI Scout.
+Generera en ${compType.replace(/_/g, " ")}-jämförelse på SVENSKA. Var specifik, använd dimensionspoäng.
+Dimensioner: DIM-01 Positionell medvetenhet, DIM-02 Taktisk flexibilitet, DIM-03 Pressing & återerövring, DIM-04 Bollkontroll, DIM-05 Passningskvalitet, DIM-06 Skotteffektivitet, DIM-07 Dribbling & 1v1, DIM-08 Sprint & acceleration, DIM-09 Uthållighet, DIM-10 Styrka & duellspel, DIM-11 Beslutsfattande under press, DIM-12 Mental motståndskraft, DIM-13 Ledarskap, DIM-14 Klubbanpassning, DIM-15 Impulskontroll, DIM-16 Drivkraft.
+Returnera valid JSON: {summary(string), rankings([{player_name,rank,overall_score,rationale}]),
 key_differentiators(string[3-5]), recommendation(string),
-dimension_comparison([{dimension,scores:{player_name:score}}])}`;
+dimension_comparison([{dimension,scores:{player_name:score}}])}. Allt på svenska.`;
 
   const playersCtx = playerData.map((pd: Record<string, unknown>) => {
     const p = pd.player as Record<string, unknown>;
@@ -330,9 +340,9 @@ async function handleWatchlistBrief(body: Record<string, unknown>): Promise<Resp
     return jsonResponse({ success: true, count: 0, brief: "No active watchlist items.", items: [] });
   }
 
-  const systemPrompt = `You are a football scout assistant for Vault AI Scout.
-Generate a concise executive watchlist brief. Be action-oriented.
-Return valid JSON: {executive_summary(string), priority_actions(string[3]),
+  const systemPrompt = `Du är en fotbollsscout-assistent för Vault AI Scout.
+Generera en koncis executive watchlist-brief på SVENSKA. Var handlingsorienterad.
+Returnera valid JSON: {executive_summary(string), priority_actions(string[3]),
 items([{name,status_note,urgency:"critical"|"high"|"normal"|"low"}]),
 deadline_alerts(string[])}`;
 

@@ -262,6 +262,13 @@ async function getAdvisorOpinion(
 
   const userPrompt = `Du ska granska följande spelanalys som expert inom dina domäner: ${advisor.matched_domains.join(", ")}.
 
+## Dimensionsramverk (DIM-01→DIM-16)
+Taktisk (22%): DIM-01 Positionell medvetenhet, DIM-02 Taktisk flexibilitet, DIM-03 Pressing & återerövring
+Teknisk (27%): DIM-04 Bollkontroll & första touch, DIM-05 Passningskvalitet, DIM-06 Skotteffektivitet, DIM-07 Dribbling & 1v1
+Fysisk (18%): DIM-08 Sprint & acceleration, DIM-09 Uthållighet, DIM-10 Styrka & duellspel
+Mental (23%): DIM-11 Beslutsfattande under press, DIM-12 Mental motståndskraft, DIM-15 Impulskontroll, DIM-16 Drivkraft
+Social/Kontext (10%): DIM-13 Ledarskap & kommunikation, DIM-14 Klubb & ligaanpassning
+
 ## Spelanalys att granska
 Spelare: ${playerName}
 
@@ -270,10 +277,11 @@ ${analysisJson}
 ## Din uppgift
 1. Granska analysen ur ditt expertperspektiv
 2. Ge ditt omdöme: AGREE (analysen stämmer), CHALLENGE (invändningar), eller FLAG (allvarliga brister/risker)
-3. Var specifik — referera till dimensioner, poäng och evidens
-4. Ge max 3 konkreta rekommendationer
+3. Var specifik — referera till DIM-nummer och poäng
+4. Kontrollera att overall_score matchar dimensionsvikterna (±0.5 tolerans)
+5. Ge max 3 konkreta rekommendationer
 
-Svara med JSON:
+Svara på SVENSKA med JSON:
 {
   "verdict": "AGREE" | "CHALLENGE" | "FLAG",
   "confidence": <0.0-1.0>,
@@ -281,7 +289,7 @@ Svara med JSON:
   "detail": "<200-400 ord — din fullständiga analys>",
   "risk_flags": ["<specifika risker du ser>"],
   "recommendations": ["<konkreta åtgärder>"],
-  "evidence_refs": ["<dina källtaggar t.ex. [ECIS], [STATSBOMB]>"]
+  "evidence_refs": ["<DIM-nummer eller källtaggar>"]
 }`;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -292,11 +300,12 @@ Svara med JSON:
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6-20250514",
+      model: "claude-opus-4-6",
       max_tokens: 2048,
       system: advisor.system_prompt,
       messages: [{ role: "user", content: userPrompt }],
     }),
+    signal: AbortSignal.timeout(55000),
   });
 
   if (!response.ok) {
