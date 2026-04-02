@@ -441,7 +441,7 @@ async function runClaudeAnalysis(
         },
       ],
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(55000),
   });
 
   if (!response.ok) {
@@ -765,6 +765,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return errorResponse(`Analysis engine error: ${message}`, 502);
     }
     if (
+      (err instanceof DOMException && err.name === "TimeoutError") ||
       message.includes("TimeoutError") ||
       message.includes("signal") ||
       message.includes("aborted")

@@ -156,9 +156,55 @@ Deno.serve(async (req: Request) => {
           .single();
         if (player) {
           playerContext = `\n\n## Aktuell spelare\nNamn: ${player.name}\nPosition: ${player.position_primary}\nKlubb: ${player.current_club}\nLiga: ${player.current_league}\nNationalitet: ${player.nationality}\nTier: ${player.tier}\nKarrärfas: ${player.career_phase}`;
+
+          // Load latest completed analysis (any type)
+          const { data: analyses } = await supabase
+            .from("scout_analyses")
+            .select("id, analysis_type, overall_score, confidence, summary, strengths, weaknesses, risk_factors, recommendation, created_at")
+            .eq("player_id", player_id)
+            .eq("status", "completed")
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          if (analyses && analyses.length > 0) {
+            const a = analyses[0];
+            playerContext += `\n\n## Senaste analys (${a.analysis_type}, ${a.created_at?.slice(0, 10) ?? "okänt datum"})`;
+            playerContext += `\nOverall score: ${a.overall_score ?? "N/A"}/10`;
+            playerContext += `\nConfidence: ${a.confidence ?? "N/A"}`;
+            playerContext += `\nRekommendation: ${a.recommendation ?? "N/A"}`;
+            playerContext += `\nSammanfattning: ${a.summary ?? "Ingen sammanfattning"}`;
+            if (Array.isArray(a.strengths) && a.strengths.length > 0) {
+              playerContext += `\nStyrkor: ${a.strengths.join(", ")}`;
+            }
+            if (Array.isArray(a.weaknesses) && a.weaknesses.length > 0) {
+              playerContext += `\nSvagheter: ${a.weaknesses.join(", ")}`;
+            }
+            if (Array.isArray(a.risk_factors) && a.risk_factors.length > 0) {
+              playerContext += `\nRiskfaktorer: ${a.risk_factors.join(", ")}`;
+            }
+
+            // Load dimension scores for this analysis
+            const { data: scores } = await supabase
+              .from("scout_scores")
+              .select("dimension_id, dimension_name, score, confidence, evidence")
+              .eq("analysis_id", a.id)
+              .order("dimension_id", { ascending: true });
+
+            if (scores && scores.length > 0) {
+              playerContext += `\n\n## Dimensionsscores`;
+              for (const s of scores) {
+                const evidenceText = typeof s.evidence === "string"
+                  ? s.evidence.slice(0, 200)
+                  : (s.evidence && typeof s.evidence === "object" && "text" in (s.evidence as Record<string, unknown>))
+                    ? String((s.evidence as Record<string, string>).text).slice(0, 200)
+                    : "";
+                playerContext += `\n- ${s.dimension_name ?? s.dimension_id}: ${s.score ?? "N/A"}/10${evidenceText ? ` (${evidenceText})` : ""}`;
+              }
+            }
+          }
         }
       } catch {
-        // Skip player
+        // Skip player context on error — Bosse still works without it
       }
     }
 
