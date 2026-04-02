@@ -330,6 +330,47 @@ export const WatchlistEntrySchema = z.object({
 });
 export type WatchlistEntry = z.infer<typeof WatchlistEntrySchema>;
 
+// --- Advisor Review schemas (Sport Advisory Board) ---
+export const AdvisorVerdictSchema = z.enum(["AGREE", "CHALLENGE", "FLAG"]);
+export type AdvisorVerdict = z.infer<typeof AdvisorVerdictSchema>;
+
+export const AdvisorOpinionSchema = z.object({
+  advisor_id: z.string(),
+  advisor_name: z.string(),
+  domain: z.string(),
+  verdict: AdvisorVerdictSchema,
+  confidence: z.number().min(0).max(1),
+  summary: z.string(),
+  detail: z.string(),
+  risk_flags: z.array(z.string()),
+  recommendations: z.array(z.string()),
+  evidence_refs: z.array(z.string()),
+});
+export type AdvisorOpinion = z.infer<typeof AdvisorOpinionSchema>;
+
+export const AdvisorReviewResponseSchema = z.object({
+  success: z.boolean(),
+  analysis_id: z.string(),
+  player_name: z.string(),
+  duration_ms: z.number(),
+  advisors_consulted: z.number(),
+  opinions: z.array(AdvisorOpinionSchema),
+  consensus: z.string().nullable(),
+});
+export type AdvisorReviewResponse = z.infer<typeof AdvisorReviewResponseSchema>;
+
+export const VERDICT_LABELS: Record<AdvisorVerdict, string> = {
+  AGREE: "Godkänner",
+  CHALLENGE: "Invändning",
+  FLAG: "Varning",
+};
+
+export const VERDICT_COLORS: Record<AdvisorVerdict, string> = {
+  AGREE: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  CHALLENGE: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+  FLAG: "text-red-400 bg-red-500/10 border-red-500/20",
+};
+
 // --- Comparison Entry schema ---
 export const ComparisonEntrySchema = z.object({
   id: z.string(),

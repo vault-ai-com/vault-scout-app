@@ -12,11 +12,13 @@ import { NotesPanel } from "@/components/NotesPanel";
 import { useAnalyzePlayer } from "@/hooks/use-scout-analyze";
 import { useGenerateReport } from "@/hooks/use-scout-report";
 import { usePersonalityAnalysis } from "@/hooks/use-scout-personality";
+import { useAdvisorReview } from "@/hooks/use-advisor-review";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { PersonalityPanel } from "@/components/PersonalityPanel";
+import { AdvisorReviewPanel } from "@/components/AdvisorReviewPanel";
 import { ComparablePlayersPanel } from "@/components/ComparablePlayersPanel";
 import { TIER_LABELS, TIER_COLORS } from "@/types/scout";
-import type { AnalysisType, AnalysisResult, PersonalityProfile } from "@/types/scout";
+import type { AnalysisType, AnalysisResult, PersonalityProfile, AdvisorReviewResponse } from "@/types/scout";
 
 const phaseLabels: Record<string, string> = {
   EMERGENCE: "Genombrott",
@@ -52,10 +54,12 @@ const PlayerDetail = () => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [personalityProfile, setPersonalityProfile] = useState<PersonalityProfile | null>(null);
+  const [advisorReview, setAdvisorReview] = useState<AdvisorReviewResponse | null>(null);
 
   const analyze = useAnalyzePlayer();
   const report = useGenerateReport();
   const personality = usePersonalityAnalysis();
+  const advisorReviewMutation = useAdvisorReview();
 
   const handleAnalyze = useCallback((type: AnalysisType) => {
     if (!id) return;
@@ -81,6 +85,18 @@ const PlayerDetail = () => {
       },
     );
   }, [id, personality]);
+
+  const handleAdvisorReview = useCallback(() => {
+    if (!analysisId) return;
+    advisorReviewMutation.mutate(
+      { analysis_id: analysisId },
+      {
+        onSuccess: (data) => {
+          setAdvisorReview(data);
+        },
+      },
+    );
+  }, [analysisId, advisorReviewMutation]);
 
   const handleReport = useCallback(() => {
     if (!id) return;
@@ -238,6 +254,18 @@ const PlayerDetail = () => {
             loading={personality.isPending}
             error={personality.error?.message ?? null}
             onAnalyze={handlePersonality}
+          />
+        </motion.div>
+      )}
+
+      {/* Advisor review — available after analysis */}
+      {analysisId && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <AdvisorReviewPanel
+            review={advisorReview}
+            loading={advisorReviewMutation.isPending}
+            error={advisorReviewMutation.error?.message ?? null}
+            onReview={handleAdvisorReview}
           />
         </motion.div>
       )}
