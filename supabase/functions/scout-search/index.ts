@@ -155,10 +155,10 @@ Deno.serve(async (req: Request) => {
 
     // --- SEARCH (pg_trgm fuzzy via RPC) ---
     if (action === "search") {
-      const rawQuery = (body.query ?? "").trim();
-      const position = body.position ?? null;
-      const tier = body.tier ?? null;
-      const limit = Math.min(body.limit ?? 50, 100);
+      const rawQuery = typeof body.query === "string" ? body.query.trim() : "";
+      const position = typeof body.position === "string" ? body.position : null;
+      const tier = typeof body.tier === "string" ? body.tier : null;
+      const limit = Math.min(typeof body.limit === "number" ? body.limit : 50, 100);
 
       if (!rawQuery) return json({ action: "search", count: 0, players: [] }, 200, reqOrigin);
 
@@ -194,9 +194,9 @@ Deno.serve(async (req: Request) => {
 
     // --- DISCOVER (keyword-based) ---
     if (action === "discover") {
-      const criteria = body.criteria ?? "";
-      const position = body.position ?? null;
-      const maxAge = body.max_age ?? null;
+      const criteria = typeof body.criteria === "string" ? body.criteria : "";
+      const position = typeof body.position === "string" ? body.position : null;
+      const maxAge = typeof body.max_age === "number" ? body.max_age : null;
 
       let q = sb.from("scout_players").select("*");
       if (position) q = q.eq("position_primary", position);

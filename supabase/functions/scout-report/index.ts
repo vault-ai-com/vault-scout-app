@@ -196,11 +196,12 @@ Generate the scouting report JSON.`;
   }
 
   // HTML format — build premium report
-  const dims = Array.isArray(report.dimensions) ? report.dimensions : [];
+  const dims = Array.isArray(report.dimensions) ? report.dimensions : (Array.isArray(report.dimension_scores) ? report.dimension_scores : []);
   const strengths = Array.isArray(report.strengths) ? report.strengths : [];
   const weaknesses = Array.isArray(report.weaknesses) ? report.weaknesses : [];
-  const rec = (report.transfer_recommendation ?? {}) as Record<string, unknown>;
-  const risk = (report.risk_assessment ?? {}) as Record<string, unknown>;
+  const recRaw = report.transfer_recommendation ?? report.recommendation_detail ?? (typeof report.recommendation === "object" && report.recommendation !== null ? report.recommendation : typeof report.recommendation === "string" ? { verdict: report.recommendation } : {});
+  const rec = recRaw as Record<string, unknown>;
+  const risk = (report.risk_assessment ?? report.risk ?? {}) as Record<string, unknown>;
   const riskFactors = Array.isArray(risk.factors) ? risk.factors : [];
   const verdictClass = rec.verdict === "SIGN" ? "bgr" : rec.verdict === "PASS" ? "br" : "bg";
   const riskClass = risk.level === "HIGH" ? "rh" : risk.level === "MEDIUM" ? "rm" : "rl";
@@ -309,12 +310,21 @@ Scores: ${s.map(x => `${x.dimension_name}:${x.score}`).join(", ") || "N/A"}`;
 async function handleWatchlistBrief(body: Record<string, unknown>): Promise<Response> {
   const db = getSupabaseClient();
   let query = db.from("scout_watchlist").select("*, scout_players(*)")
-    .eq("status", "active").order("priority", { ascending: true })
+    .eq("status", "active")
     .order("deadline", { ascending: true, nullsFirst: false }).limit(20);
   const authUserId = body._userId as string | undefined;
   if (authUserId) query = query.eq("user_id", authUserId);
 
-  const { data: items, error: wErr } = await query;
+  const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const { data: rawItems, error: wErr } = await query;
+  const items = rawItems ? [...rawItems].sort((a, b) => {
+    const pa = PRIORITY_ORDER[String(a.priority ?? "medium").toLowerCase()] ?? 99;
+    const pb = PRIORITY_ORDER[String(b.priority ?? "medium").toLowerCase()] ?? 99;
+    if (pa !== pb) return pa - pb;
+    const da = a.deadline ? new Date(a.deadline as string).getTime() : Infinity;
+    const dtB = b.deadline ? new Date(b.deadline as string).getTime() : Infinity;
+    return da - dtB;
+  }) : rawItems;
   if (wErr) return errorResponse(`Watchlist fetch failed: ${wErr.message}`, 500);
   if (!items || items.length === 0) {
     return jsonResponse({ success: true, count: 0, brief: "No active watchlist items.", items: [] });
