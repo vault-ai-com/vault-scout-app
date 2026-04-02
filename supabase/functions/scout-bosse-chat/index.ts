@@ -134,12 +134,18 @@ Deno.serve(async (req: Request) => {
         .from("knowledge_bank")
         .select("title, category, content")
         .eq("cluster", "vault_ai_scout")
-        .limit(8);
+        .limit(12);
+      const expectedKbCount = 12; // vault_ai_scout has 12 KB entries
       if (kbEntries && kbEntries.length > 0) {
+        if (kbEntries.length < expectedKbCount) {
+          console.warn(`[KB-GUARD] bosse-chat: loaded ${kbEntries.length}/${expectedKbCount} KB entries`);
+        }
         kbContext = "\n\n## Scout Knowledge Base\n" +
           kbEntries.map((e: { title: string; category: string; content: unknown }) =>
             `### ${e.title} (${e.category})\n${typeof e.content === 'string' ? e.content.slice(0, 3000) : JSON.stringify(e.content).slice(0, 3000)}`
           ).join("\n\n");
+      } else {
+        console.warn(`[KB-GUARD] bosse-chat: loaded 0/${expectedKbCount} KB entries`);
       }
     } catch {
       // Skip KB

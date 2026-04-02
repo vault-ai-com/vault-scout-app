@@ -175,20 +175,26 @@ Deno.serve(async (req: Request) => {
       }, 404);
     }
 
-    // Load KB context
+    // Load KB context — verified keys from vault_ai_scout cluster
     const kbKeys = [
-      'bpa_football_framework',
-      'psychological_dimensions',
-      'archetype_definitions',
-      'coaching_integration',
-      'career_motivation_framework',
-    ];
+      'football_behavioral_signals',
+      'football_contradiction_detector',
+      'match_stress_responses',
+      'coaching_triggers',
+      'career_phases',
+      'player_archetypes',
+    ] as const;
     const { data: kbRows } = await supabase
       .from('knowledge_bank')
       .select('key, content')
       .eq('cluster', 'vault_ai_scout')
-      .in('key', kbKeys)
-      .limit(5);
+      .in('key', [...kbKeys])
+      .limit(6);
+
+    // KB count guard — warn if fewer than expected loaded
+    if (!kbRows || kbRows.length < kbKeys.length) {
+      console.warn(`[KB-GUARD] personality-analysis: loaded ${kbRows?.length ?? 0}/${kbKeys.length} KB entries`);
+    }
 
     const kbContext = (kbRows ?? []).map((r: { key: string; content: unknown }) => {
       const content = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);

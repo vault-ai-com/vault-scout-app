@@ -245,23 +245,24 @@ export const PersonalityResponseSchema = z.object({
 export type PersonalityResponse = z.infer<typeof PersonalityResponseSchema>;
 
 // --- Labels & colors ---
-// Aligned with Knowledge Bank football_dimensions (KB source of truth)
-// Industry-grounded: StatsBomb 360, Wyscout Index, CIES, InStat
+// Canonical 16-dimension framework — SSOT for frontend + edge functions
+// Weights: Tactical 22% (01-03), Technical 27% (04-07), Physical 18% (08-10),
+//          Mental 23% (11-12, 15-16), Social/Context 10% (13-14)
 export const DIMENSION_LABELS: Record<string, string> = {
-  "DIM-01": "Taktisk intelligens",
-  "DIM-02": "Teknisk kvalitet",
-  "DIM-03": "Fysisk kapacitet",
-  "DIM-04": "Mental styrka",
-  "DIM-05": "Ledarskap",
-  "DIM-06": "Kreativitet",
-  "DIM-07": "Defensivt bidrag",
-  "DIM-08": "Offensivt bidrag",
-  "DIM-09": "Speluppbyggnad",
-  "DIM-10": "Set pieces",
-  "DIM-11": "Anpassningsförmåga",
-  "DIM-12": "Social profil",
-  "DIM-13": "Fysisk hållbarhet",
-  "DIM-14": "Marknadsvärde",
+  "DIM-01": "Positionell medvetenhet",
+  "DIM-02": "Taktisk flexibilitet",
+  "DIM-03": "Pressing & återerövring",
+  "DIM-04": "Bollkontroll & första touch",
+  "DIM-05": "Passningskvalitet",
+  "DIM-06": "Skotteffektivitet",
+  "DIM-07": "Dribbling & 1v1",
+  "DIM-08": "Sprint & acceleration",
+  "DIM-09": "Uthållighet",
+  "DIM-10": "Styrka & duellspel",
+  "DIM-11": "Beslutsfattande under press",
+  "DIM-12": "Mental motståndskraft",
+  "DIM-13": "Ledarskap & kommunikation",
+  "DIM-14": "Klubb & ligaanpassning",
   "DIM-15": "Impulskontroll",
   "DIM-16": "Drivkraft",
 };

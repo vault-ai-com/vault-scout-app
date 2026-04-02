@@ -102,37 +102,37 @@ You provide rigorous, evidence-based player assessments. Never speculate beyond 
 
 Score each applicable dimension 0-10 with specific evidence from the player data.
 
-### Tactical (DIM-01 to DIM-03)
-- DIM-01 Positional Awareness: Movement off the ball, spatial intelligence, defensive positioning
-- DIM-02 Tactical Versatility: Ability to play multiple roles/formations, tactical adaptability
-- DIM-03 Decision Making: Pass selection, when to shoot/dribble/pass, game reading
+### Tactical — 22% weight (DIM-01 to DIM-03)
+- DIM-01 Positionell medvetenhet: Movement off the ball, spatial intelligence, defensive positioning
+- DIM-02 Taktisk flexibilitet: Ability to play multiple roles/formations, tactical adaptability
+- DIM-03 Pressing & återerövring: Press intensity, counter-press success, ball recovery rate
 
-### Technical (DIM-04 to DIM-06)
-- DIM-04 Ball Control & First Touch: Receiving under pressure, touch quality in tight spaces
-- DIM-05 Passing Range: Short/medium/long distribution accuracy, progressive passing
-- DIM-06 Finishing & Chance Creation: Goal scoring ability, final third creativity, xG performance
+### Technical — 27% weight (DIM-04 to DIM-07)
+- DIM-04 Bollkontroll & första touch: Receiving under pressure, touch quality in tight spaces
+- DIM-05 Passningskvalitet: Short/medium/long distribution accuracy, progressive passing
+- DIM-06 Skotteffektivitet: Goal scoring ability, xG performance, shot placement
+- DIM-07 Dribbling & 1v1: Take-on success rate, ball carrying, 1v1 offensive/defensive ability
 
-### Physical (DIM-07 to DIM-09)
-- DIM-07 Athletic Profile: Speed, acceleration, stamina, recovery metrics
-- DIM-08 Aerial & Duel Strength: Header win rate, ground duel success, physical dominance
-- DIM-09 Injury Resilience: Injury history, availability percentage, physical robustness
+### Physical — 18% weight (DIM-08 to DIM-10)
+- DIM-08 Sprint & acceleration: Top speed, acceleration over 5/10/20m, sprint frequency
+- DIM-09 Uthållighet: High-intensity distance per 90, stamina consistency across halves
+- DIM-10 Styrka & duellspel: Aerial duel win rate, ground duel success, physical dominance
 
-### Mental (DIM-10 to DIM-11, DIM-15, DIM-16)
-- DIM-10 Composure Under Pressure: Big-match performance, late-game decision making
-- DIM-11 Leadership & Mentality: Communication, work rate, consistency, coachability
-- DIM-15 Impulse Control & Discipline: Self-regulation under pressure, emotional composure in confrontations, tackle discipline (avoids reckless challenges), response to provocation, yellow/red card patterns, consistency in maintaining focus
-- DIM-16 Drive & Motivation: Intrinsic motivation and competitive fire, work rate consistency across matches, sprint frequency in final minutes, response to setbacks (goals conceded, errors), ambition trajectory (club/league progression)
+### Mental — 23% weight (DIM-11, DIM-12, DIM-15, DIM-16)
+- DIM-11 Beslutsfattande under press: Big-match performance, late-game composure, decision quality under pressure
+- DIM-12 Mental motståndskraft: Response to setbacks, consistency after errors, mental recovery
+- DIM-15 Impulskontroll: Self-regulation, emotional composure, tackle discipline, yellow/red card patterns
+- DIM-16 Drivkraft: Intrinsic motivation, work rate consistency, sprint frequency in final minutes, ambition trajectory
 
-### Social & Contextual (DIM-12 to DIM-14)
-- DIM-12 Team Fit & Chemistry: Playing style compatibility, squad role projection
-- DIM-13 Development Trajectory: Age curve position, improvement trend, ceiling projection
-- DIM-14 Market & Contract Context: Value relative to market, contract situation, transfer feasibility
+### Social & Contextual — 10% weight (DIM-13 to DIM-14)
+- DIM-13 Ledarskap & kommunikation: On-pitch communication, work rate leadership, coachability
+- DIM-14 Klubb & ligaanpassning: Playing style compatibility, league level fit, squad role projection
 
 ## Output Rules
 - Be direct and specific. No filler language.
 - Every claim must reference data from the player profile or stats provided.
 - If data is insufficient for a dimension, score it null and state "Insufficient data".
-- overall_score = weighted average of dimension scores (tactical 22%, technical 27%, physical 18%, mental 23%, social/contextual 10%).
+- overall_score = weighted average: tactical(DIM-01→03) 22% + technical(DIM-04→07) 27% + physical(DIM-08→10) 18% + mental(DIM-11,12,15,16) 23% + social(DIM-13→14) 10%.
 - confidence = 0.0-1.0 based on data completeness and quality.
 - recommendation must be one of: "SIGN", "MONITOR", "PASS", "INSUFFICIENT_DATA".
 
@@ -305,8 +305,13 @@ async function loadKnowledgeContext(
       `cluster=eq.vault_ai_scout&key=in.(football_dimensions,football_dim_15_impulse_control,football_dim_16_drive_motivation,player_archetypes,career_phases,football_behavioral_signals)&select=key,title,content&order=updated_at.desc&limit=10`
     );
 
+    const expectedKbCount = 6; // football_dimensions, dim_15, dim_16, player_archetypes, career_phases, behavioral_signals
     if (!Array.isArray(kbEntries) || kbEntries.length === 0) {
+      console.warn(`[KB-GUARD] analyze-player: loaded 0/${expectedKbCount} KB entries`);
       return { context: "No additional knowledge bank context available.", filesUsed: [] };
+    }
+    if (kbEntries.length < expectedKbCount) {
+      console.warn(`[KB-GUARD] analyze-player: loaded ${kbEntries.length}/${expectedKbCount} KB entries`);
     }
 
     const contextParts: string[] = [];
