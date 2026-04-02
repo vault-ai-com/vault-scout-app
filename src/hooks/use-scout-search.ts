@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { extractEdgeFunctionError } from "@/lib/edge-function-error";
 import {
   SearchResponseSchema,
   DiscoverResponseSchema,
@@ -11,7 +12,7 @@ import type { SearchResponse, DiscoverResponse, DashboardStats, GetPlayerRespons
 
 async function invokeScout(functionName: string, body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke(functionName, { body });
-  if (error) throw new Error(error.message || "Edge function call failed");
+  if (error) throw new Error(await extractEdgeFunctionError(error, "Edge function call failed"));
   return data;
 }
 

@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { extractEdgeFunctionError } from "@/lib/edge-function-error";
 import { ReportResponseSchema, safeObject } from "@/types/scout";
 import type { ReportResponse } from "@/types/scout";
 
@@ -9,7 +10,7 @@ export function useGenerateReport() {
       const { data, error } = await supabase.functions.invoke("scout-report", {
         body: { action: "generate", ...vars },
       });
-      if (error) throw new Error(error.message || "Report generation failed");
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Report generation failed"));
       const parsed = safeObject(ReportResponseSchema, data);
       if (!parsed) throw new Error("scout-report: unexpected response shape");
       return parsed;
