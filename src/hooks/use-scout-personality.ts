@@ -17,5 +17,6 @@ export function usePersonalityAnalysis() {
       if (!parsed) throw new Error("scout-personality-analysis: unexpected response shape");
       return parsed;
     },
+    retry: 1,
   });
 }

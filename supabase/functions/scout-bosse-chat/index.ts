@@ -69,6 +69,18 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (typeof message !== "string") {
+      return new Response(JSON.stringify({ code: 400, message: "message must be a string" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (message.length > 4000) {
+      return new Response(JSON.stringify({ code: 400, message: "Message too long (max 4000 characters)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     if (typeof session_id !== "string" || !isValidUUID(session_id)) {
       return new Response(JSON.stringify({ code: 400, message: "session_id must be a valid UUID" }), {
         status: 400,
@@ -218,11 +230,15 @@ Deno.serve(async (req: Request) => {
                 role: "assistant",
                 content: fullContent,
               });
+              const { count: messageCount } = await supabase
+                .from("scout_chat_messages")
+                .select("*", { count: "exact", head: true })
+                .eq("session_id", session_id);
               await supabase
                 .from("scout_chat_sessions")
                 .update({
                   updated_at: new Date().toISOString(),
-                  message_count: (history?.length ?? 0) + 2,
+                  message_count: messageCount ?? 0,
                 })
                 .eq("id", session_id);
             }

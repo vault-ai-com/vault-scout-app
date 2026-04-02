@@ -15,5 +15,6 @@ export function useGenerateReport() {
       if (!parsed) throw new Error("scout-report: unexpected response shape");
       return parsed;
     },
+    retry: 1,
   });
 }

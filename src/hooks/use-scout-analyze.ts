@@ -14,5 +14,6 @@ export function useAnalyzePlayer() {
       if (!parsed) throw new Error("scout-analyze-player: unexpected response shape");
       return parsed;
     },
+    retry: 1,
   });
 }
