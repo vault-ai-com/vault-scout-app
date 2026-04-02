@@ -217,6 +217,14 @@ export const DATA_SOURCE_LABELS: Record<DataSourceQuality, string> = {
   VERIFIED: "Verifierade källor",
 };
 
+// Contradiction score uses 0-1 range (not 1-10)
+export const ContradictionDimensionSchema = z.object({
+  name: z.string(),
+  score: z.number().min(0).max(1),
+  evidence: z.string(),
+});
+export type ContradictionDimension = z.infer<typeof ContradictionDimensionSchema>;
+
 export const PersonalityProfileSchema = z.object({
   decision_tempo: PersonalityDimensionSchema,
   risk_appetite: PersonalityDimensionSchema,
@@ -225,6 +233,12 @@ export const PersonalityProfileSchema = z.object({
   tactical_understanding: PersonalityDimensionSchema,
   ambition_level: PersonalityDimensionSchema,
   career_motivation: PersonalityDimensionSchema,
+  // KB-enhanced dimensions (optional for backward compat with cached 7-dim responses)
+  ego: PersonalityDimensionSchema.optional(),
+  resilience: PersonalityDimensionSchema.optional(),
+  coachability: PersonalityDimensionSchema.optional(),
+  x_factor: PersonalityDimensionSchema.optional(),
+  contradiction_score: ContradictionDimensionSchema.optional(),
   stress_archetype: z.string().min(1),
   coaching_approach: z.array(z.string().min(1)).min(1).max(7),
   integration_risks: z.array(z.string().min(1)).min(1).max(6),
