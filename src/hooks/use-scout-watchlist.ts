@@ -9,7 +9,7 @@ export function useWatchlist() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("scout_watchlist")
-        .select("*, scout_players(id, name, position_primary, tier, current_club)")
+        .select("*, scout_players(id, name, position_primary, tier, current_club, nationality, current_league, career_phase, date_of_birth, market_value_eur)")
         .order("created_at", { ascending: false });
       if (error) throw new Error(error.message);
       return safeArray(WatchlistEntrySchema, data);

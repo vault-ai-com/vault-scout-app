@@ -318,6 +318,11 @@ export const WatchlistEntrySchema = z.object({
     position_primary: z.string(),
     tier: z.string(),
     current_club: z.string(),
+    nationality: z.string().nullable().optional(),
+    current_league: z.string().nullable().optional(),
+    career_phase: z.string().nullable().optional(),
+    date_of_birth: z.string().nullable().optional(),
+    market_value_eur: z.number().nullable().optional(),
   }).nullable().optional(),
 });
 export type WatchlistEntry = z.infer<typeof WatchlistEntrySchema>;

@@ -78,7 +78,7 @@ const Dashboard = () => {
         {[
           { to: "/players", icon: Search, label: "Sök spelare", desc: "Hitta och analysera spelare" },
           { to: "/chat", icon: MessageCircle, label: "Prata med Bosse", desc: "Fråga AI-scouten" },
-          { to: "/players", icon: TrendingUp, label: "Bevakningslista", desc: "Dina bevakade spelare" },
+          { to: "/players?watchlist=true", icon: TrendingUp, label: "Bevakningslista", desc: "Dina bevakade spelare" },
         ].map((action, i) => (
           <motion.div key={action.to + action.label}
             initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
