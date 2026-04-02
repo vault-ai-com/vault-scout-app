@@ -4,27 +4,11 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const VERSION = "v23-12dim-bpa";
 
-const ALLOWED_ORIGINS = [
-  "https://vaultai.se",
-  "https://www.vaultai.se",
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:5174",
-  "https://vault-scout-app.vercel.app",
-];
-
-function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin =
-    requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
-      ? requestOrigin
-      : ALLOWED_ORIGINS[0];
-  return {
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 // 7 composite archetypes (closed taxonomy, v6)
 const ARCHETYPES = [
@@ -37,46 +21,75 @@ const ARCHETYPES = [
   'RELIABLE_SOLDIER',
 ];
 
-function isValidUUID(id: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-}
-
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
 function resolveArchetype(profile: Record<string, number>): string {
-  const { decision_tempo: dt, risk_appetite: ra, ambition_level: al,
-    team_orientation: to, tactical_understanding: tu, structure_need: sn,
-    career_motivation: cm } = profile;
+  const dt = profile.decision_tempo ?? 5;
+  const ra = profile.risk_appetite ?? 5;
+  const al = profile.ambition_level ?? 5;
+  const to = profile.team_orientation ?? 5;
+  const tu = profile.tactical_understanding ?? 5;
+  const sn = profile.structure_need ?? 5;
+  const cm = profile.career_motivation ?? 5;
+  const eg = profile.ego ?? 5;
+  const re = profile.resilience ?? 5;
+  const co = profile.coachability ?? 5;
+  const xf = profile.x_factor ?? 5;
+  const cs = profile.contradiction_score ?? 0.3;
 
-  // RELIABLE_SOLDIER: team-first, structure-driven, moderate ambition
-  if (to >= 6 && sn >= 7 && al >= 4 && al <= 6) return 'RELIABLE_SOLDIER';
-  // MENTALITY_MONSTER: high decision tempo + high ambition + high career motivation
-  if (dt >= 8 && al >= 8 && cm >= 8) return 'MENTALITY_MONSTER';
-  // TOXIC_HIGH_PERFORMER: high solo, low team
-  if (ra >= 8 && to <= 3 && al >= 8) return 'TOXIC_HIGH_PERFORMER';
-  // COMPLETE_PROFESSIONAL: balanced high across all
-  if (dt >= 7 && al >= 7 && to >= 6 && tu >= 7 && sn >= 5) return 'COMPLETE_PROFESSIONAL';
-  // HIGH_PERFORMING_SOLO: high ambition, moderate team
-  if (al >= 8 && to <= 5 && dt >= 7) return 'HIGH_PERFORMING_SOLO';
-  // SILENT_LEADER: high team, low structure need, moderate ambition
-  if (to >= 7 && sn <= 4 && al >= 6) return 'SILENT_LEADER';
-  // COACHABLE_RAW_TALENT: low decision tempo, high structure need
-  if (dt <= 5 && sn >= 6 && al >= 5) return 'COACHABLE_RAW_TALENT';
+  // TOXIC_HIGH_PERFORMER: high ego + low team + low coachability
+  if (eg >= 8 && to <= 3 && co <= 4 && al >= 8) return 'TOXIC_HIGH_PERFORMER';
+  // MENTALITY_MONSTER: high resilience + high decision tempo + high ambition
+  if (re >= 8 && dt >= 8 && al >= 8 && cm >= 8) return 'MENTALITY_MONSTER';
+  // RELIABLE_SOLDIER: team-first, structure-driven, moderate ambition, coachable
+  if (to >= 6 && sn >= 7 && al >= 4 && al <= 6 && co >= 6) return 'RELIABLE_SOLDIER';
+  // COMPLETE_PROFESSIONAL: balanced high + x-factor + low contradiction
+  if (dt >= 7 && al >= 7 && to >= 6 && tu >= 7 && sn >= 5 && xf >= 7 && cs <= 0.4) return 'COMPLETE_PROFESSIONAL';
+  // HIGH_PERFORMING_SOLO: high ego + high ambition + moderate team
+  if (al >= 8 && to <= 5 && dt >= 7 && eg >= 7) return 'HIGH_PERFORMING_SOLO';
+  // SILENT_LEADER: high team, low ego, high resilience
+  if (to >= 7 && eg <= 5 && re >= 6 && al >= 6) return 'SILENT_LEADER';
+  // COACHABLE_RAW_TALENT: high coachability + structure need
+  if (co >= 7 && dt <= 5 && sn >= 6 && al >= 5) return 'COACHABLE_RAW_TALENT';
 
-  // Fallback: score-based
+  // Fallback: score-based with all 12 dimensions
   const scores: Array<[string, number]> = [
-    ['MENTALITY_MONSTER', (dt + al + cm) / 3],
-    ['COMPLETE_PROFESSIONAL', (dt + al + to + tu + sn) / 5],
-    ['HIGH_PERFORMING_SOLO', (al + dt + ra) / 3],
-    ['SILENT_LEADER', (to + cm + tu) / 3],
-    ['COACHABLE_RAW_TALENT', (sn + tu + cm) / 3],
-    ['RELIABLE_SOLDIER', (to + sn + cm) / 3],
-    ['TOXIC_HIGH_PERFORMER', (ra + al) / 2],
+    ['MENTALITY_MONSTER', (dt + al + cm + re) / 4],
+    ['COMPLETE_PROFESSIONAL', (dt + al + to + tu + sn + xf + re) / 7],
+    ['HIGH_PERFORMING_SOLO', (al + dt + ra + eg) / 4],
+    ['SILENT_LEADER', (to + cm + tu + re) / 4],
+    ['COACHABLE_RAW_TALENT', (sn + tu + cm + co) / 4],
+    ['RELIABLE_SOLDIER', (to + sn + cm + co) / 4],
+    ['TOXIC_HIGH_PERFORMER', (ra + al + eg) / 3 - co / 3],
   ];
   scores.sort((a, b) => b[1] - a[1]);
   return scores[0][0];
+}
+
+function resolveRecommendation(
+  archetype: string,
+  dimScores: Record<string, number>,
+  contradictionScore: number,
+  confidenceScore: number
+): 'SIGN' | 'MONITOR' | 'PASS' {
+  const generic7 = ['decision_tempo', 'risk_appetite', 'ambition_level',
+    'team_orientation', 'tactical_understanding', 'structure_need', 'career_motivation'];
+  const avg7 = generic7.reduce((sum, k) => sum + (dimScores[k] ?? 5), 0) / 7;
+  const co = dimScores.coachability ?? 5;
+  const re = dimScores.resilience ?? 5;
+
+  // PASS: toxic + low coachability, or high contradiction + low resilience
+  if (archetype === 'TOXIC_HIGH_PERFORMER' && co <= 4) return 'PASS';
+  if (contradictionScore >= 0.7 && re <= 4) return 'PASS';
+
+  // SIGN: strong profile + manageable risk
+  if (avg7 >= 7 && contradictionScore <= 0.4 && co >= 6 && confidenceScore >= 0.5) return 'SIGN';
+  if (archetype === 'COMPLETE_PROFESSIONAL' && avg7 >= 6.5) return 'SIGN';
+  if (archetype === 'MENTALITY_MONSTER' && avg7 >= 7 && co >= 5) return 'SIGN';
+
+  return 'MONITOR';
 }
 
 function computeConfidence(
@@ -84,7 +97,7 @@ function computeConfidence(
   llmConfidence: number,
   dataSourceQuality: string
 ): number {
-  const maxEvidence = 12;
+  const maxEvidence = 11;
   const evidenceRatio = Math.min(evidenceCount / maxEvidence, 1.0);
   const baseline = dataSourceQuality === 'VERIFIED' ? 0.75 : dataSourceQuality === 'MIXED' ? 0.55 : 0.40;
   const deterministic = (0.60 * evidenceRatio) + (0.30 * llmConfidence) + (0.10 * baseline);
@@ -92,9 +105,6 @@ function computeConfidence(
 }
 
 Deno.serve(async (req: Request) => {
-  const reqOrigin = req.headers.get("Origin");
-  const corsHeaders = getCorsHeaders(reqOrigin);
-
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -108,24 +118,6 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 
-    // JWT authentication — verify user before running expensive LLM analysis
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return respond({ success: false, error: 'Missing Authorization header' }, 401);
-    }
-    try {
-      const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-      const authClient = createClient(supabaseUrl, anonKey);
-      const { data: { user }, error: authErr } = await authClient.auth.getUser(
-        authHeader.replace('Bearer ', '')
-      );
-      if (authErr || !user) {
-        return respond({ success: false, error: 'Unauthorized' }, 401);
-      }
-    } catch {
-      return respond({ success: false, error: 'Authentication failed' }, 401);
-    }
-
     // FIX: global auth header so service_role overrides inbound JWT
     const supabase = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -137,9 +129,6 @@ Deno.serve(async (req: Request) => {
 
     if (!player_id) {
       return respond({ success: false, error: 'player_id required' }, 400);
-    }
-    if (!isValidUUID(player_id)) {
-      return respond({ success: false, error: 'Invalid player_id format' }, 400);
     }
 
     // Check cache (48h) — FIX: use analysis_data column + maybeSingle
@@ -170,31 +159,26 @@ Deno.serve(async (req: Request) => {
     if (playerErr || !player) {
       return respond({
         success: false,
-        error: 'Player not found',
+        error: 'PLAYER_NOT_FOUND_V21',
+        db_error: playerErr ? JSON.stringify(playerErr) : 'NO_ROWS',
         player_id,
       }, 404);
     }
 
-    // Load KB context — verified keys from vault_ai_scout cluster
+    // Load KB context
     const kbKeys = [
-      'football_behavioral_signals',
-      'football_contradiction_detector',
-      'match_stress_responses',
-      'coaching_triggers',
-      'career_phases',
-      'player_archetypes',
-    ] as const;
+      'bpa_football_framework',
+      'psychological_dimensions',
+      'archetype_definitions',
+      'coaching_integration',
+      'career_motivation_framework',
+    ];
     const { data: kbRows } = await supabase
       .from('knowledge_bank')
       .select('key, content')
       .eq('cluster', 'vault_ai_scout')
-      .in('key', [...kbKeys])
-      .limit(6);
-
-    // KB count guard — warn if fewer than expected loaded
-    if (!kbRows || kbRows.length < kbKeys.length) {
-      console.warn(`[KB-GUARD] personality-analysis: loaded ${kbRows?.length ?? 0}/${kbKeys.length} KB entries`);
-    }
+      .in('key', kbKeys)
+      .limit(5);
 
     const kbContext = (kbRows ?? []).map((r: { key: string; content: unknown }) => {
       const content = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);
@@ -210,7 +194,7 @@ Deno.serve(async (req: Request) => {
 Din uppgift är att analysera en fotbollsspelares psykologiska profil baserat på tillgänglig information.
 Använd EXAKT dessa 12 dimensioner och returnera JSON.
 
-## Generiska BPA-dimensioner (7 st, alla 1-10):
+Grunddimensioner (alla 1-10):
 - decision_tempo: Hur snabbt fattar spelaren beslut under press
 - risk_appetite: Benägenhet att ta risker på och av planen
 - ambition_level: Drivkraft att nå toppen
@@ -219,22 +203,23 @@ Använd EXAKT dessa 12 dimensioner och returnera JSON.
 - structure_need: Behov av tydlig struktur och direktiv
 - career_motivation: Yttre vs inre motivation
 
-## KB-förstärkta dimensioner (5 st — KRÄVER evidens från Knowledge Bank):
-- ego: (1-10) Ego-nivå, självbild, uppmärksamhetsbehov. Analysera via [KB: football_behavioral_signals].
-- resilience: (1-10) Mental motståndskraft vid motgångar, förluster, kritik. Analysera via [KB: match_stress_responses].
-- coachability: (1-10) Träningsbarhet, receptivitet för instruktion, anpassningsförmåga. Analysera via [KB: coaching_triggers].
-- x_factor: (1-10) Unik karisma, wow-faktor, det som inte syns i statistik. Analysera via [KB: football_behavioral_signals].
-- contradiction_score: (0.0-1.0) Graden av motsägelsefullhet i beteendeprofilen (0=konsistent, 1=maximal gap). Analysera via [KB: football_contradiction_detector]. Sök efter gap mellan publikt beteende och prestationsmönster.
+KB-förstärkta dimensioner (alla 1-10):
+- ego: Ego-profil — narcissism vs självkännedom, hur spelaren hanterar uppmärksamhet
+- resilience: Mental motståndskraft — hur spelaren hanterar motgångar, skador, bänkning
+- coachability: Träningsbarhet — öppenhet för feedback, vilja att utvecklas
+- x_factor: Unik kvalitet som sticker ut — karisma, clutch-gen, oförutsägbarhet
+
+Motsägelsefullhet (0-1):
+- contradiction_score: Graden av motsägelser i beteendemönster (0=konsekvent, 1=starkt motstridigt). Letar efter gap mellan ord och handling, image och verklighet.
 
 Arketyper (välj EN, closed taxonomy):
 ${ARCHETYPES.join(', ')}
 
-Returformat — EXAKT detta JSON:
-{"dimensions":{"decision_tempo":{"score":N,"evidence":"..."},"risk_appetite":{"score":N,"evidence":"..."},"ambition_level":{"score":N,"evidence":"..."},"team_orientation":{"score":N,"evidence":"..."},"tactical_understanding":{"score":N,"evidence":"..."},"structure_need":{"score":N,"evidence":"..."},"career_motivation":{"score":N,"evidence":"..."},"ego":{"score":N,"evidence":"..."},"resilience":{"score":N,"evidence":"..."},"coachability":{"score":N,"evidence":"..."},"x_factor":{"score":N,"evidence":"..."},"contradiction_score":{"score":N,"evidence":"..."}},"composite_archetype":"ARCHETYPE_NAME","composite_archetype_reasoning":"...","coaching_approach":["tip1","tip2","tip3"],"integration_risks":["risk1","risk2"],"CONFIDENCE_LABEL":0.75,"data_source_quality":"PUBLIC_ONLY","confidence_reasoning":"..."}
+Returformat — EXAKT detta JSON (inga andra fält):
+{"dimensions":{"decision_tempo":{"score":N,"evidence":"..."},"risk_appetite":{"score":N,"evidence":"..."},"ambition_level":{"score":N,"evidence":"..."},"team_orientation":{"score":N,"evidence":"..."},"tactical_understanding":{"score":N,"evidence":"..."},"structure_need":{"score":N,"evidence":"..."},"career_motivation":{"score":N,"evidence":"..."},"ego":{"score":N,"evidence":"..."},"resilience":{"score":N,"evidence":"..."},"coachability":{"score":N,"evidence":"..."},"x_factor":{"score":N,"evidence":"..."}},"contradiction_score":{"score":0.3,"evidence":"..."},"composite_archetype":"ARCHETYPE_NAME","composite_archetype_reasoning":"...","stress_archetype":"...","coaching_approach":["tip1","tip2","tip3"],"integration_risks":["risk1","risk2"],"CONFIDENCE_LABEL":0.75,"data_source_quality":"PUBLIC_ONLY","confidence_reasoning":"..."}
 
 VIKTIGT: composite_archetype MÅSTE vara exakt ett av: ${ARCHETYPES.join(', ')}
-VIKTIGT: contradiction_score.score är 0.0-1.0 (INTE 1-10). Alla andra scores är 1-10.
-VIKTIGT: KB-förstärkta dimensioner KRÄVER evidens med [KB:]-referens.
+VIKTIGT: stress_archetype = fritext som beskriver spelarens beteende under extrem press (max 100 tecken).
 
 ${kbContext ? 'Knowledge Bank Context:\n' + kbContext : ''}`;
 
@@ -243,7 +228,7 @@ Klubb: ${player.current_club} | Liga: ${player.current_league}
 Ålder: ${ageStr} | Nationalitet: ${player.nationality}
 ${player.profile_data ? 'Profildata: ' + (typeof player.profile_data === 'string' ? player.profile_data : JSON.stringify(player.profile_data)).slice(0, 2000) : ''}
 
-Returnera JSON med exakt ovanstående struktur. Generiska scores 1-10. contradiction_score 0.0-1.0. CONFIDENCE_LABEL 0-1. coaching_approach max 7 items. integration_risks max 6 items. KB-dimensioner KRÄVER [KB:]-referens i evidence.`;
+Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. contradiction_score 0-1. CONFIDENCE_LABEL 0-1. coaching_approach max 7 items. integration_risks max 6 items. stress_archetype max 100 tecken.`;
 
     const startTime = Date.now();
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
@@ -257,7 +242,7 @@ Returnera JSON med exakt ovanstående struktur. Generiska scores 1-10. contradic
       },
       body: JSON.stringify({
         model: 'claude-opus-4-6',
-        max_tokens: 3000,
+        max_tokens: 2500,
         temperature: 0,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
@@ -300,22 +285,24 @@ Returnera JSON med exakt ovanstående struktur. Generiska scores 1-10. contradic
     const tu = getDim('tactical_understanding');
     const sn = getDim('structure_need');
     const cm = getDim('career_motivation');
-
-    // KB-enhanced dimensions (5 st)
     const ego = getDim('ego');
     const resilience = getDim('resilience');
     const coachability = getDim('coachability');
     const xFactor = getDim('x_factor');
-    // contradiction_score uses 0-1 range, not 1-10
-    const csRaw = dims['contradiction_score'];
-    const contradictionScore: { score: number; evidence: string } = csRaw && typeof csRaw.score === 'number'
-      ? { score: Math.round(clamp(csRaw.score, 0, 1) * 100) / 100, evidence: String(csRaw.evidence || 'Baserat på tillgänglig data').slice(0, 500) }
-      : { score: 0.3, evidence: 'Otillräcklig data för contradiction-analys' };
 
-    const dimScores = {
+    // Contradiction score: 0-1 scale (separate from 1-10 dimensions)
+    const csRaw = parsed.contradiction_score as { score?: number; evidence?: string } | undefined;
+    const contradictionScore = csRaw && typeof csRaw.score === 'number'
+      ? clamp(Math.round(csRaw.score * 100) / 100, 0, 1)
+      : 0.3;
+    const contradictionEvidence = String(csRaw?.evidence || 'Otillräcklig data för motsägelsebedömning').slice(0, 500);
+
+    const dimScores: Record<string, number> = {
       decision_tempo: dt.score, risk_appetite: ra.score, ambition_level: al.score,
       team_orientation: to.score, tactical_understanding: tu.score,
       structure_need: sn.score, career_motivation: cm.score,
+      ego: ego.score, resilience: resilience.score, coachability: coachability.score,
+      x_factor: xFactor.score, contradiction_score: contradictionScore,
     };
     const llmArchetype = String(parsed.composite_archetype ?? '');
     const composite_archetype = ARCHETYPES.includes(llmArchetype)
@@ -339,10 +326,14 @@ Returnera JSON med exakt ovanstående struktur. Generiska scores 1-10. contradic
     const evidenceCount = Object.values(dims).filter(
       (d: unknown) => d && typeof (d as { evidence: string }).evidence === 'string' && (d as { evidence: string }).evidence.length > 10
     ).length;
+    const maxEvidence = 11; // 7 generic + 4 KB-enhanced
     const confidence_score = computeConfidence(evidenceCount, llmConf, dataSourceQuality);
-    const confidence_reasoning = String(parsed.confidence_reasoning || `Evidence ratio: ${evidenceCount}/${12}, LLM: ${llmConf}, Source: ${dataSourceQuality}`);
+    const confidence_reasoning = String(parsed.confidence_reasoning || `Evidence ratio: ${evidenceCount}/${maxEvidence}, LLM: ${llmConf}, Source: ${dataSourceQuality}`);
 
     const duration_ms = Date.now() - startTime;
+
+    // Stress archetype from LLM or fallback to composite
+    const stressArchetype = String(parsed.stress_archetype || composite_archetype).slice(0, 200);
 
     const profile = {
       decision_tempo: { name: 'Beslutstempo', ...dt },
@@ -352,13 +343,12 @@ Returnera JSON med exakt ovanstående struktur. Generiska scores 1-10. contradic
       tactical_understanding: { name: 'Taktisk förståelse', ...tu },
       structure_need: { name: 'Strukturbehov', ...sn },
       career_motivation: { name: 'Karriärmotivation', ...cm },
-      // KB-enhanced dimensions (5 st)
       ego: { name: 'Ego', ...ego },
       resilience: { name: 'Resiliens', ...resilience },
       coachability: { name: 'Träningsbarhet', ...coachability },
       x_factor: { name: 'X-faktor', ...xFactor },
-      contradiction_score: { name: 'Motsägelsefullhet', ...contradictionScore },
-      stress_archetype: composite_archetype,
+      contradiction_score: { name: 'Motsägelsefullhet', score: contradictionScore, evidence: contradictionEvidence },
+      stress_archetype: stressArchetype,
       coaching_approach,
       integration_risks,
       confidence_score,
@@ -376,14 +366,21 @@ Returnera JSON med exakt ovanstående struktur. Generiska scores 1-10. contradic
       cache_hit: false,
     };
 
-    // FIX: use analysis_data column (not result_json)
+    // Overall score: weighted average of all 11 scored dims (7 generic 70% + 4 KB 30%)
+    const avg7 = (dt.score + ra.score + al.score + to.score + tu.score + sn.score + cm.score) / 7;
+    const kbScores = [ego.score, resilience.score, coachability.score, xFactor.score];
+    const avgKb = kbScores.reduce((a, b) => a + b, 0) / kbScores.length;
+    const overall_score = Math.round((avg7 * 0.7 + avgKb * 0.3) * 10) / 10;
+
+    const recommendation = resolveRecommendation(composite_archetype, dimScores, contradictionScore, confidence_score);
+
     await supabase.from('scout_analyses').insert({
       player_id,
       analysis_type: 'personality',
-      overall_score: confidence_score * 10,
+      overall_score,
       confidence: confidence_score,
-      recommendation: 'MONITOR',
-      summary: `Arketyp: ${composite_archetype} | EGO:${ego.score} RES:${resilience.score} COACH:${coachability.score} X:${xFactor.score} CONTR:${contradictionScore.score}`,
+      recommendation,
+      summary: `Arketyp: ${composite_archetype} | ${recommendation}`,
       analysis_data: result,
     });
 
@@ -393,7 +390,7 @@ Returnera JSON med exakt ovanstående struktur. Generiska scores 1-10. contradic
     );
 
   } catch (err: unknown) {
-    console.error('scout-personality-analysis unhandled error:', err);
-    return respond({ success: false, error: 'Internal error' }, 500);
+    const msg = err instanceof Error ? err.message : String(err);
+    return respond({ success: false, error: msg }, 500);
   }
 });
