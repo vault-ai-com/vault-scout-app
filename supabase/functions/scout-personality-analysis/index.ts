@@ -2,7 +2,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const VERSION = "v22-model-fix";
+const VERSION = "v23-12dim-bpa";
 
 const ALLOWED_ORIGINS = [
   "https://vaultai.se",
@@ -84,7 +84,7 @@ function computeConfidence(
   llmConfidence: number,
   dataSourceQuality: string
 ): number {
-  const maxEvidence = 7;
+  const maxEvidence = 12;
   const evidenceRatio = Math.min(evidenceCount / maxEvidence, 1.0);
   const baseline = dataSourceQuality === 'VERIFIED' ? 0.75 : dataSourceQuality === 'MIXED' ? 0.55 : 0.40;
   const deterministic = (0.60 * evidenceRatio) + (0.30 * llmConfidence) + (0.10 * baseline);
@@ -208,9 +208,9 @@ Deno.serve(async (req: Request) => {
 
     const systemPrompt = `Du är en världsledande fotbollspsykolog och beteendeanalytiker.
 Din uppgift är att analysera en fotbollsspelares psykologiska profil baserat på tillgänglig information.
-Använd EXAKT dessa 7 dimensioner och returnera JSON.
+Använd EXAKT dessa 12 dimensioner och returnera JSON.
 
-Dimensioner (alla 1-10):
+## Generiska BPA-dimensioner (7 st, alla 1-10):
 - decision_tempo: Hur snabbt fattar spelaren beslut under press
 - risk_appetite: Benägenhet att ta risker på och av planen
 - ambition_level: Drivkraft att nå toppen
@@ -219,13 +219,22 @@ Dimensioner (alla 1-10):
 - structure_need: Behov av tydlig struktur och direktiv
 - career_motivation: Yttre vs inre motivation
 
+## KB-förstärkta dimensioner (5 st — KRÄVER evidens från Knowledge Bank):
+- ego: (1-10) Ego-nivå, självbild, uppmärksamhetsbehov. Analysera via [KB: football_behavioral_signals].
+- resilience: (1-10) Mental motståndskraft vid motgångar, förluster, kritik. Analysera via [KB: match_stress_responses].
+- coachability: (1-10) Träningsbarhet, receptivitet för instruktion, anpassningsförmåga. Analysera via [KB: coaching_triggers].
+- x_factor: (1-10) Unik karisma, wow-faktor, det som inte syns i statistik. Analysera via [KB: football_behavioral_signals].
+- contradiction_score: (0.0-1.0) Graden av motsägelsefullhet i beteendeprofilen (0=konsistent, 1=maximal gap). Analysera via [KB: football_contradiction_detector]. Sök efter gap mellan publikt beteende och prestationsmönster.
+
 Arketyper (välj EN, closed taxonomy):
 ${ARCHETYPES.join(', ')}
 
-Returformat — EXAKT detta JSON (inga andra fält):
-{"dimensions":{"decision_tempo":{"score":N,"evidence":"..."},"risk_appetite":{"score":N,"evidence":"..."},"ambition_level":{"score":N,"evidence":"..."},"team_orientation":{"score":N,"evidence":"..."},"tactical_understanding":{"score":N,"evidence":"..."},"structure_need":{"score":N,"evidence":"..."},"career_motivation":{"score":N,"evidence":"..."}},"composite_archetype":"ARCHETYPE_NAME","composite_archetype_reasoning":"...","coaching_approach":["tip1","tip2","tip3"],"integration_risks":["risk1","risk2"],"CONFIDENCE_LABEL":0.75,"data_source_quality":"PUBLIC_ONLY","confidence_reasoning":"..."}
+Returformat — EXAKT detta JSON:
+{"dimensions":{"decision_tempo":{"score":N,"evidence":"..."},"risk_appetite":{"score":N,"evidence":"..."},"ambition_level":{"score":N,"evidence":"..."},"team_orientation":{"score":N,"evidence":"..."},"tactical_understanding":{"score":N,"evidence":"..."},"structure_need":{"score":N,"evidence":"..."},"career_motivation":{"score":N,"evidence":"..."},"ego":{"score":N,"evidence":"..."},"resilience":{"score":N,"evidence":"..."},"coachability":{"score":N,"evidence":"..."},"x_factor":{"score":N,"evidence":"..."},"contradiction_score":{"score":N,"evidence":"..."}},"composite_archetype":"ARCHETYPE_NAME","composite_archetype_reasoning":"...","coaching_approach":["tip1","tip2","tip3"],"integration_risks":["risk1","risk2"],"CONFIDENCE_LABEL":0.75,"data_source_quality":"PUBLIC_ONLY","confidence_reasoning":"..."}
 
 VIKTIGT: composite_archetype MÅSTE vara exakt ett av: ${ARCHETYPES.join(', ')}
+VIKTIGT: contradiction_score.score är 0.0-1.0 (INTE 1-10). Alla andra scores är 1-10.
+VIKTIGT: KB-förstärkta dimensioner KRÄVER evidens med [KB:]-referens.
 
 ${kbContext ? 'Knowledge Bank Context:\n' + kbContext : ''}`;
 
@@ -234,7 +243,7 @@ Klubb: ${player.current_club} | Liga: ${player.current_league}
 Ålder: ${ageStr} | Nationalitet: ${player.nationality}
 ${player.profile_data ? 'Profildata: ' + (typeof player.profile_data === 'string' ? player.profile_data : JSON.stringify(player.profile_data)).slice(0, 2000) : ''}
 
-Returnera JSON med exakt ovanstående struktur. Alla scores 1-10. CONFIDENCE_LABEL 0-1. coaching_approach max 7 items. integration_risks max 6 items.`;
+Returnera JSON med exakt ovanstående struktur. Generiska scores 1-10. contradiction_score 0.0-1.0. CONFIDENCE_LABEL 0-1. coaching_approach max 7 items. integration_risks max 6 items. KB-dimensioner KRÄVER [KB:]-referens i evidence.`;
 
     const startTime = Date.now();
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
@@ -248,7 +257,7 @@ Returnera JSON med exakt ovanstående struktur. Alla scores 1-10. CONFIDENCE_LAB
       },
       body: JSON.stringify({
         model: 'claude-opus-4-6',
-        max_tokens: 2000,
+        max_tokens: 3000,
         temperature: 0,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
@@ -292,6 +301,17 @@ Returnera JSON med exakt ovanstående struktur. Alla scores 1-10. CONFIDENCE_LAB
     const sn = getDim('structure_need');
     const cm = getDim('career_motivation');
 
+    // KB-enhanced dimensions (5 st)
+    const ego = getDim('ego');
+    const resilience = getDim('resilience');
+    const coachability = getDim('coachability');
+    const xFactor = getDim('x_factor');
+    // contradiction_score uses 0-1 range, not 1-10
+    const csRaw = dims['contradiction_score'];
+    const contradictionScore: { score: number; evidence: string } = csRaw && typeof csRaw.score === 'number'
+      ? { score: Math.round(clamp(csRaw.score, 0, 1) * 100) / 100, evidence: String(csRaw.evidence || 'Baserat på tillgänglig data').slice(0, 500) }
+      : { score: 0.3, evidence: 'Otillräcklig data för contradiction-analys' };
+
     const dimScores = {
       decision_tempo: dt.score, risk_appetite: ra.score, ambition_level: al.score,
       team_orientation: to.score, tactical_understanding: tu.score,
@@ -320,7 +340,7 @@ Returnera JSON med exakt ovanstående struktur. Alla scores 1-10. CONFIDENCE_LAB
       (d: unknown) => d && typeof (d as { evidence: string }).evidence === 'string' && (d as { evidence: string }).evidence.length > 10
     ).length;
     const confidence_score = computeConfidence(evidenceCount, llmConf, dataSourceQuality);
-    const confidence_reasoning = String(parsed.confidence_reasoning || `Evidence ratio: ${evidenceCount}/${7}, LLM: ${llmConf}, Source: ${dataSourceQuality}`);
+    const confidence_reasoning = String(parsed.confidence_reasoning || `Evidence ratio: ${evidenceCount}/${12}, LLM: ${llmConf}, Source: ${dataSourceQuality}`);
 
     const duration_ms = Date.now() - startTime;
 
@@ -332,6 +352,12 @@ Returnera JSON med exakt ovanstående struktur. Alla scores 1-10. CONFIDENCE_LAB
       tactical_understanding: { name: 'Taktisk förståelse', ...tu },
       structure_need: { name: 'Strukturbehov', ...sn },
       career_motivation: { name: 'Karriärmotivation', ...cm },
+      // KB-enhanced dimensions (5 st)
+      ego: { name: 'Ego', ...ego },
+      resilience: { name: 'Resiliens', ...resilience },
+      coachability: { name: 'Träningsbarhet', ...coachability },
+      x_factor: { name: 'X-faktor', ...xFactor },
+      contradiction_score: { name: 'Motsägelsefullhet', ...contradictionScore },
       stress_archetype: composite_archetype,
       coaching_approach,
       integration_risks,
@@ -357,7 +383,7 @@ Returnera JSON med exakt ovanstående struktur. Alla scores 1-10. CONFIDENCE_LAB
       overall_score: confidence_score * 10,
       confidence: confidence_score,
       recommendation: 'MONITOR',
-      summary: `Arketyp: ${composite_archetype}`,
+      summary: `Arketyp: ${composite_archetype} | EGO:${ego.score} RES:${resilience.score} COACH:${coachability.score} X:${xFactor.score} CONTR:${contradictionScore.score}`,
       analysis_data: result,
     });
 
