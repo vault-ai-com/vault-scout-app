@@ -7,7 +7,7 @@ test.describe("Players", () => {
 
     await expect(page.locator("h1")).toContainText("Sök och analysera");
     await expect(page.locator('input[aria-label="Sök spelare"]')).toBeVisible();
-    await expect(page.locator("text=Sök efter spelare")).toBeVisible();
+    await expect(page.locator("text=Hitta spelare med AI-driven sökning")).toBeVisible();
   });
 
   test("search for player returns results", async ({ page }) => {
