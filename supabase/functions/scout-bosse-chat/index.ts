@@ -10,6 +10,10 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5174",
 ];
 
+function isValidUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
   const origin =
     requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
@@ -61,6 +65,18 @@ Deno.serve(async (req: Request) => {
     const { message, session_id, player_id } = await req.json();
     if (!message || !session_id) {
       return new Response(JSON.stringify({ code: 400, message: "Missing message or session_id" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (typeof session_id !== "string" || !isValidUUID(session_id)) {
+      return new Response(JSON.stringify({ code: 400, message: "session_id must be a valid UUID" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (player_id != null && (typeof player_id !== "string" || !isValidUUID(player_id))) {
+      return new Response(JSON.stringify({ code: 400, message: "player_id must be a valid UUID" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -252,7 +268,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     console.error("Function error:", err);
-    return new Response(JSON.stringify({ code: 500, message: String(err) }), {
+    return new Response(JSON.stringify({ code: 500, message: "Internal error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

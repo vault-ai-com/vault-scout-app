@@ -36,6 +36,10 @@ function errorResponse(msg: string, status = 400): Response {
   return jsonResponse({ error: msg }, status);
 }
 
+function isValidUUID(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 function escapeHtml(str: unknown): string {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
@@ -129,6 +133,7 @@ function wrapHtml(title: string, body: string): string {
 async function handleGenerate(body: Record<string, unknown>): Promise<Response> {
   const playerId = body.player_id;
   if (!playerId || typeof playerId !== "string") return errorResponse("Missing or invalid 'player_id'");
+  if (!isValidUUID(playerId)) return errorResponse("Invalid player_id format");
   const format = body.format === "json" ? "json" : "html";
   const db = getSupabaseClient();
 
@@ -137,7 +142,7 @@ async function handleGenerate(body: Record<string, unknown>): Promise<Response> 
   if (pErr || !player) return errorResponse(`Player not found: ${pErr?.message ?? "unknown"}`, 404);
 
   // Fetch analysis — specific ID or most recent
-  const analysisQuery = body.analysis_id && typeof body.analysis_id === "string"
+  const analysisQuery = body.analysis_id && typeof body.analysis_id === "string" && isValidUUID(body.analysis_id)
     ? db.from("scout_analyses").select("*").eq("id", body.analysis_id).single()
     : db.from("scout_analyses").select("*").eq("player_id", playerId).order("created_at", { ascending: false }).limit(1);
   const { data: aRows, error: aErr } = await analysisQuery;
@@ -382,6 +387,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
   } catch (e) {
     console.error(`Unhandled error [${action}]:`, e);
-    return errorResponse(`Internal error: ${e}`, 500);
+    return errorResponse("Internal error", 500);
   }
 });

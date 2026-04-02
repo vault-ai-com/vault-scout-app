@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
@@ -89,12 +89,32 @@ export function useSendMessage() {
   const [streamContent, setStreamContent] = useState("");
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const pendingContentRef = useRef<string | null>(null);
+  const rafRef = useRef<number | null>(null);
   const qc = useQueryClient();
+
+  const flushPending = useCallback(() => {
+    rafRef.current = null;
+    if (pendingContentRef.current !== null) {
+      setStreamContent(pendingContentRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   const send = useCallback(async ({ message, sessionId, playerId }: SendMessageArgs): Promise<string> => {
     setStreaming(true);
     setStreamContent("");
     setError(null);
+    pendingContentRef.current = null;
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     abortRef.current = new AbortController();
 
     try {
@@ -148,7 +168,10 @@ export function useSendMessage() {
           }
           if (evt.type === "content_block_delta" && evt.delta?.text) {
             fullContent += evt.delta.text;
-            setStreamContent(fullContent);
+            pendingContentRef.current = fullContent;
+            if (rafRef.current === null) {
+              rafRef.current = requestAnimationFrame(flushPending);
+            }
           } else if (evt.type === "error") {
             throw new Error(evt.error || "Stream error");
           }
@@ -163,6 +186,11 @@ export function useSendMessage() {
     } catch (err) {
       // Intentional abort is not an error
       if (err instanceof DOMException && err.name === "AbortError") {
+        if (rafRef.current !== null) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+        pendingContentRef.current = null;
         setStreamContent("");
         return "";
       }
@@ -170,10 +198,18 @@ export function useSendMessage() {
       setError(msg);
       throw err;
     } finally {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (pendingContentRef.current !== null) {
+        setStreamContent(pendingContentRef.current);
+        pendingContentRef.current = null;
+      }
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [qc]);
+  }, [qc, flushPending]);
 
   const abort = useCallback(() => {
     abortRef.current?.abort();

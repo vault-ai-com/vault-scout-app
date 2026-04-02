@@ -518,6 +518,10 @@ async function runClaudeAnalysis(
 // Validation
 // ---------------------------------------------------------------------------
 
+function isValidUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 function validateRequest(body: unknown): RequestBody {
   if (!body || typeof body !== "object") {
     throw new Error("Request body must be a JSON object");
@@ -530,6 +534,9 @@ function validateRequest(body: unknown): RequestBody {
   }
   if (b.player_id.length > 100) {
     throw new Error("player_id exceeds maximum length");
+  }
+  if (!isValidUUID(b.player_id)) {
+    throw new Error("player_id must be a valid UUID");
   }
 
   if (
@@ -768,6 +775,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    return errorResponse(`Internal error: ${message}`, 500);
+    return errorResponse("Internal error", 500);
   }
 });

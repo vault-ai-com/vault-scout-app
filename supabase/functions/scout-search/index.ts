@@ -30,6 +30,10 @@ function json(data: unknown, status = 200, origin: string | null = null) {
   });
 }
 
+function isValidUUID(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 function computeAge(dob: string | null): number {
   if (!dob) return 0;
   const birth = new Date(dob);
@@ -179,6 +183,7 @@ Deno.serve(async (req: Request) => {
     if (action === "get_player") {
       const playerId = body.player_id;
       if (!playerId) return json({ error: "player_id required" }, 400, reqOrigin);
+      if (typeof playerId !== "string" || !isValidUUID(playerId)) return json({ error: "Invalid player_id format" }, 400, reqOrigin);
 
       const { data, error } = await sb.from("scout_players").select("*").eq("id", playerId).single();
       if (error || !data) return json({ error: "Player not found" }, 404, reqOrigin);
@@ -226,6 +231,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ error: `Unknown action: ${action}` }, 400, reqOrigin);
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : "Internal error" }, 500, reqOrigin);
+    console.error("scout-search unhandled error:", err);
+    return json({ error: "Internal error" }, 500, reqOrigin);
   }
 });

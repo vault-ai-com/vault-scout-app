@@ -37,6 +37,10 @@ const ARCHETYPES = [
   'RELIABLE_SOLDIER',
 ];
 
+function isValidUUID(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
@@ -133,6 +137,9 @@ Deno.serve(async (req: Request) => {
 
     if (!player_id) {
       return respond({ success: false, error: 'player_id required' }, 400);
+    }
+    if (!isValidUUID(player_id)) {
+      return respond({ success: false, error: 'Invalid player_id format' }, 400);
     }
 
     // Check cache (48h) — FIX: use analysis_data column + maybeSingle
@@ -354,7 +361,7 @@ Returnera JSON med exakt ovanstående struktur. Alla scores 1-10. CONFIDENCE_LAB
     );
 
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return respond({ success: false, error: msg }, 500);
+    console.error('scout-personality-analysis unhandled error:', err);
+    return respond({ success: false, error: 'Internal error' }, 500);
   }
 });
