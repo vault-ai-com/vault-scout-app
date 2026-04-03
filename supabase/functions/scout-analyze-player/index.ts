@@ -64,6 +64,28 @@ const ALLOWED_ANALYSIS_TYPES = [
 
 type AnalysisType = (typeof ALLOWED_ANALYSIS_TYPES)[number];
 
+type KbGroup = "tactical" | "technical_physical" | "behavioral_contextual" | "all";
+
+const KB_KEYS_BY_GROUP: Record<KbGroup, string[]> = {
+  tactical: ["football_dimensions"],
+  technical_physical: ["football_dimensions"],
+  behavioral_contextual: [
+    "football_behavioral_signals",
+    "football_dim_15_impulse_control",
+    "football_dim_16_drive_motivation",
+    "player_archetypes",
+    "career_phases",
+  ],
+  all: [
+    "football_dimensions",
+    "football_dim_15_impulse_control",
+    "football_dim_16_drive_motivation",
+    "player_archetypes",
+    "career_phases",
+    "football_behavioral_signals",
+  ],
+};
+
 interface RequestBody {
   player_id: string;
   analysis_type: AnalysisType;
@@ -113,6 +135,25 @@ interface AnalysisResult {
   risk_factors: string[];
   recommendation: string;
   dimension_scores: DimensionScore[];
+}
+
+// ---------------------------------------------------------------------------
+// Multi-agent types
+// ---------------------------------------------------------------------------
+
+interface AgentResult {
+  agentName: string;
+  status: "success" | "error" | "timeout";
+  dimension_scores: DimensionScore[];
+  raw_text: string;
+  overall_score?: number;
+  confidence?: number;
+  summary?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  risk_factors?: string[];
+  error?: string;
+  duration_ms: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -303,16 +344,18 @@ async function fetchPlayerData(playerId: string): Promise<PlayerData> {
 
 async function loadKnowledgeContext(
   player: PlayerData,
-  analysisType: AnalysisType
+  analysisType: AnalysisType,
+  group: KbGroup = "all"
 ): Promise<{ context: string; filesUsed: string[] }> {
   try {
-    // Load scouting-relevant KB entries by cluster + key (NOT category — categories don't match)
+    // Load scouting-relevant KB entries by cluster + key, filtered by agent group
+    const kbKeys = KB_KEYS_BY_GROUP[group];
     const kbEntries = await supabaseQuery(
       "knowledge_bank",
-      `cluster=eq.vault_ai_scout&key=in.(football_dimensions,football_dim_15_impulse_control,football_dim_16_drive_motivation,player_archetypes,career_phases,football_behavioral_signals)&select=key,title,content&order=updated_at.desc&limit=10`
+      `cluster=eq.vault_ai_scout&key=in.(${kbKeys.join(",")})&select=key,title,content&order=updated_at.desc&limit=10`
     );
 
-    const expectedKbCount = 6; // football_dimensions, dim_15, dim_16, player_archetypes, career_phases, behavioral_signals
+    const expectedKbCount = kbKeys.length; // dynamic based on group
     if (!Array.isArray(kbEntries) || kbEntries.length === 0) {
       console.warn(`[KB-GUARD] analyze-player: loaded 0/${expectedKbCount} KB entries`);
       return { context: "No additional knowledge bank context available.", filesUsed: [] };
@@ -527,6 +570,394 @@ async function runClaudeAnalysis(
 }
 
 // ---------------------------------------------------------------------------
+// runSingleAgent — per-agent Claude call with timeout, JSON parsing, bounds validation
+// ---------------------------------------------------------------------------
+
+async function runSingleAgent(
+  agentName: string,
+  systemPrompt: string,
+  userPrompt: string,
+  timeoutMs = 40000
+): Promise<AgentResult> {
+  const startTime = Date.now();
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) {
+    return {
+      agentName,
+      status: "error",
+      dimension_scores: [],
+      raw_text: "",
+      error: "Missing ANTHROPIC_API_KEY environment variable",
+      duration_ms: 0,
+    };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6-20250514",
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const duration_ms = Date.now() - startTime;
+    const isTimeout =
+      err instanceof DOMException && err.name === "TimeoutError";
+    console.warn(
+      `[multi-agent] Agent "${agentName}" ${isTimeout ? "timed out" : "fetch failed"}: ${(err as Error).message}`
+    );
+    return {
+      agentName,
+      status: isTimeout ? "timeout" : "error",
+      dimension_scores: [],
+      raw_text: "",
+      error: (err as Error).message,
+      duration_ms,
+    };
+  }
+
+  const duration_ms = Date.now() - startTime;
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.warn(
+      `[multi-agent] Agent "${agentName}" API error (${response.status}): ${errorText}`
+    );
+    return {
+      agentName,
+      status: "error",
+      dimension_scores: [],
+      raw_text: "",
+      error: `Anthropic API error (${response.status}): ${errorText}`,
+      duration_ms,
+    };
+  }
+
+  const data = (await response.json()) as {
+    content: Array<{ type: string; text?: string }>;
+    stop_reason: string;
+    usage: { input_tokens: number; output_tokens: number };
+  };
+
+  const textBlock = data.content.find((c) => c.type === "text");
+  const rawText = textBlock?.text ?? "";
+
+  console.log(
+    `[multi-agent] Agent "${agentName}" usage: ${data.usage.input_tokens} in / ${data.usage.output_tokens} out — ${duration_ms}ms`
+  );
+
+  // Parse JSON — handle potential markdown wrapping
+  let jsonText = rawText.trim();
+  if (jsonText.startsWith("```")) {
+    jsonText = jsonText
+      .replace(/^```(?:json)?\n?/, "")
+      .replace(/\n?```$/, "")
+      .trim();
+  }
+
+  let parsed: Partial<AnalysisResult>;
+  try {
+    parsed = JSON.parse(jsonText) as Partial<AnalysisResult>;
+  } catch (parseErr) {
+    console.warn(
+      `[multi-agent] Agent "${agentName}" JSON parse failed: ${(parseErr as Error).message}`
+    );
+    return {
+      agentName,
+      status: "error",
+      dimension_scores: [],
+      raw_text: rawText,
+      error: `JSON parse failed: ${(parseErr as Error).message}`,
+      duration_ms,
+    };
+  }
+
+  // Filter dimension_scores to only include dimensions within agent's assigned scope (VCE09 F5 fix)
+  const assignedDims = AGENT_DIMENSIONS[agentName]?.ids ?? [];
+  const dimensionScores: DimensionScore[] = [];
+  if (Array.isArray(parsed.dimension_scores)) {
+    for (const dim of parsed.dimension_scores) {
+      // Only keep dimensions assigned to this agent
+      if (assignedDims.length > 0 && !assignedDims.includes(dim.dimension_id)) {
+        continue;
+      }
+      if (typeof dim.score === "number" && (dim.score < 0 || dim.score > 10)) {
+        console.warn(
+          `[multi-agent] Agent "${agentName}" dimension ${dim.dimension_id} score out of range: ${dim.score}, clamping`
+        );
+        dim.score = Math.min(10, Math.max(0, dim.score));
+      }
+      dimensionScores.push(dim);
+    }
+  }
+
+  // Clamp overall_score if present
+  let overallScore = parsed.overall_score;
+  if (typeof overallScore === "number" && (overallScore < 0 || overallScore > 10)) {
+    overallScore = Math.min(10, Math.max(0, overallScore));
+  }
+
+  // Clamp confidence if present
+  let confidence = parsed.confidence;
+  if (typeof confidence === "number" && (confidence < 0 || confidence > 1)) {
+    confidence = Math.min(1, Math.max(0, confidence));
+  }
+
+  return {
+    agentName,
+    status: "success",
+    dimension_scores: dimensionScores,
+    raw_text: rawText,
+    overall_score: overallScore,
+    confidence,
+    summary: typeof parsed.summary === "string" ? parsed.summary : undefined,
+    strengths: Array.isArray(parsed.strengths) ? parsed.strengths : undefined,
+    weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses : undefined,
+    risk_factors: Array.isArray(parsed.risk_factors) ? parsed.risk_factors : undefined,
+    duration_ms,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// runMultiAgentAnalysis — 3 parallel Claude agents via Promise.allSettled
+// ---------------------------------------------------------------------------
+
+// Dimension assignment per agent
+const AGENT_DIMENSIONS: Record<string, { ids: string[]; label: string }> = {
+  tactical: {
+    ids: ["DIM-01", "DIM-02", "DIM-03"],
+    label: "Tactical (DIM-01 Positional Awareness, DIM-02 Tactical Flexibility, DIM-03 Pressing & Recovery)",
+  },
+  technical_physical: {
+    ids: ["DIM-04", "DIM-05", "DIM-06", "DIM-07", "DIM-08", "DIM-09", "DIM-10"],
+    label:
+      "Technical (DIM-04 Ball Control, DIM-05 Passing Quality, DIM-06 Shooting Efficiency, DIM-07 Dribbling & 1v1) " +
+      "and Physical (DIM-08 Sprint & Acceleration, DIM-09 Endurance, DIM-10 Strength & Duels)",
+  },
+  behavioral_contextual: {
+    ids: ["DIM-11", "DIM-12", "DIM-13", "DIM-14", "DIM-15", "DIM-16"],
+    label:
+      "Mental (DIM-11 Decision Making Under Pressure, DIM-12 Mental Resilience, DIM-15 Impulse Control, DIM-16 Drive) " +
+      "and Social/Context (DIM-13 Leadership & Communication, DIM-14 Club & League Adaptation)",
+  },
+};
+
+function buildAgentUserPrompt(
+  baseUserPrompt: string,
+  agentName: string
+): string {
+  const agentDims = AGENT_DIMENSIONS[agentName];
+  if (!agentDims) return baseUserPrompt;
+
+  const focusInstruction = `\n\n## Agent Scope\nYou are Agent "${agentName}". Score ONLY the following dimensions: ${agentDims.label}.\nFor all other dimensions, omit them from dimension_scores entirely (do not include dimensions outside your scope).\nFocus your overall_score and confidence on your assigned dimensions only.`;
+
+  // Inject scope restriction before the JSON schema line
+  const schemaMarker = "Respond with a single JSON object matching this structure exactly:";
+  const schemaIdx = baseUserPrompt.indexOf(schemaMarker);
+  if (schemaIdx !== -1) {
+    return (
+      baseUserPrompt.slice(0, schemaIdx) +
+      focusInstruction +
+      "\n\n" +
+      baseUserPrompt.slice(schemaIdx)
+    );
+  }
+  return baseUserPrompt + focusInstruction;
+}
+
+async function runMultiAgentAnalysis(
+  systemPromptBase: string,
+  player: PlayerData,
+  analysisType: AnalysisType
+): Promise<AgentResult[]> {
+  const agentNames = ["tactical", "technical_physical", "behavioral_contextual"] as const;
+
+  console.log(
+    `[multi-agent] Launching ${agentNames.length} parallel agents for player "${player.name}" (${analysisType})`
+  );
+
+  // Load KB per agent group for selective context — reduces token waste
+  const [kbTactical, kbTechnical, kbBehavioral] = await Promise.all([
+    loadKnowledgeContext(player, analysisType, "tactical"),
+    loadKnowledgeContext(player, analysisType, "technical_physical"),
+    loadKnowledgeContext(player, analysisType, "behavioral_contextual"),
+  ]);
+
+  const agentKb: Record<string, { context: string; filesUsed: string[] }> = {
+    tactical: kbTactical,
+    technical_physical: kbTechnical,
+    behavioral_contextual: kbBehavioral,
+  };
+
+  // Run all 3 agents in parallel — allSettled so one failure does not abort others
+  const settled = await Promise.allSettled(
+    agentNames.map((name) => {
+      const kb = agentKb[name];
+      const agentUserPrompt = buildAgentUserPrompt(
+        buildUserPrompt(player, analysisType, kb.context),
+        name
+      );
+      return runSingleAgent(name, systemPromptBase, agentUserPrompt, 40000);
+    })
+  );
+
+  const results: AgentResult[] = settled.map((outcome, idx) => {
+    if (outcome.status === "fulfilled") {
+      return outcome.value;
+    }
+    const agentName = agentNames[idx];
+    console.warn(
+      `[multi-agent] Agent "${agentName}" promise rejected unexpectedly: ${outcome.reason}`
+    );
+    return {
+      agentName,
+      status: "error" as const,
+      dimension_scores: [],
+      raw_text: "",
+      error: String(outcome.reason),
+      duration_ms: 0,
+    };
+  });
+
+  const successCount = results.filter((r) => r.status === "success").length;
+  console.log(
+    `[multi-agent] Agents complete: ${successCount}/${agentNames.length} succeeded`
+  );
+
+  // Require at least 2 of 3 agents to succeed (VCE09 F6 — partial coverage gate)
+  if (successCount < 2) {
+    const errors = results.map((r) => `${r.agentName}: ${r.error ?? r.status}`).join("; ");
+    throw new Error(`Multi-agent failed — only ${successCount}/3 succeeded (need >=2). Errors: ${errors}`);
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// mergeAgentResults — deterministic synthesis of multi-agent outputs
+// ---------------------------------------------------------------------------
+
+// Dimension weight groups (matches scout terminal DIM framework)
+const DIM_WEIGHTS: Record<string, number> = {
+  "DIM-01": 0.22 / 3,  // Tactical 22% split across 3 dims
+  "DIM-02": 0.22 / 3,
+  "DIM-03": 0.22 / 3,
+  "DIM-04": 0.27 / 4,  // Technical 27% split across 4 dims
+  "DIM-05": 0.27 / 4,
+  "DIM-06": 0.27 / 4,
+  "DIM-07": 0.27 / 4,
+  "DIM-08": 0.18 / 3,  // Physical 18% split across 3 dims
+  "DIM-09": 0.18 / 3,
+  "DIM-10": 0.18 / 3,
+  "DIM-11": 0.23 / 4,  // Mental 23% split across 4 dims
+  "DIM-12": 0.23 / 4,
+  "DIM-15": 0.23 / 4,
+  "DIM-16": 0.23 / 4,
+  "DIM-13": 0.10 / 2,  // Social/Context 10% split across 2 dims
+  "DIM-14": 0.10 / 2,
+};
+
+function deriveRecommendation(overallScore: number): string {
+  if (overallScore > 7) return "SIGN";
+  if (overallScore >= 4) return "MONITOR";
+  return "PASS";
+}
+
+function deduplicateStrings(arrays: (string[] | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const arr of arrays) {
+    if (!arr) continue;
+    for (const item of arr) {
+      const key = item.trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(item);
+      }
+    }
+  }
+  return result;
+}
+
+function mergeAgentResults(results: AgentResult[]): AnalysisResult {
+  const successful = results.filter((r) => r.status === "success");
+  if (successful.length === 0) {
+    throw new Error("mergeAgentResults called with no successful agent results");
+  }
+
+  // Collect all dimension scores — agents already filtered to their assigned scope (VCE09 F5)
+  const allDimScores: DimensionScore[] = [];
+  for (const agent of successful) {
+    for (const dim of agent.dimension_scores) {
+      allDimScores.push(dim);
+    }
+  }
+
+  // Compute weighted overall_score from dimension scores
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const dim of allDimScores) {
+    if (typeof dim.score !== "number") continue;
+    const weight = DIM_WEIGHTS[dim.dimension_id];
+    if (weight !== undefined) {
+      weightedSum += dim.score * weight;
+      totalWeight += weight;
+    }
+  }
+
+  // Normalise — if not all dims present, scale by covered weight
+  const overallScore =
+    totalWeight > 0
+      ? Math.min(10, Math.max(0, Math.round((weightedSum / totalWeight) * 10) / 10))
+      : 0;
+
+  // confidence = lowest among successful agents (conservative)
+  const confidences = successful
+    .map((r) => r.confidence)
+    .filter((c): c is number => typeof c === "number");
+  const confidence =
+    confidences.length > 0 ? Math.min(...confidences) : 0.5;
+
+  // strengths / weaknesses / risk_factors — concat and deduplicate
+  const strengths = deduplicateStrings(successful.map((r) => r.strengths));
+  const weaknesses = deduplicateStrings(successful.map((r) => r.weaknesses));
+  const riskFactors = deduplicateStrings(successful.map((r) => r.risk_factors));
+
+  // summary — concatenate non-empty summaries
+  const summaryParts = successful
+    .map((r) => r.summary)
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+  const summary = summaryParts.join(" ");
+
+  const recommendation = deriveRecommendation(overallScore);
+
+  console.log(
+    `[multi-agent] Merge complete — overall_score: ${overallScore}, confidence: ${confidence.toFixed(2)}, recommendation: ${recommendation}, dims: ${allDimScores.length}`
+  );
+
+  return {
+    overall_score: overallScore,
+    confidence,
+    summary: summary || "Multi-agent analysis complete.",
+    strengths,
+    weaknesses,
+    risk_factors: riskFactors,
+    recommendation,
+    dimension_scores: allDimScores,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -646,6 +1077,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
   }
 
+  let analysisId: string | undefined;
   try {
     // 1. Parse and validate request
     const body = await req.json();
@@ -694,7 +1126,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_user_id: userId,
     })) as { analysis_id: string } | string;
 
-    const analysisId =
+    analysisId =
       typeof analysisEntry === "string"
         ? analysisEntry
         : analysisEntry?.analysis_id;
@@ -714,13 +1146,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // 4. Load knowledge bank context
     const { context: kbContext, filesUsed: kbFilesUsed } = await loadKnowledgeContext(player, analysis_type);
 
-    // 5. Build prompts
-    const userPrompt = buildUserPrompt(player, analysis_type, kbContext);
-
-    // 6. Run Claude analysis
+    // 5. Run analysis (multi-agent with single-agent fallback)
     const startTime = Date.now();
     const systemPrompt = await getSystemPrompt();
-    const result = await runClaudeAnalysis(systemPrompt, userPrompt);
+    let result: AnalysisResult;
+    let agentsUsed: string[] = ["claude-sonnet-4-6"];
+
+    try {
+      // Multi-agent path — 3 parallel specialized Claude agents
+      const agentResults = await runMultiAgentAnalysis(systemPrompt, player, analysis_type);
+      result = mergeAgentResults(agentResults);
+      agentsUsed = agentResults.map(r =>
+        r.status === "success" ? `scout-${r.agentName}` : `scout-${r.agentName}-${r.status.toUpperCase()}`
+      );
+      console.log(`[scout-analyze-player] Multi-agent path succeeded`);
+    } catch (multiErr) {
+      // Fallback — single-agent (existing runClaudeAnalysis)
+      console.warn(`[scout-analyze-player] Multi-agent failed, falling back to single-agent: ${(multiErr as Error).message}`);
+      const fallbackPrompt = buildUserPrompt(player, analysis_type, kbContext);
+      result = await runClaudeAnalysis(systemPrompt, fallbackPrompt);
+      agentsUsed = ["claude-sonnet-4-6-fallback"];
+    }
+
     const durationMs = Date.now() - startTime;
 
     console.log(
@@ -738,7 +1185,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_risk_factors: result.risk_factors,
       p_recommendation: result.recommendation,
       p_analysis_data: result,
-      p_agents_used: ["claude-sonnet-4-6"],
+      p_agents_used: agentsUsed,
       p_kb_files_used: kbFilesUsed,
       p_scores: result.dimension_scores ?? [],
     });
@@ -772,6 +1219,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[scout-analyze-player] ERROR: ${message}`);
+
+    // Mark analysis as failed if we have an analysisId (V64 F11 — prevent orphaned "running" entries)
+    try {
+      if (analysisId) {
+        await supabaseRpc("fail_scout_analysis", {
+          p_analysis_id: analysisId,
+          p_error_message: message.substring(0, 500),
+        });
+      }
+    } catch (failErr) {
+      console.warn(`[scout-analyze-player] Failed to mark analysis as failed:`, failErr);
+    }
 
     // Classify error for status code
     if (message.includes("not found")) {
