@@ -255,19 +255,15 @@ async function loadRoutedAdvisors(
 async function getAdvisorOpinion(
   advisor: RoutedAdvisor,
   playerName: string,
-  analysisJson: string
+  analysisJson: string,
+  dimFramework: string
 ): Promise<AdvisorOpinion> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY");
 
   const userPrompt = `Du ska granska följande spelanalys som expert inom dina domäner: ${advisor.matched_domains.join(", ")}.
 
-## Dimensionsramverk (DIM-01→DIM-16)
-Taktisk (22%): DIM-01 Positionell medvetenhet, DIM-02 Taktisk flexibilitet, DIM-03 Pressing & återerövring
-Teknisk (27%): DIM-04 Bollkontroll & första touch, DIM-05 Passningskvalitet, DIM-06 Skotteffektivitet, DIM-07 Dribbling & 1v1
-Fysisk (18%): DIM-08 Sprint & acceleration, DIM-09 Uthållighet, DIM-10 Styrka & duellspel
-Mental (23%): DIM-11 Beslutsfattande under press, DIM-12 Mental motståndskraft, DIM-15 Impulskontroll, DIM-16 Drivkraft
-Social/Kontext (10%): DIM-13 Ledarskap & kommunikation, DIM-14 Klubb & ligaanpassning
+${dimFramework}
 
 ## Spelanalys att granska
 Spelare: ${playerName}
@@ -506,12 +502,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
       2
     );
 
-    // 5. Get opinions from each advisor (sequential to avoid rate limits)
+    // 5. Load dimension framework from DB (SSOT)
+    let dimFramework = "## Dimensionsramverk (DIM-01→DIM-16)\nTaktisk 22%, Teknisk 27%, Fysisk 18%, Mental 23%, Social 10%.";
+    try {
+      const dbDims = await supabaseRpc("get_dimension_framework_prompt", { p_type: "performance" }) as string;
+      if (typeof dbDims === "string" && dbDims.length > 0) dimFramework = dbDims;
+    } catch (e) { console.warn("[advisor-review] Failed to load dim framework:", e); }
+
+    // 6. Get opinions from each advisor (sequential to avoid rate limits)
     const opinions: AdvisorOpinion[] = [];
     for (const advisor of advisors) {
       try {
         console.log(`[advisor-review] Consulting ${advisor.advisor_name} (${advisor.advisor_id})`);
-        const opinion = await getAdvisorOpinion(advisor, playerName, analysisJson);
+        const opinion = await getAdvisorOpinion(advisor, playerName, analysisJson, dimFramework);
         opinions.push(opinion);
       } catch (err) {
         console.error(`[advisor-review] ${advisor.advisor_id} failed:`, err);
@@ -519,7 +522,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
-    // 6. Derive consensus
+    // 7. Derive consensus
     const consensus = deriveConsensus(opinions);
 
     const result: AdvisorReviewResponse = {
@@ -536,7 +539,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       `[advisor-review] Complete: ${opinions.length} opinions in ${result.duration_ms}ms`
     );
 
-    // 7. Persist advisor review to analysis_data for report access
+    // 8. Persist advisor review to analysis_data for report access
     if (opinions.length > 0) {
       try {
         const patchBody = {

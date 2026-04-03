@@ -119,48 +119,31 @@ interface AnalysisResult {
 // System prompt — Vault AI Scout persona + dimension framework
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are Vault AI Scout, a world-class football scouting analyst built by Vault AI.
-You provide rigorous, evidence-based player assessments. Never speculate beyond the data provided.
+const SYSTEM_PROMPT_STATIC = `You are Vault AI Scout, a world-class football scouting analyst built by Vault AI.
+You provide rigorous, evidence-based player assessments. Never speculate beyond the data provided.`;
 
-## Analysis Framework — FOOTBALL_DIMENSIONS (DIM-01 through DIM-16)
-
-Score each applicable dimension 0-10 with specific evidence from the player data.
-
-### Tactical — 22% weight (DIM-01 to DIM-03)
-- DIM-01 Positionell medvetenhet: Movement off the ball, spatial intelligence, defensive positioning
-- DIM-02 Taktisk flexibilitet: Ability to play multiple roles/formations, tactical adaptability
-- DIM-03 Pressing & återerövring: Press intensity, counter-press success, ball recovery rate
-
-### Technical — 27% weight (DIM-04 to DIM-07)
-- DIM-04 Bollkontroll & första touch: Receiving under pressure, touch quality in tight spaces
-- DIM-05 Passningskvalitet: Short/medium/long distribution accuracy, progressive passing
-- DIM-06 Skotteffektivitet: Goal scoring ability, xG performance, shot placement
-- DIM-07 Dribbling & 1v1: Take-on success rate, ball carrying, 1v1 offensive/defensive ability
-
-### Physical — 18% weight (DIM-08 to DIM-10)
-- DIM-08 Sprint & acceleration: Top speed, acceleration over 5/10/20m, sprint frequency
-- DIM-09 Uthållighet: High-intensity distance per 90, stamina consistency across halves
-- DIM-10 Styrka & duellspel: Aerial duel win rate, ground duel success, physical dominance
-
-### Mental — 23% weight (DIM-11, DIM-12, DIM-15, DIM-16)
-- DIM-11 Beslutsfattande under press: Big-match performance, late-game composure, decision quality under pressure
-- DIM-12 Mental motståndskraft: Response to setbacks, consistency after errors, mental recovery
-- DIM-15 Impulskontroll: Self-regulation, emotional composure, tackle discipline, yellow/red card patterns
-- DIM-16 Drivkraft: Intrinsic motivation, work rate consistency, sprint frequency in final minutes, ambition trajectory
-
-### Social & Contextual — 10% weight (DIM-13 to DIM-14)
-- DIM-13 Ledarskap & kommunikation: On-pitch communication, work rate leadership, coachability
-- DIM-14 Klubb & ligaanpassning: Playing style compatibility, league level fit, squad role projection
-
-## Output Rules
+const SYSTEM_PROMPT_RULES = `## Output Rules
 - Be direct and specific. No filler language.
 - Every claim must reference data from the player profile or stats provided.
 - If data is insufficient for a dimension, score it null and state "Insufficient data".
-- overall_score = weighted average: tactical(DIM-01→03) 22% + technical(DIM-04→07) 27% + physical(DIM-08→10) 18% + mental(DIM-11,12,15,16) 23% + social(DIM-13→14) 10%.
 - confidence = 0.0-1.0 based on data completeness and quality.
 - recommendation must be one of: "SIGN", "MONITOR", "PASS", "INSUFFICIENT_DATA".
 
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.`;
+
+async function getSystemPrompt(): Promise<string> {
+  try {
+    const dimFramework = await supabaseRpc("get_dimension_framework_prompt", { p_type: "performance" });
+    if (typeof dimFramework === "string" && dimFramework.length > 0) {
+      return `${SYSTEM_PROMPT_STATIC}\n\n${dimFramework}\n\nScore each applicable dimension 0-10 with specific evidence from the player data.\n\n${SYSTEM_PROMPT_RULES}`;
+    }
+    console.warn("[scout-analyze] RPC returned empty/null, using fallback");
+    return `${SYSTEM_PROMPT_STATIC}\n\n${SYSTEM_PROMPT_RULES}`;
+  } catch (err) {
+    console.warn("[scout-analyze] Failed to load dimension framework from DB, using fallback:", err);
+    return `${SYSTEM_PROMPT_STATIC}\n\n${SYSTEM_PROMPT_RULES}`;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Analysis type modifiers — appended to user prompt
@@ -736,7 +719,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // 6. Run Claude analysis
     const startTime = Date.now();
-    const result = await runClaudeAnalysis(SYSTEM_PROMPT, userPrompt);
+    const systemPrompt = await getSystemPrompt();
+    const result = await runClaudeAnalysis(systemPrompt, userPrompt);
     const durationMs = Date.now() - startTime;
 
     console.log(

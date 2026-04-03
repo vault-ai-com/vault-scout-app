@@ -203,20 +203,21 @@ async function handleGenerate(body: Record<string, unknown>): Promise<Response> 
     comparisons = sim ?? [];
   }
 
-  // Claude prompt
+  // Load dimension framework from DB (SSOT)
+  let dimFramework = "";
+  try {
+    const { data: dimText } = await db.rpc("get_dimension_framework_prompt", { p_type: "performance" });
+    dimFramework = typeof dimText === "string" ? dimText : "";
+  } catch (e) { console.warn("[scout-report] Failed to load dim framework:", e); }
+
   const systemPrompt = `Du är en världsledande fotbollsscout-analytiker för Vault AI Scout.
 Generera en professionell scoutingrapport på SVENSKA. Var specifik, datadriven och beslutsam.
 Använd dimensionspoängen (0-10) för att grunda din analys.
 
-Dimensionsramverk (DIM-01→DIM-16):
-Taktisk (22%): DIM-01 Positionell medvetenhet, DIM-02 Taktisk flexibilitet, DIM-03 Pressing & återerövring
-Teknisk (27%): DIM-04 Bollkontroll & första touch, DIM-05 Passningskvalitet, DIM-06 Skotteffektivitet, DIM-07 Dribbling & 1v1
-Fysisk (18%): DIM-08 Sprint & acceleration, DIM-09 Uthållighet, DIM-10 Styrka & duellspel
-Mental (23%): DIM-11 Beslutsfattande under press, DIM-12 Mental motståndskraft, DIM-15 Impulskontroll, DIM-16 Drivkraft
-Social/Kontext (10%): DIM-13 Ledarskap & kommunikation, DIM-14 Klubb & ligaanpassning
+${dimFramework || "Dimensionsramverk (DIM-01→DIM-16): Taktisk 22%, Teknisk 27%, Fysisk 18%, Mental 23%, Social 10%."}
 
 Returnera valid JSON med: overview(string), strengths(string[3-5]), weaknesses(string[2-4]),
-dimensions([{name,score,comment}] — använd de svenska dimensionsnamnen ovan),
+dimensions([{name,score,comment}] — använd de svenska dimensionsnamnen),
 transfer_recommendation({verdict:"SIGN"|"MONITOR"|"PASS",confidence:1-10,reasoning,estimated_value_eur}),
 risk_assessment({level:"LOW"|"MEDIUM"|"HIGH",factors:string[]}), development_notes(string).
 Allt på svenska.`;
@@ -395,9 +396,16 @@ async function handleCompare(body: Record<string, unknown>): Promise<Response> {
     playerData.push({ player: p, analysis, scores });
   }
 
-  const systemPrompt = `Du är en världsledande fotbollsscout-analytiker för Vault AI Scout.
+  // Load compact dimension list from DB (SSOT)
+  let compactDims = "";
+  try {
+    const { data: cText } = await db.rpc("get_dimension_framework_prompt", { p_type: "compact" });
+    compactDims = typeof cText === "string" ? cText : "";
+  } catch (e) { console.warn("[scout-report] Failed to load compact dims:", e); }
+
+  const compSystemPrompt = `Du är en världsledande fotbollsscout-analytiker för Vault AI Scout.
 Generera en ${compType.replace(/_/g, " ")}-jämförelse på SVENSKA. Var specifik, använd dimensionspoäng.
-Dimensioner: DIM-01 Positionell medvetenhet, DIM-02 Taktisk flexibilitet, DIM-03 Pressing & återerövring, DIM-04 Bollkontroll, DIM-05 Passningskvalitet, DIM-06 Skotteffektivitet, DIM-07 Dribbling & 1v1, DIM-08 Sprint & acceleration, DIM-09 Uthållighet, DIM-10 Styrka & duellspel, DIM-11 Beslutsfattande under press, DIM-12 Mental motståndskraft, DIM-13 Ledarskap, DIM-14 Klubbanpassning, DIM-15 Impulskontroll, DIM-16 Drivkraft.
+${compactDims || "Dimensioner: DIM-01 till DIM-16 (Taktisk, Teknisk, Fysisk, Mental, Social)."}
 Returnera valid JSON: {summary(string), rankings([{player_name,rank,overall_score,rationale}]),
 key_differentiators(string[3-5]), recommendation(string),
 dimension_comparison([{dimension,scores:{player_name:score}}])}. Allt på svenska.`;
@@ -413,7 +421,7 @@ Scores: ${s.map(x => `${x.dimension_name}:${x.score}`).join(", ") || "N/A"}`;
 
   let compareData: Record<string, unknown>;
   try {
-    compareData = parseAiJson(await callClaude(systemPrompt,
+    compareData = parseAiJson(await callClaude(compSystemPrompt,
       `Type: ${compType.replace(/_/g, " ")}\n\n${playersCtx}\n\nGenerate comparison JSON.`));
   } catch (e) { return errorResponse(`Comparison failed: ${e}`, 502); }
 
