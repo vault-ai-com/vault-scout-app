@@ -4,6 +4,30 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const VERSION = "v23-12dim-bpa";
 
+// ---------------------------------------------------------------------------
+// Rate limiter — in-memory per isolate (Deno Deploy)
+// Key: player_id (no JWT auth) | Window: 15 min | Max: 5 requests per player
+// ---------------------------------------------------------------------------
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 5;
+
+const rateLimitStore = new Map<string, number[]>();
+
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
+    rateLimitStore.set(key, timestamps);
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+  }
+  timestamps.push(now);
+  rateLimitStore.set(key, timestamps);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -131,6 +155,16 @@ Deno.serve(async (req: Request) => {
       return respond({ success: false, error: 'player_id required' }, 400);
     }
 
+    // Rate limit check — keyed on player_id (no JWT in this function)
+    const rl = checkRateLimit(player_id);
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Rate limit exceeded. Max 5 personality analyses per 15 minutes per player.', retry_after_seconds: retryAfterSec, _v: VERSION }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retryAfterSec) } }
+      );
+    }
+
     // Check cache (48h) — FIX: use analysis_data column + maybeSingle
     const { data: cached } = await supabase
       .from('scout_analyses')
@@ -144,7 +178,7 @@ Deno.serve(async (req: Request) => {
 
     if (cached?.analysis_data) {
       return new Response(
-        JSON.stringify({ ...(cached.analysis_data as object), cache_hit: true, _v: VERSION }),
+        JSON.stringify({ ...(cached.analysis_data as object), _v: VERSION }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

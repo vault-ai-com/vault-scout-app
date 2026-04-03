@@ -8,6 +8,30 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Runs Claude Sonnet 4.6 analysis on a player, saves structured results.
 // ============================================================================
 
+// ---------------------------------------------------------------------------
+// Rate limiter — in-memory per isolate (Deno Deploy)
+// Key: userId | Window: 15 min | Max: 10 requests
+// ---------------------------------------------------------------------------
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 10;
+
+const rateLimitStore = new Map<string, number[]>();
+
+function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (rateLimitStore.get(userId) ?? []).filter(ts => ts > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
+    rateLimitStore.set(userId, timestamps);
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+  }
+  timestamps.push(now);
+  rateLimitStore.set(userId, timestamps);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
 const ALLOWED_ORIGINS = [
   "https://vaultai.se",
   "https://www.vaultai.se",
@@ -626,6 +650,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return errorResponse("Authentication failed", 401, corsHeaders);
   }
 
+  // Rate limit check — after auth, before any expensive work
+  const rl = checkRateLimit(userId);
+  if (!rl.allowed) {
+    const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
+    return new Response(
+      JSON.stringify({ success: false, error: "Rate limit exceeded. Max 10 analyses per 15 minutes.", retry_after_seconds: retryAfterSec }),
+      {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) },
+      }
+    );
+  }
+
   try {
     // 1. Parse and validate request
     const body = await req.json();
@@ -646,7 +683,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           success: true,
           analysis_id: cached.analysis_id,
           duration_ms: cached.duration_ms,
-          cache_hit: true,
+
           result: {
             overall_score: cached.result.overall_score,
             confidence: cached.result.confidence,
