@@ -144,7 +144,7 @@ async function handleGenerate(body: Record<string, unknown>): Promise<Response> 
   // Fetch analysis — specific ID or most recent
   const analysisQuery = body.analysis_id && typeof body.analysis_id === "string" && isValidUUID(body.analysis_id)
     ? db.from("scout_analyses").select("*").eq("id", body.analysis_id).single()
-    : db.from("scout_analyses").select("*").eq("player_id", playerId).order("created_at", { ascending: false }).limit(1);
+    : db.from("scout_analyses").select("*").eq("player_id", playerId).neq("analysis_type", "personality").order("created_at", { ascending: false }).limit(1);
   const { data: aRows, error: aErr } = await analysisQuery;
   const analysis = Array.isArray(aRows) ? aRows[0] : aRows;
   if (aErr || !analysis) return errorResponse(`No analysis found: ${aErr?.message ?? "none"}`, 404);
@@ -152,6 +152,24 @@ async function handleGenerate(body: Record<string, unknown>): Promise<Response> 
   // Fetch dimension scores
   const { data: scores } = await db.from("scout_scores").select("*")
     .eq("analysis_id", analysis.id).order("dimension_id", { ascending: true });
+
+  // Fetch personality analysis (BPA — analysis_type = 'personality')
+  let bpaProfile: Record<string, unknown> | null = null;
+  {
+    const { data: paRows } = await db
+      .from("scout_analyses")
+      .select("id,analysis_data,created_at")
+      .eq("player_id", playerId)
+      .eq("analysis_type", "personality")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const paRow = Array.isArray(paRows) && paRows.length > 0 ? paRows[0] : null;
+    if (paRow?.analysis_data && typeof paRow.analysis_data === "object") {
+      const ad = paRow.analysis_data as Record<string, unknown>;
+      // analysis_data = { success, player_id, profile: {...dims...}, duration_ms }
+      bpaProfile = (ad.profile && typeof ad.profile === "object" ? ad.profile : ad) as Record<string, unknown>;
+    }
+  }
 
   // Optional: comparable players
   let comparisons: unknown[] = [];
@@ -189,6 +207,13 @@ Detail: ${JSON.stringify(analysis.analysis_data ?? {})}
 Scores:
 ${(scores ?? []).map((s: Record<string, unknown>) => `- ${s.dimension_name}: ${s.score}/10`).join("\n")}
 ${comparisons.length > 0 ? `\nComparables:\n${comparisons.map((c: Record<string, unknown>) => `- ${c.name} (${c.current_club}, ${c.current_league}, age ${computeAge(c.date_of_birth) ?? "?"})`).join("\n")}` : ""}
+${bpaProfile ? `\nBPA Personality Profile:
+- Composite Archetype: ${bpaProfile.composite_archetype ?? "N/A"}
+- Stress Archetype: ${bpaProfile.stress_archetype ?? "N/A"}
+- BPA Dimensions (1-10): ${["decision_tempo","risk_appetite","structure_need","team_orientation","tactical_understanding","ambition_level","career_motivation","ego","resilience","coachability","x_factor"].map((k) => { const d = bpaProfile![k]; return `${k}=${typeof d === "object" && d !== null ? (d as Record<string, unknown>).score ?? "?" : "?"}`;}).join(", ")}
+- Contradiction Score (0-1 scale, NOT 1-10): ${(() => { const cs = bpaProfile!.contradiction_score; return typeof cs === "object" && cs !== null ? (cs as Record<string, unknown>).score ?? "?" : "?"; })()}
+- Coaching: ${Array.isArray(bpaProfile.coaching_approach) ? (bpaProfile.coaching_approach as string[]).join("; ") : "N/A"}
+- Integration Risks: ${Array.isArray(bpaProfile.integration_risks) ? (bpaProfile.integration_risks as string[]).join("; ") : "N/A"}` : ""}
 Generate the scouting report JSON.`;
 
   let report: Record<string, unknown>;
@@ -241,6 +266,47 @@ ${weaknesses.map((w: string) => `<div class="wi">${escapeHtml(w)}</div>`).join("
   <h2 class="${riskClass}">${escapeHtml(risk.level ?? "N/A")} Risk</h2>
   ${riskFactors.map((f: string) => `<div class="wi">${escapeHtml(f)}</div>`).join("")}
 </div>
+${(() => {
+  if (!bpaProfile) return "";
+  const ARCH_LABELS: Record<string, string> = {
+    MENTALITY_MONSTER: "Mentalitetsmonster", HIGH_PERFORMING_SOLO: "Högpresterande Solist",
+    COMPLETE_PROFESSIONAL: "Komplett Proffs", SILENT_LEADER: "Tyst Ledare",
+    COACHABLE_RAW_TALENT: "Formbar Råtalang", TOXIC_HIGH_PERFORMER: "Toxisk Stjärna",
+    RELIABLE_SOLDIER: "Pålitlig Soldat",
+  };
+  const archRaw = String(bpaProfile.composite_archetype ?? "");
+  const archLabel = ARCH_LABELS[archRaw] ?? archRaw;
+  const stressRaw = String(bpaProfile.stress_archetype ?? "");
+  const BPA_DIMS = [
+    { key: "decision_tempo", label: "Beslutstempo" }, { key: "risk_appetite", label: "Riskvillighet" },
+    { key: "structure_need", label: "Strukturbehov" }, { key: "team_orientation", label: "Lagkänsla" },
+    { key: "tactical_understanding", label: "Spelförståelse" }, { key: "ambition_level", label: "Ambitionsnivå" },
+    { key: "career_motivation", label: "Karriärmotivation" }, { key: "ego", label: "Ego" },
+    { key: "resilience", label: "Resiliens" }, { key: "coachability", label: "Träningsbarhet" },
+    { key: "x_factor", label: "X-faktor" },
+  ];
+  const csRaw = bpaProfile.contradiction_score;
+  const csVal = typeof csRaw === "object" && csRaw !== null ? Number((csRaw as Record<string, unknown>).score ?? 0) : 0;
+  const csPct = Math.round(Math.min(1, Math.max(0, csVal)) * 100);
+  const csClass = csPct >= 70 ? "rh" : csPct >= 40 ? "rm" : "rl";
+  const coaching = Array.isArray(bpaProfile.coaching_approach) ? bpaProfile.coaching_approach as string[] : [];
+  const risks = Array.isArray(bpaProfile.integration_risks) ? bpaProfile.integration_risks as string[] : [];
+  return `<div class="card"><div class="ch">BPA — Beteendeprofil</div>
+<div style="margin-bottom:14px">
+  <span class="b ba" style="font-size:13px;padding:5px 12px">${escapeHtml(archLabel || "Okänd")}</span>
+  ${stressRaw ? `<span class="b bg" style="font-size:12px">Stress: ${escapeHtml(stressRaw)}</span>` : ""}
+</div>
+${BPA_DIMS.map((dim) => {
+  const d = bpaProfile![dim.key];
+  const score = typeof d === "object" && d !== null ? Number((d as Record<string, unknown>).score ?? 0) : 0;
+  const pct = Math.max(0, Math.min(100, score * 10));
+  return `<div class="dr"><div class="dl">${escapeHtml(dim.label)}</div><div class="db"><div class="df" style="width:${pct}%"></div></div><div class="ds">${score > 0 ? score.toFixed(1) : "–"}</div></div>`;
+}).join("")}
+<div class="dr"><div class="dl">Motsägelsefullhet</div><div class="db"><div class="df" style="width:${csPct}%;background:linear-gradient(90deg,#00B894,#EF4444)"></div></div><div class="ds ${csClass}">${csPct}%</div></div>
+${coaching.length > 0 ? `<div style="margin-top:14px"><div class="meta" style="margin-bottom:6px;font-weight:600">Coaching-approach</div>${coaching.map((c) => `<div class="si">${escapeHtml(c)}</div>`).join("")}</div>` : ""}
+${risks.length > 0 ? `<div style="margin-top:14px"><div class="meta" style="margin-bottom:6px;font-weight:600">Integrationsrisker</div>${risks.map((r) => `<div class="wi">${escapeHtml(r)}</div>`).join("")}</div>` : ""}
+</div>`;
+})()}
 ${report.development_notes ? `<div class="card"><div class="ch">Development Notes</div><div class="st">${escapeHtml(report.development_notes)}</div></div>` : ""}`;
 
   return jsonResponse({ success: true, report: wrapHtml(`${player.name} — Scouting Report`, htmlBody) });
