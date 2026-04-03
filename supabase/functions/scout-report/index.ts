@@ -331,6 +331,34 @@ ${coaching.length > 0 ? `<div style="margin-top:14px"><div class="meta" style="m
 ${risks.length > 0 ? `<div style="margin-top:14px"><div class="meta" style="margin-bottom:6px;font-weight:600">Integrationsrisker</div>${risks.map((r) => `<div class="wi">${escapeHtml(r)}</div>`).join("")}</div>` : ""}
 </div>`;
 })()}
+${(() => {
+  const advReview = (analysis.analysis_data as Record<string, unknown>)?.advisor_review as Record<string, unknown> | undefined;
+  if (!advReview) return "";
+  const opinions = Array.isArray(advReview.opinions) ? advReview.opinions as Array<Record<string, unknown>> : [];
+  if (opinions.length === 0) return "";
+  const consensusText = advReview.consensus ? String(advReview.consensus) : "";
+  const VERDICT_CLASS: Record<string, string> = { AGREE: "bgr", CHALLENGE: "bg", FLAG: "br" };
+  const VERDICT_LABEL: Record<string, string> = { AGREE: "Godkänd", CHALLENGE: "Invändning", FLAG: "Varning" };
+  return `<div class="card"><div class="ch">Sport Advisory Board</div>
+${consensusText ? `<div style="margin-bottom:14px;padding:10px 14px;background:#f0f9ff;border-radius:8px;font-size:13px;color:#1e40af">${escapeHtml(consensusText)}</div>` : ""}
+${opinions.map((o) => {
+  const v = String(o.verdict ?? "CHALLENGE");
+  const flags = Array.isArray(o.risk_flags) ? o.risk_flags as string[] : [];
+  const recs = Array.isArray(o.recommendations) ? o.recommendations as string[] : [];
+  return `<div style="margin-bottom:16px;padding:12px 16px;background:#fafafa;border-radius:8px;border-left:4px solid ${v === "AGREE" ? "#00B894" : v === "FLAG" ? "#EF4444" : "#F59E0B"}">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-weight:600;font-size:14px">${escapeHtml(o.advisor_name)}</div>
+    <span class="b ${VERDICT_CLASS[v] ?? "bg"}" style="font-size:11px">${escapeHtml(VERDICT_LABEL[v] ?? v)}</span>
+  </div>
+  <div class="meta" style="margin-bottom:4px">${escapeHtml(o.domain)} &bull; Confidence: ${Number(o.confidence ?? 0).toFixed(1)}</div>
+  <div style="font-size:13px;color:#374151;margin-bottom:8px">${escapeHtml(o.summary)}</div>
+  ${String(o.detail ?? "").length > 0 ? `<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:12px;color:#6B7280">Visa detaljanalys</summary><div style="font-size:12px;color:#4B5563;margin-top:6px;white-space:pre-wrap">${escapeHtml(o.detail)}</div></details>` : ""}
+  ${flags.length > 0 ? `<div style="margin-bottom:6px">${flags.map((f: string) => `<div style="font-size:12px;color:#DC2626;padding:2px 0">\u26A0 ${escapeHtml(f)}</div>`).join("")}</div>` : ""}
+  ${recs.length > 0 ? `<div>${recs.map((r: string) => `<div style="font-size:12px;color:#059669;padding:2px 0">\u2192 ${escapeHtml(r)}</div>`).join("")}</div>` : ""}
+</div>`;
+}).join("")}
+</div>`;
+})()}
 ${report.development_notes ? `<div class="card"><div class="ch">Development Notes</div><div class="st">${escapeHtml(report.development_notes)}</div></div>` : ""}`;
 
   return jsonResponse({ success: true, report: wrapHtml(`${player.name} — Scouting Report`, htmlBody) });

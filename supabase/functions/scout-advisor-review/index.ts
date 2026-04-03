@@ -536,6 +536,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
       `[advisor-review] Complete: ${opinions.length} opinions in ${result.duration_ms}ms`
     );
 
+    // 7. Persist advisor review to analysis_data for report access
+    if (opinions.length > 0) {
+      try {
+        const patchBody = {
+          analysis_data: {
+            ...analysisData,
+            advisor_review: {
+              advisors_consulted: opinions.length,
+              consensus,
+              reviewed_at: new Date().toISOString(),
+              opinions: opinions.map((o) => ({
+                advisor_name: o.advisor_name,
+                domain: o.domain,
+                verdict: o.verdict,
+                confidence: o.confidence,
+                summary: o.summary,
+                detail: o.detail,
+                risk_flags: o.risk_flags,
+                recommendations: o.recommendations,
+              })),
+            },
+          },
+        };
+        await fetch(
+          `${Deno.env.get("SUPABASE_URL")}/rest/v1/scout_analyses?id=eq.${encodeURIComponent(analysisId)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!}`,
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify(patchBody),
+          }
+        );
+      } catch (persistErr) {
+        console.warn("[advisor-review] Failed to persist review:", persistErr);
+      }
+    }
+
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { ...cors, "Content-Type": "application/json" },
