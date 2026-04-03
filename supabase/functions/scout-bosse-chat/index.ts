@@ -1,6 +1,30 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// ---------------------------------------------------------------------------
+// Rate limiter — in-memory per isolate (Deno Deploy)
+// Key: userId | Window: 15 min | Max: 20 requests
+// ---------------------------------------------------------------------------
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+
+const rateLimitStore = new Map<string, number[]>();
+
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
+    rateLimitStore.set(key, timestamps);
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+  }
+  timestamps.push(now);
+  rateLimitStore.set(key, timestamps);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
 const ALLOWED_ORIGINS = [
   "https://vault-scout-app.vercel.app",
   "https://vaultai.se",
@@ -59,6 +83,16 @@ Deno.serve(async (req: Request) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Rate limit check — after auth, before any expensive work
+    const rl = checkRateLimit(user.id);
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
+      return new Response(
+        JSON.stringify({ code: 429, message: "Rate limit exceeded. Max 20 messages per 15 minutes.", retry_after_seconds: retryAfterSec }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
+      );
     }
 
     // Parse body

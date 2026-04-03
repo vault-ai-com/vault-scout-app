@@ -1,6 +1,30 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// ---------------------------------------------------------------------------
+// Rate limiter — in-memory per isolate (Deno Deploy)
+// Key: userId | Window: 15 min | Max: 30 requests
+// ---------------------------------------------------------------------------
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 30;
+
+const rateLimitStore = new Map<string, number[]>();
+
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
+    rateLimitStore.set(key, timestamps);
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+  }
+  timestamps.push(now);
+  rateLimitStore.set(key, timestamps);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
 const ALLOWED_ORIGINS = [
   "https://vaultai.se",
   "https://www.vaultai.se",
@@ -74,6 +98,7 @@ Deno.serve(async (req: Request) => {
   if (!authHeader?.startsWith("Bearer ")) {
     return json({ error: "Missing or invalid Authorization header" }, 401, reqOrigin);
   }
+  let userId: string;
   try {
     const _supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -84,8 +109,19 @@ Deno.serve(async (req: Request) => {
     if (authErr || !user) {
       return json({ error: "Unauthorized" }, 401, reqOrigin);
     }
+    userId = user.id;
   } catch {
     return json({ error: "Authentication failed" }, 401, reqOrigin);
+  }
+
+  // Rate limit check — after auth, before any work
+  const rl = checkRateLimit(userId);
+  if (!rl.allowed) {
+    const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
+    return new Response(
+      JSON.stringify({ error: "Rate limit exceeded. Max 30 requests per 15 minutes.", retry_after_seconds: retryAfterSec }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
+    );
   }
 
   try {

@@ -66,6 +66,39 @@ interface RoutedAdvisor {
 }
 
 // ---------------------------------------------------------------------------
+// Rate limiter — in-memory per isolate (Deno Deploy)
+// Key: IP address | Window: 15 min | Max: 5 requests
+// ---------------------------------------------------------------------------
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 5;
+
+const rateLimitStore = new Map<string, number[]>();
+
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
+    rateLimitStore.set(key, timestamps);
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+  }
+  timestamps.push(now);
+  rateLimitStore.set(key, timestamps);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
+function getClientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map(s => s.trim()).filter(Boolean);
+    return parts[parts.length - 1] ?? "unknown";
+  }
+  return req.headers.get("x-real-ip") ?? "unknown";
+}
+
+// ---------------------------------------------------------------------------
 // Supabase helpers (same pattern as scout-analyze-player)
 // ---------------------------------------------------------------------------
 
@@ -401,6 +434,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({ error: "Method not allowed" }),
       { status: 405, headers: { ...cors, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Rate limit check — IP-based (no JWT auth on this endpoint)
+  const clientIp = getClientIp(req);
+  const rl = checkRateLimit(clientIp);
+  if (!rl.allowed) {
+    const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
+    return new Response(
+      JSON.stringify({ error: "Rate limit exceeded. Max 5 advisor reviews per 15 minutes.", retry_after_seconds: retryAfterSec }),
+      { status: 429, headers: { ...cors, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
     );
   }
 
