@@ -29,7 +29,7 @@ test.describe("Dashboard", () => {
 
     // Navigate to Bosse AI
     await page.click('nav[aria-label="Huvudnavigation"] >> text=Bosse AI');
-    await expect(page.locator("h2:has-text('Prata med Bosse')")).toBeVisible();
+    await expect(page.locator("text=Bosse Andersson")).toBeVisible();
 
     // Navigate back to dashboard
     await page.click('nav[aria-label="Huvudnavigation"] >> text=Dashboard');
