@@ -48,16 +48,14 @@ function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
   };
 }
 
-let _corsHeaders: Record<string, string> = getCorsHeaders(null);
-
-function jsonResponse(data: unknown, status = 200): Response {
+function jsonResponse(data: unknown, corsHeaders: Record<string, string>, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ..._corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-function errorResponse(msg: string, status = 400): Response {
-  return jsonResponse({ error: msg }, status);
+function errorResponse(msg: string, corsHeaders: Record<string, string>, status = 400): Response {
+  return jsonResponse({ error: msg }, corsHeaders, status);
 }
 
 function isValidUUID(id: string): boolean {
@@ -155,16 +153,16 @@ function wrapHtml(title: string, body: string): string {
 // ---------------------------------------------------------------------------
 // Action: generate — full scouting report for a single player
 // ---------------------------------------------------------------------------
-async function handleGenerate(body: Record<string, unknown>): Promise<Response> {
+async function handleGenerate(body: Record<string, unknown>, corsHeaders: Record<string, string>): Promise<Response> {
   const playerId = body.player_id;
-  if (!playerId || typeof playerId !== "string") return errorResponse("Missing or invalid 'player_id'");
-  if (!isValidUUID(playerId)) return errorResponse("Invalid player_id format");
+  if (!playerId || typeof playerId !== "string") return errorResponse("Missing or invalid 'player_id'", corsHeaders);
+  if (!isValidUUID(playerId)) return errorResponse("Invalid player_id format", corsHeaders);
   const format = body.format === "json" ? "json" : "html";
   const db = getSupabaseClient();
 
   // Fetch player
   const { data: player, error: pErr } = await db.from("scout_players").select("*").eq("id", playerId).single();
-  if (pErr || !player) return errorResponse(`Player not found: ${pErr?.message ?? "unknown"}`, 404);
+  if (pErr || !player) return errorResponse(`Player not found: ${pErr?.message ?? "unknown"}`, corsHeaders, 404);
 
   // Fetch analysis — specific ID or most recent
   const analysisQuery = body.analysis_id && typeof body.analysis_id === "string" && isValidUUID(body.analysis_id)
@@ -172,7 +170,7 @@ async function handleGenerate(body: Record<string, unknown>): Promise<Response> 
     : db.from("scout_analyses").select("*").eq("player_id", playerId).neq("analysis_type", "personality").order("created_at", { ascending: false }).limit(1);
   const { data: aRows, error: aErr } = await analysisQuery;
   const analysis = Array.isArray(aRows) ? aRows[0] : aRows;
-  if (aErr || !analysis) return errorResponse(`No analysis found: ${aErr?.message ?? "none"}`, 404);
+  if (aErr || !analysis) return errorResponse(`No analysis found: ${aErr?.message ?? "none"}`, corsHeaders, 404);
 
   // Fetch dimension scores
   const { data: scores } = await db.from("scout_scores").select("*")
@@ -244,7 +242,7 @@ Generate the scouting report JSON.`;
 
   let report: Record<string, unknown>;
   try { report = parseAiJson(await callClaude(systemPrompt, userPrompt)); }
-  catch (e) { return errorResponse(`Report generation failed: ${e}`, 502); }
+  catch (e) { return errorResponse(`Report generation failed: ${e}`, corsHeaders, 502); }
 
   // JSON format — return raw structured data
   if (format === "json") {
@@ -252,7 +250,7 @@ Generate the scouting report JSON.`;
       success: true,
       player: { id: player.id, name: player.name, position_primary: player.position_primary },
       analysis_id: analysis.id, report,
-    });
+    }, corsHeaders);
   }
 
   // HTML format — build premium report
@@ -363,25 +361,25 @@ ${opinions.map((o) => {
 })()}
 ${report.development_notes ? `<div class="card"><div class="ch">Development Notes</div><div class="st">${escapeHtml(report.development_notes)}</div></div>` : ""}`;
 
-  return jsonResponse({ success: true, report: wrapHtml(`${player.name} — Scouting Report`, htmlBody) });
+  return jsonResponse({ success: true, report: wrapHtml(`${player.name} — Scouting Report`, htmlBody) }, corsHeaders);
 }
 
 // ---------------------------------------------------------------------------
 // Action: compare — comparison report for 2-4 players
 // ---------------------------------------------------------------------------
-async function handleCompare(body: Record<string, unknown>): Promise<Response> {
+async function handleCompare(body: Record<string, unknown>, corsHeaders: Record<string, string>): Promise<Response> {
   const playerIds = body.player_ids;
   if (!Array.isArray(playerIds) || playerIds.length < 2 || playerIds.length > 4) {
-    return errorResponse("'player_ids' must be an array of 2-4 player IDs");
+    return errorResponse("'player_ids' must be an array of 2-4 player IDs", corsHeaders);
   }
   const compType = typeof body.comparison_type === "string" ? body.comparison_type : "head_to_head";
   if (!["head_to_head", "squad_fit", "replacement"].includes(compType)) {
-    return errorResponse("Invalid comparison_type. Use: head_to_head, squad_fit, replacement");
+    return errorResponse("Invalid comparison_type. Use: head_to_head, squad_fit, replacement", corsHeaders);
   }
   const db = getSupabaseClient();
 
   const { data: players, error: pErr } = await db.from("scout_players").select("*").in("id", playerIds);
-  if (pErr || !players || players.length < 2) return errorResponse(`Players not found: ${pErr?.message ?? "none"}`, 404);
+  if (pErr || !players || players.length < 2) return errorResponse(`Players not found: ${pErr?.message ?? "none"}`, corsHeaders, 404);
 
   // Fetch latest analysis + scores per player
   const playerData: Record<string, unknown>[] = [];
@@ -424,7 +422,7 @@ Scores: ${s.map(x => `${x.dimension_name}:${x.score}`).join(", ") || "N/A"}`;
   try {
     compareData = parseAiJson(await callClaude(compSystemPrompt,
       `Type: ${compType.replace(/_/g, " ")}\n\n${playersCtx}\n\nGenerate comparison JSON.`));
-  } catch (e) { return errorResponse(`Comparison failed: ${e}`, 502); }
+  } catch (e) { return errorResponse(`Comparison failed: ${e}`, corsHeaders, 502); }
 
   // Persist to scout_comparisons (non-blocking)
   try {
@@ -438,13 +436,13 @@ Scores: ${s.map(x => `${x.dimension_name}:${x.score}`).join(", ") || "N/A"}`;
     success: true, comparison_type: compType,
     players: players.map((p: Record<string, unknown>) => ({ id: p.id, name: p.name, position_primary: p.position_primary })),
     report: compareData,
-  });
+  }, corsHeaders);
 }
 
 // ---------------------------------------------------------------------------
 // Action: watchlist_brief — executive summary of active watchlist
 // ---------------------------------------------------------------------------
-async function handleWatchlistBrief(body: Record<string, unknown>): Promise<Response> {
+async function handleWatchlistBrief(body: Record<string, unknown>, corsHeaders: Record<string, string>): Promise<Response> {
   const db = getSupabaseClient();
   let query = db.from("scout_watchlist").select("*, scout_players(*)")
     .eq("status", "active")
@@ -462,9 +460,9 @@ async function handleWatchlistBrief(body: Record<string, unknown>): Promise<Resp
     const dtB = b.deadline ? new Date(b.deadline as string).getTime() : Infinity;
     return da - dtB;
   }) : rawItems;
-  if (wErr) return errorResponse(`Watchlist fetch failed: ${wErr.message}`, 500);
+  if (wErr) return errorResponse(`Watchlist fetch failed: ${wErr.message}`, corsHeaders, 500);
   if (!items || items.length === 0) {
-    return jsonResponse({ success: true, count: 0, brief: "No active watchlist items.", items: [] });
+    return jsonResponse({ success: true, count: 0, brief: "No active watchlist items.", items: [] }, corsHeaders);
   }
 
   const systemPrompt = `Du är en fotbollsscout-assistent för Vault AI Scout.
@@ -482,24 +480,24 @@ deadline_alerts(string[])}`;
   try {
     briefData = parseAiJson(await callClaude(systemPrompt,
       `Watchlist (${items.length}):\n${itemsCtx}\nToday: ${new Date().toISOString().slice(0, 10)}\nGenerate brief JSON.`));
-  } catch (e) { return errorResponse(`Brief generation failed: ${e}`, 502); }
+  } catch (e) { return errorResponse(`Brief generation failed: ${e}`, corsHeaders, 502); }
 
-  return jsonResponse({ success: true, count: items.length, brief: briefData });
+  return jsonResponse({ success: true, count: items.length, brief: briefData }, corsHeaders);
 }
 
 // ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 Deno.serve(async (req: Request): Promise<Response> => {
-  _corsHeaders = getCorsHeaders(req.headers.get("Origin"));
+  const corsHeaders = getCorsHeaders(req.headers.get("Origin"));
 
-  if (req.method === "OPTIONS") return new Response("ok", { headers: _corsHeaders });
-  if (req.method !== "POST") return errorResponse("Method not allowed", 405);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return errorResponse("Method not allowed", corsHeaders, 405);
 
   // JWT authentication
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return errorResponse("Missing or invalid Authorization header", 401);
+    return errorResponse("Missing or invalid Authorization header", corsHeaders, 401);
   }
 
   let userId: string;
@@ -510,40 +508,40 @@ Deno.serve(async (req: Request): Promise<Response> => {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authErr } = await authClient.auth.getUser();
-    if (authErr || !user) return errorResponse("Unauthorized", 401);
+    if (authErr || !user) return errorResponse("Unauthorized", corsHeaders, 401);
     userId = user.id;
   } catch {
-    return errorResponse("Authentication failed", 401);
+    return errorResponse("Authentication failed", corsHeaders, 401);
   }
 
-  // Rate limit check — after auth + after _corsHeaders set (W5)
+  // Rate limit check — after auth + after corsHeaders set (W5)
   const rl = checkRateLimit(userId);
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(
       JSON.stringify({ error: "Rate limit exceeded. Max 10 report requests per 15 minutes.", retry_after_seconds: retryAfterSec }),
-      { status: 429, headers: { ..._corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
     );
   }
 
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return errorResponse("Invalid JSON body"); }
+  try { body = await req.json(); } catch { return errorResponse("Invalid JSON body", corsHeaders); }
   body._userId = userId;
 
   const action = body.action;
   if (!action || typeof action !== "string") {
-    return errorResponse("Missing 'action'. Valid: generate, compare, watchlist_brief");
+    return errorResponse("Missing 'action'. Valid: generate, compare, watchlist_brief", corsHeaders);
   }
 
   try {
     switch (action) {
-      case "generate": return await handleGenerate(body);
-      case "compare": return await handleCompare(body);
-      case "watchlist_brief": return await handleWatchlistBrief(body);
-      default: return errorResponse(`Unknown action '${action}'. Valid: generate, compare, watchlist_brief`);
+      case "generate": return await handleGenerate(body, corsHeaders);
+      case "compare": return await handleCompare(body, corsHeaders);
+      case "watchlist_brief": return await handleWatchlistBrief(body, corsHeaders);
+      default: return errorResponse(`Unknown action '${action}'. Valid: generate, compare, watchlist_brief`, corsHeaders);
     }
   } catch (e) {
     console.error(`Unhandled error [${action}]:`, e);
-    return errorResponse("Internal error", 500);
+    return errorResponse("Internal error", corsHeaders, 500);
   }
 });
