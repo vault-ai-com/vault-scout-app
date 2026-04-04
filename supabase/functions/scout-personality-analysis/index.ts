@@ -28,11 +28,28 @@ function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number }
   return { allowed: true, retryAfterMs: 0 };
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const ALLOWED_ORIGINS = [
+  "https://vaultai.se",
+  "https://www.vaultai.se",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:5174",
+  "https://vault-scout-app.vercel.app",
+];
+
+function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
+  const origin =
+    requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
+      ? requestOrigin
+      : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
+  };
+}
 
 // 7 composite archetypes (closed taxonomy, v6)
 const ARCHETYPES = [
@@ -130,12 +147,14 @@ function computeConfidence(
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: getCorsHeaders(req.headers.get("origin")) });
   }
+
+  const _corsHeaders = getCorsHeaders(req.headers.get("origin"));
 
   const respond = (body: unknown, status = 200) => new Response(
     JSON.stringify({ ...(typeof body === 'object' ? body as object : { data: body }), _v: VERSION }),
-    { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    { status, headers: { ..._corsHeaders, 'Content-Type': 'application/json' } }
   );
 
   try {
@@ -161,7 +180,7 @@ Deno.serve(async (req: Request) => {
       const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
       return new Response(
         JSON.stringify({ success: false, error: 'Rate limit exceeded. Max 5 personality analyses per 15 minutes per player.', retry_after_seconds: retryAfterSec, _v: VERSION }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retryAfterSec) } }
+        { status: 429, headers: { ..._corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retryAfterSec) } }
       );
     }
 
@@ -179,7 +198,7 @@ Deno.serve(async (req: Request) => {
     if (cached?.analysis_data) {
       return new Response(
         JSON.stringify({ ...(cached.analysis_data as object), _v: VERSION }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ..._corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -420,7 +439,7 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
 
     return new Response(
       JSON.stringify({ ...result, _v: VERSION }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ..._corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (err: unknown) {
