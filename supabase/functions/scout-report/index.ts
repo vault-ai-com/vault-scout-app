@@ -96,6 +96,8 @@ async function callClaude(
 }
 
 function parseAiJson(raw: string): Record<string, unknown> {
+  // Try direct parse first (cleanest path)
+  try { return JSON.parse(raw.trim()); } catch { /* fallback to regex */ }
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("AI returned invalid format");
   return JSON.parse(match[0]);
@@ -937,20 +939,50 @@ Bosse Andersson: ${bpaProfile.bosse_review ?? "N/A"}` : "";
     return obj;
   }
 
+  const warnings: string[] = [];
+
   if (narrativeResult.status === "fulfilled" && narrativeResult.value) {
-    try { narrative = sanitizeDeep(parseAiJson(narrativeResult.value)) as Record<string, unknown>; } catch (_e) { /* parse fail */ }
+    try {
+      const parsed = sanitizeDeep(parseAiJson(narrativeResult.value)) as Record<string, unknown>;
+      // Schema validation: require key fields
+      if (!parsed.first_impression && !parsed.career_chapters) {
+        warnings.push("SRR01 returned unexpected JSON schema — narrative may be incomplete");
+      }
+      narrative = parsed;
+    } catch (err) {
+      warnings.push(`SRR01 narrative parse failed: ${String(err).slice(0, 100)}`);
+    }
+  } else if (narrativeResult.status === "rejected") {
+    warnings.push(`SRR01 narrative call failed: ${String(narrativeResult.reason).slice(0, 100)}`);
   }
+
   if (bpaResult.status === "fulfilled" && bpaResult.value) {
-    try { bpaFormatted = sanitizeDeep(parseAiJson(bpaResult.value)) as Record<string, unknown>; } catch (_e) { /* parse fail */ }
+    try {
+      const parsed = sanitizeDeep(parseAiJson(bpaResult.value)) as Record<string, unknown>;
+      // Schema validation: require at least one key section
+      if (!parsed.psychology_cards && !parsed.stress_response && !parsed.coaching_blueprint) {
+        warnings.push("SRR02 returned unexpected JSON schema — BPA sections may be incomplete");
+      }
+      bpaFormatted = parsed;
+    } catch (err) {
+      warnings.push(`SRR02 BPA parse failed: ${String(err).slice(0, 100)}`);
+    }
+  } else if (bpaResult.status === "rejected") {
+    warnings.push(`SRR02 BPA call failed: ${String(bpaResult.reason).slice(0, 100)}`);
+  } else if (!bpaFormatted && bpaProfile) {
+    warnings.push("BPA data exists but SRR02 formatting unavailable");
   }
-  const srr02Err = bpaResult.status === "rejected" ? String(bpaResult.reason) : (!bpaFormatted && bpaProfile ? "Empty or unparseable response" : null);
 
   // --- STEP 3: Build 15-slide HTML (deterministic code rendering) ---
   const reportHtml = buildReportHtml(
     player, analysis, scores ?? [], bpaProfile, narrative, bpaFormatted, advisorReview
   );
 
-  return jsonResponse({ success: true, report: reportHtml }, corsHeaders);
+  return jsonResponse({
+    success: true,
+    report: reportHtml,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  }, corsHeaders);
 }
 
 // ---------------------------------------------------------------------------
