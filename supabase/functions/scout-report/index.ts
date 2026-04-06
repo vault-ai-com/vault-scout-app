@@ -3,12 +3,9 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
-// Key: userId | Window: 15 min | Max: 10 requests
 // ---------------------------------------------------------------------------
-
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 10;
-
 const rateLimitStore = new Map<string, number[]>();
 
 function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: number } {
@@ -25,34 +22,27 @@ function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: numbe
   return { allowed: true, retryAfterMs: 0 };
 }
 
+// ---------------------------------------------------------------------------
+// CORS
+// ---------------------------------------------------------------------------
 const ALLOWED_ORIGINS = [
-  "https://vaultai.se",
-  "https://www.vaultai.se",
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:5174",
+  "https://vaultai.se", "https://www.vaultai.se",
+  "http://localhost:5173", "http://localhost:3000", "http://localhost:5174",
   "https://vault-scout-app.vercel.app",
 ];
 
 function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin =
-    requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
-      ? requestOrigin
-      : ALLOWED_ORIGINS[0];
+  const origin = requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin) ? requestOrigin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     Vary: "Origin",
   };
 }
 
 function jsonResponse(data: unknown, corsHeaders: Record<string, string>, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 function errorResponse(msg: string, corsHeaders: Record<string, string>, status = 400): Response {
   return jsonResponse({ error: msg }, corsHeaders, status);
@@ -62,15 +52,10 @@ function isValidUUID(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
-// XSS defense: all user-controlled content MUST pass through escapeHtml before HTML injection
-function escapeHtml(str: unknown): string {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function e(str: unknown): string {
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
+const escapeHtml = e;
 
 function computeAge(dob: unknown): number | null {
   if (!dob || typeof dob !== "string") return null;
@@ -88,17 +73,23 @@ function getSupabaseClient() {
   return createClient(url, key);
 }
 
-async function callClaude(system: string, user: string): Promise<string> {
+// ---------------------------------------------------------------------------
+// Claude API — supports model selection
+// ---------------------------------------------------------------------------
+async function callClaude(
+  system: string, user: string,
+  opts: { model?: string; maxTokens?: number; timeoutMs?: number } = {}
+): Promise<string> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+  const model = opts.model ?? "claude-sonnet-4-6-20250514";
+  const maxTokens = opts.maxTokens ?? 4096;
+  const timeoutMs = opts.timeoutMs ?? 45000;
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6-20250514", max_tokens: 4096, system,
-      messages: [{ role: "user", content: user }],
-    }),
-    signal: AbortSignal.timeout(30000),
+    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!resp.ok) throw new Error(`Anthropic API ${resp.status}: ${await resp.text()}`);
   return (await resp.json())?.content?.[0]?.text ?? "";
@@ -111,47 +102,584 @@ function parseAiJson(raw: string): Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// Vault AI Design System — CSS
+// Vault Scout Report — Design System CSS
 // ---------------------------------------------------------------------------
-const VAULT_CSS = `
+const VAULT_REPORT_CSS = `
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0B1D33;color:#FFF;
-  line-height:1.6;-webkit-font-smoothing:antialiased;padding:16px;max-width:720px;margin:0 auto}
-.card{background:rgba(255,255,255,.05);border-radius:12px;padding:20px;margin-bottom:16px;
-  border:1px solid rgba(255,255,255,.08)}
-.ch{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6C5CE7;margin-bottom:12px}
-h1{font-size:24px;font-weight:700;margin-bottom:4px}
-h2{font-size:18px;font-weight:600;margin-bottom:8px;color:#FDCB6E}
-.sub{color:rgba(255,255,255,.7);font-size:14px;margin-bottom:16px}
-.meta{color:rgba(255,255,255,.5);font-size:12px}
-.b{display:inline-block;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;margin:0 6px 4px 0}
-.bg{background:rgba(253,203,110,.15);color:#FDCB6E}
-.ba{background:rgba(108,92,231,.15);color:#6C5CE7}
-.br{background:rgba(239,68,68,.15);color:#EF4444}
-.bgr{background:rgba(0,184,148,.15);color:#00B894}
-.dr{display:flex;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
-.dl{font-size:13px;color:rgba(255,255,255,.8);flex:1}
-.db{flex:2;height:6px;background:rgba(255,255,255,.08);border-radius:3px;margin:0 12px;overflow:hidden}
-.df{height:100%;border-radius:3px;background:linear-gradient(90deg,#6C5CE7,#FDCB6E)}
-.ds{font-size:13px;font-weight:600;min-width:32px;text-align:right}
-.st{color:rgba(255,255,255,.85);font-size:14px;line-height:1.7}
-.si,.wi{padding:6px 0;font-size:14px}
-.si::before{content:"\\2714 ";color:#00B894}
-.wi::before{content:"\\26A0 ";color:#EF4444}
-.rh{color:#EF4444}.rm{color:#F59E0B}.rl{color:#00B894}
-.wm{text-align:center;padding:20px 0;color:rgba(255,255,255,.2);font-size:11px}`;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0a1628;color:#e8edf5;
+  line-height:1.6;-webkit-font-smoothing:antialiased;padding:24px 16px}
+.report{max-width:800px;margin:0 auto}
+.slide{background:#111d35;border-radius:16px;border:1px solid rgba(255,255,255,.06);
+  padding:32px;margin-bottom:24px;page-break-inside:avoid}
+.slide-tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;
+  color:#00d4aa;margin-bottom:16px}
+h1{font-size:28px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+h2{font-size:20px;font-weight:700;color:#f4c430;margin-bottom:12px}
+h3{font-size:15px;font-weight:600;color:rgba(255,255,255,.9);margin-bottom:8px}
+.sub{color:rgba(255,255,255,.6);font-size:14px}
+.text{color:rgba(255,255,255,.85);font-size:14px;line-height:1.8}
+.badge{display:inline-block;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;margin-right:8px;margin-bottom:4px}
+.b-sign{background:rgba(0,212,170,.15);color:#00d4aa;border:1px solid rgba(0,212,170,.3)}
+.b-monitor{background:rgba(244,196,48,.15);color:#f4c430;border:1px solid rgba(244,196,48,.3)}
+.b-pass{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.b-info{background:rgba(99,102,241,.12);color:#818cf8;border:1px solid rgba(99,102,241,.25)}
+.b-gold{background:rgba(244,196,48,.12);color:#f4c430;border:1px solid rgba(244,196,48,.25)}
+.dim-group{margin-bottom:20px}
+.dim-group-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;
+  padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.06)}
+.dim-group-label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#00d4aa}
+.dim-group-weight{font-size:11px;color:rgba(255,255,255,.4)}
+.dim-row{display:flex;align-items:center;padding:5px 0}
+.dim-name{width:200px;font-size:13px;color:rgba(255,255,255,.75)}
+.dim-bar{flex:1;height:7px;background:rgba(255,255,255,.06);border-radius:4px;margin:0 12px;overflow:hidden}
+.dim-fill{height:100%;border-radius:4px}
+.dim-score{width:36px;text-align:right;font-size:13px;font-weight:600}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-top:16px}
+.stat{text-align:center;padding:16px 12px;background:rgba(255,255,255,.03);border-radius:12px;
+  border:1px solid rgba(255,255,255,.05)}
+.stat-val{font-size:26px;font-weight:800;color:#00d4aa}
+.stat-lbl{font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{padding:20px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
+.card-title{font-size:14px;font-weight:600;margin-bottom:8px}
+.card-text{font-size:13px;color:rgba(255,255,255,.7);line-height:1.7}
+.timeline{position:relative;padding-left:24px}
+.timeline::before{content:'';position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:rgba(0,212,170,.3)}
+.tl-item{position:relative;margin-bottom:20px}
+.tl-item::before{content:'';position:absolute;left:-20px;top:6px;width:10px;height:10px;
+  border-radius:50%;background:#00d4aa;border:2px solid #111d35}
+.tl-title{font-size:14px;font-weight:600;margin-bottom:4px}
+.tl-text{font-size:13px;color:rgba(255,255,255,.7);line-height:1.7}
+.risk-step{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+.risk-num{width:28px;height:28px;border-radius:50%;background:rgba(239,68,68,.15);color:#ef4444;
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.trigger-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.trigger-col h3{margin-bottom:10px}
+.trigger-item{font-size:13px;padding:6px 0;color:rgba(255,255,255,.75);border-bottom:1px solid rgba(255,255,255,.04)}
+.coach-step{display:flex;gap:14px;margin-bottom:16px}
+.coach-num{width:32px;height:32px;border-radius:10px;background:rgba(0,212,170,.12);color:#00d4aa;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+.advisor-card{padding:16px;border-radius:12px;background:rgba(255,255,255,.02);
+  border-left:4px solid #f4c430;margin-bottom:14px}
+.advisor-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.advisor-name{font-size:14px;font-weight:600}
+.advisor-domain{font-size:11px;color:rgba(255,255,255,.4)}
+.compat-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.compat-item{padding:16px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)}
+.compat-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#00d4aa;font-weight:600;margin-bottom:6px}
+.compat-text{font-size:13px;color:rgba(255,255,255,.75);line-height:1.6}
+.cs-meter{display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px 16px;
+  background:rgba(255,255,255,.03);border-radius:10px}
+.cs-bar{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+.cs-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#00d4aa,#f4c430,#ef4444)}
+.cs-val{font-size:14px;font-weight:700;min-width:40px;text-align:right}
+.cover-rec{margin-top:20px;padding:16px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.08)}
+.meta-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);
+  font-size:13px}
+.meta-label{color:rgba(255,255,255,.5)}
+.meta-value{color:rgba(255,255,255,.85);font-weight:500}
+.watermark{text-align:center;padding:24px 0;color:rgba(255,255,255,.15);font-size:11px;letter-spacing:.05em}
+@media(max-width:640px){
+  .slide{padding:20px;margin-bottom:16px}
+  .card-grid,.trigger-grid,.compat-grid{grid-template-columns:1fr}
+  .dim-name{width:120px;font-size:12px}
+  h1{font-size:22px}
+  .stats-grid{grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}
+}
+@media print{
+  body{background:#fff;color:#111;padding:0}
+  .slide{border:1px solid #ddd;background:#fff;box-shadow:none}
+  .slide-tag{color:#00a88a}
+  .dim-bar{background:#eee}
+  .card,.stat,.compat-item{background:#f9f9f9;border-color:#ddd}
+}`;
 
-function wrapHtml(title: string, body: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+// ---------------------------------------------------------------------------
+// SVG Generators
+// ---------------------------------------------------------------------------
+function generateRadarSvg(data: { axis: string; value: number }[]): string {
+  const cx = 160, cy = 160, r = 120, n = data.length;
+  if (n < 3) return "";
+  const angleStep = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+
+  const point = (i: number, scale: number) => {
+    const a = startAngle + i * angleStep;
+    return { x: cx + scale * r * Math.cos(a), y: cy + scale * r * Math.sin(a) };
+  };
+
+  // Grid polygons
+  const gridLevels = [0.25, 0.5, 0.75, 1.0];
+  const grids = gridLevels.map(lv => {
+    const pts = Array.from({ length: n }, (_, i) => point(i, lv));
+    return `<polygon points="${pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="1"/>`;
+  }).join("");
+
+  // Axis lines + labels
+  const axes = data.map((d, i) => {
+    const p = point(i, 1.0);
+    const lp = point(i, 1.22);
+    const anchor = lp.x < cx - 10 ? "end" : lp.x > cx + 10 ? "start" : "middle";
+    return `<line x1="${cx}" y1="${cy}" x2="${p.x.toFixed(1)}" y2="${p.y.toFixed(1)}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+<text x="${lp.x.toFixed(1)}" y="${lp.y.toFixed(1)}" text-anchor="${anchor}" font-size="10" fill="rgba(255,255,255,.6)" font-family="Inter,sans-serif">${escapeHtml(d.axis)}</text>`;
+  }).join("");
+
+  // Data polygon
+  const dataPts = data.map((d, i) => point(i, Math.max(0, Math.min(1, d.value / 10))));
+  const dataPath = `<polygon points="${dataPts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}" fill="rgba(0,212,170,.15)" stroke="#00d4aa" stroke-width="2"/>`;
+
+  // Data points
+  const dots = dataPts.map(p =>
+    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#00d4aa"/>`
+  ).join("");
+
+  return `<svg viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:320px;display:block;margin:0 auto">${grids}${axes}${dataPath}${dots}</svg>`;
+}
+
+function generateScoreCircleSvg(score: number, max = 10): string {
+  const pct = Math.max(0, Math.min(1, score / max));
+  const r = 54, circ = 2 * Math.PI * r;
+  const offset = circ * (1 - pct);
+  const color = score >= 7 ? "#00d4aa" : score >= 4 ? "#f4c430" : "#ef4444";
+  return `<svg viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg" style="width:140px;height:140px">
+<circle cx="70" cy="70" r="${r}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="8"/>
+<circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round"
+  stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}" transform="rotate(-90 70 70)"/>
+<text x="70" y="65" text-anchor="middle" font-size="32" font-weight="800" fill="${color}" font-family="Inter,sans-serif">${score.toFixed(1)}</text>
+<text x="70" y="82" text-anchor="middle" font-size="11" fill="rgba(255,255,255,.4)" font-family="Inter,sans-serif">/ ${max}</text>
+</svg>`;
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const DIM_GROUPS: { key: string; label: string; weight: string; dims: string[] }[] = [
+  { key: "tactical", label: "Taktisk", weight: "22%", dims: ["DIM-01", "DIM-02", "DIM-03"] },
+  { key: "technical", label: "Teknisk", weight: "27%", dims: ["DIM-04", "DIM-05", "DIM-06", "DIM-07"] },
+  { key: "physical", label: "Fysisk", weight: "18%", dims: ["DIM-08", "DIM-09", "DIM-10"] },
+  { key: "mental", label: "Mental", weight: "23%", dims: ["DIM-11", "DIM-12", "DIM-15", "DIM-16"] },
+  { key: "social", label: "Social/Kontext", weight: "10%", dims: ["DIM-13", "DIM-14"] },
+];
+
+const BPA_KEYS = [
+  { key: "decision_tempo", label: "Beslutstempo" }, { key: "risk_appetite", label: "Riskvillighet" },
+  { key: "structure_need", label: "Strukturbehov" }, { key: "team_orientation", label: "Lagkänsla" },
+  { key: "tactical_understanding", label: "Spelförståelse" }, { key: "ambition_level", label: "Ambitionsnivå" },
+  { key: "career_motivation", label: "Karriärmotivation" }, { key: "ego", label: "Ego" },
+  { key: "resilience", label: "Resiliens" }, { key: "coachability", label: "Träningsbarhet" },
+  { key: "x_factor", label: "X-faktor" },
+];
+
+const RADAR_KEYS = ["decision_tempo", "risk_appetite", "structure_need", "team_orientation", "ambition_level", "ego", "resilience"];
+
+const ARCH_LABELS: Record<string, string> = {
+  MENTALITY_MONSTER: "Mentalitetsmonster", HIGH_PERFORMING_SOLO: "Högpresterande Solist",
+  COMPLETE_PROFESSIONAL: "Komplett Proffs", SILENT_LEADER: "Tyst Ledare",
+  COACHABLE_RAW_TALENT: "Formbar Råtalang", TOXIC_HIGH_PERFORMER: "Toxisk Stjärna",
+  RELIABLE_SOLDIER: "Pålitlig Soldat",
+};
+
+function bpaVal(profile: Record<string, unknown>, key: string): number {
+  // Try direct key first (personality analysis format: profile.decision_tempo = {score: X})
+  let d = profile[key];
+  // Try bpa_scores sub-object (full_scout format: profile.bpa_scores.decision_tempo = 6.0)
+  if (d === undefined || d === null) {
+    const bpaScores = profile.bpa_scores as Record<string, unknown> | undefined;
+    if (bpaScores) d = bpaScores[key];
+  }
+  if (typeof d === "number") return d;
+  if (typeof d === "object" && d !== null) return Number((d as Record<string, unknown>).score ?? 0);
+  return 0;
+}
+
+function dimColor(score: number): string {
+  return score >= 7 ? "#00d4aa" : score >= 4 ? "#f4c430" : "#ef4444";
+}
+
+function recBadgeClass(rec: string): string {
+  const r = (rec ?? "").toUpperCase();
+  return r === "SIGN" ? "b-sign" : r === "PASS" ? "b-pass" : "b-monitor";
+}
+
+// ---------------------------------------------------------------------------
+// 15-Slide Report Builder
+// ---------------------------------------------------------------------------
+function buildReportHtml(
+  player: Record<string, unknown>,
+  analysis: Record<string, unknown>,
+  scores: Record<string, unknown>[],
+  bpa: Record<string, unknown> | null,
+  narrative: Record<string, unknown> | null,
+  bpaFormatted: Record<string, unknown> | null,
+  advisorReview: Record<string, unknown> | null,
+): string {
+  const age = computeAge(player.date_of_birth);
+  const overall = Number(analysis.overall_score ?? 0);
+  const confidence = Number(analysis.confidence ?? 0);
+  const rec = String(analysis.recommendation ?? "MONITOR");
+  // Sanitize summary — strip internal agent/pipeline details (business secrets)
+  const rawSummary = String(analysis.summary ?? "");
+  const summary = rawSummary.replace(/\s*—?\s*\d+\s*agenter.*$/i, "").replace(/\s*VET\d+\s*\w+/gi, "").replace(/\s*SCOUT\d+/gi, "").trim();
+
+  // Score map for dimension lookup
+  const scoreMap = new Map<string, { name: string; score: number }>();
+  for (const s of scores) {
+    scoreMap.set(String(s.dimension_id), { name: String(s.dimension_name ?? s.dimension_id), score: Number(s.score ?? 0) });
+  }
+
+  // === SLIDE 1: COVER ===
+  const slide1 = `<section class="slide" id="s1">
+<div class="slide-tag">Vault AI Scout Report</div>
+<h1>${e(player.name)}</h1>
+<div class="sub" style="margin:8px 0 16px">${e(player.position_primary)} &bull; ${e(player.current_club)} &bull; ${e(player.current_league)}</div>
+<div style="margin-bottom:16px">
+  <span class="badge b-info">${e(player.nationality)}</span>
+  <span class="badge b-gold">${age ? `${age} \u00e5r` : "Okänd ålder"}</span>
+  <span class="badge b-info">${e(player.tier)}</span>
+  <span class="badge b-gold">${e(player.career_phase)}</span>
+  <span class="badge ${recBadgeClass(rec)}" style="font-size:14px;padding:6px 18px">${e(rec)}</span>
+</div>
+<div class="cover-rec">
+  <div style="display:flex;align-items:center;gap:16px">
+    ${generateScoreCircleSvg(overall)}
+    <div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">Overall Score: ${overall.toFixed(1)}/10</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.5)">Confidence: ${(confidence * 100).toFixed(0)}%</div>
+      <div class="text" style="margin-top:8px">${e(summary).substring(0, 200)}${summary.length > 200 ? "..." : ""}</div>
+    </div>
+  </div>
+</div>
+</section>`;
+
+  // === SLIDE 2: FIRST IMPRESSION ===
+  const firstImpression = narrative?.first_impression ?? summary;
+  const slide2 = `<section class="slide" id="s2">
+<div class="slide-tag">Första Intrycket</div>
+<div class="text" style="font-size:15px;line-height:1.9">${e(firstImpression)}</div>
+</section>`;
+
+  // === SLIDE 3: PLAYER PROFILE ===
+  const initials = String(player.name ?? "").split(" ").map(w => (w[0] ?? "").toUpperCase()).join("").substring(0, 2);
+  const strengths = Array.isArray(analysis.strengths) ? analysis.strengths as string[] : [];
+  const weaknesses = Array.isArray(analysis.weaknesses) ? analysis.weaknesses as string[] : [];
+  const marketValue = player.market_value_eur ? `€${(Number(player.market_value_eur) / 1e6).toFixed(1)}M` : "Okänt";
+  const contractEnd = player.contract_expires ? String(player.contract_expires).substring(0, 10) : "Okänt";
+  const slide3 = `<section class="slide" id="s3">
+<div class="slide-tag">Spelarprofil</div>
+<div style="display:flex;align-items:center;gap:20px;margin-bottom:20px">
+  <div style="width:64px;height:64px;border-radius:50%;background:rgba(0,212,170,.15);border:2px solid #00d4aa;
+    display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#00d4aa;flex-shrink:0">${e(initials)}</div>
+  <div>
+    <h2 style="color:#e8edf5;margin-bottom:2px">${e(player.name)}</h2>
+    <div class="sub">${e(player.position_primary)} &bull; ${e(player.current_club)} &bull; ${e(player.current_league)}</div>
+  </div>
+</div>
+<div class="stats-grid">
+  <div class="stat"><div class="stat-val">${overall.toFixed(1)}</div><div class="stat-lbl">Overall</div></div>
+  <div class="stat"><div class="stat-val">${e(marketValue)}</div><div class="stat-lbl">Marknadsvärde</div></div>
+  <div class="stat"><div class="stat-val">${age ?? "?"}</div><div class="stat-lbl">Ålder</div></div>
+  <div class="stat"><div class="stat-val">${(confidence * 100).toFixed(0)}%</div><div class="stat-lbl">Confidence</div></div>
+  <div class="stat"><div class="stat-val">${e(contractEnd)}</div><div class="stat-lbl">Kontrakt</div></div>
+</div>
+</section>`;
+
+  // === SLIDE 4: OVERALL SCORE ===
+  const recReasoning = typeof analysis.analysis_data === "object" && analysis.analysis_data !== null
+    ? String((analysis.analysis_data as Record<string, unknown>).recommendation_reasoning ?? summary)
+    : summary;
+  const slide4 = `<section class="slide" id="s4">
+<div class="slide-tag">Overall Score</div>
+<div style="text-align:center;margin-bottom:24px">
+  ${generateScoreCircleSvg(overall)}
+  <div style="margin-top:12px">
+    <span class="badge ${recBadgeClass(rec)}" style="font-size:16px;padding:8px 24px">${e(rec)}</span>
+  </div>
+  <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,.4)">Confidence: ${(confidence * 100).toFixed(0)}%</div>
+</div>
+<div class="text" style="text-align:center;max-width:600px;margin:0 auto">${e(recReasoning).substring(0, 400)}</div>
+<div style="display:flex;gap:16px;margin-top:20px">
+  <div style="flex:1">
+    <h3 style="color:#00d4aa">Styrkor</h3>
+    ${strengths.map(s => `<div style="padding:4px 0;font-size:13px;color:rgba(255,255,255,.75)">✓ ${e(s)}</div>`).join("")}
+  </div>
+  <div style="flex:1">
+    <h3 style="color:#ef4444">Svagheter</h3>
+    ${weaknesses.map(w => `<div style="padding:4px 0;font-size:13px;color:rgba(255,255,255,.75)">⚠ ${e(w)}</div>`).join("")}
+  </div>
+</div>
+</section>`;
+
+  // === SLIDE 5: 16 DIMENSIONS ===
+  const dimGroupsHtml = DIM_GROUPS.map(g => {
+    const rows = g.dims.map(dimId => {
+      const d = scoreMap.get(dimId);
+      if (!d) return "";
+      const pct = Math.max(0, Math.min(100, d.score * 10));
+      return `<div class="dim-row"><div class="dim-name">${e(d.name)}</div><div class="dim-bar"><div class="dim-fill" style="width:${pct}%;background:${dimColor(d.score)}"></div></div><div class="dim-score" style="color:${dimColor(d.score)}">${d.score.toFixed(1)}</div></div>`;
+    }).join("");
+    return `<div class="dim-group"><div class="dim-group-hdr"><span class="dim-group-label">${e(g.label)}</span><span class="dim-group-weight">${e(g.weight)}</span></div>${rows}</div>`;
+  }).join("");
+
+  const slide5 = `<section class="slide" id="s5">
+<div class="slide-tag">16 Dimensioner</div>
+<h2 style="margin-bottom:20px">Dimensionsanalys</h2>
+${dimGroupsHtml}
+</section>`;
+
+  // === SLIDE 6: BPA RADAR ===
+  let slide6 = "";
+  if (bpa) {
+    const radarData = RADAR_KEYS.map(k => {
+      const lbl = BPA_KEYS.find(b => b.key === k)?.label ?? k;
+      return { axis: lbl, value: bpaVal(bpa, k) };
+    });
+
+    const archRaw = String(bpa.composite_archetype ?? "");
+    const archLabel = ARCH_LABELS[archRaw] ?? archRaw;
+    const stressArch = String(bpa.stress_archetype ?? "");
+
+    const csRaw = bpa.contradiction_score ?? (bpa.bpa_scores as Record<string, unknown> | undefined)?.contradiction_score ?? 0;
+    const csVal = typeof csRaw === "number" ? csRaw : (typeof csRaw === "object" && csRaw !== null ? Number((csRaw as Record<string, unknown>).score ?? 0) : 0);
+    const csPct = Math.round(Math.min(1, Math.max(0, csVal)) * 100);
+    const csColor = csPct >= 70 ? "#ef4444" : csPct >= 40 ? "#f4c430" : "#00d4aa";
+
+    const bpaBarsHtml = BPA_KEYS.map(dim => {
+      const score = bpaVal(bpa, dim.key);
+      const pct = Math.max(0, Math.min(100, score * 10));
+      return `<div class="dim-row"><div class="dim-name">${e(dim.label)}</div><div class="dim-bar"><div class="dim-fill" style="width:${pct}%;background:${dimColor(score)}"></div></div><div class="dim-score" style="color:${dimColor(score)}">${score > 0 ? score.toFixed(1) : "–"}</div></div>`;
+    }).join("");
+
+    slide6 = `<section class="slide" id="s6">
+<div class="slide-tag">Beteendeprofil (BPA)</div>
+<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+  <span class="badge b-info" style="font-size:13px;padding:6px 16px">${e(archLabel || "Okänd arketyp")}</span>
+  ${stressArch ? `<span class="badge b-gold">Stress: ${e(stressArch)}</span>` : ""}
+</div>
+<div style="margin-bottom:24px">${generateRadarSvg(radarData)}</div>
+<h3 style="margin-bottom:12px">Alla BPA-dimensioner (11)</h3>
+${bpaBarsHtml}
+<div class="cs-meter" style="margin-top:16px">
+  <span style="font-size:12px;color:rgba(255,255,255,.5);min-width:110px">Motsägelsefullhet</span>
+  <div class="cs-bar"><div class="cs-fill" style="width:${csPct}%"></div></div>
+  <span class="cs-val" style="color:${csColor}">${csPct}%</span>
+</div>
+</section>`;
+  }
+
+  // === SLIDE 7: PSYCHOLOGY CARDS ===
+  let slide7 = "";
+  if (bpaFormatted) {
+    const cards = Array.isArray(bpaFormatted.psychology_cards) ? bpaFormatted.psychology_cards as Record<string, unknown>[] : [];
+    if (cards.length > 0) {
+      const CARD_ACCENTS = ["#00d4aa", "#f4c430", "#818cf8", "#f97316"];
+      slide7 = `<section class="slide" id="s7">
+<div class="slide-tag">Karaktär & Psykologi</div>
+<div class="card-grid">
+${cards.map((c, i) => `<div class="card" style="border-left:3px solid ${CARD_ACCENTS[i % 4]}">
+  <div class="card-title" style="color:${CARD_ACCENTS[i % 4]}">${e(c.title)}</div>
+  <div class="card-text">${e(c.content)}</div>
+</div>`).join("")}
+</div>
+</section>`;
+    }
+  }
+
+  // === SLIDE 8: STRESS RESPONSE ===
+  let slide8 = "";
+  if (bpaFormatted) {
+    const stressItems = Array.isArray(bpaFormatted.stress_response) ? bpaFormatted.stress_response as Record<string, unknown>[] : [];
+    if (stressItems.length > 0) {
+      slide8 = `<section class="slide" id="s8">
+<div class="slide-tag">Stressrespons</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+${stressItems.map(s => `<div class="card">
+  <h3>${e(s.title)}</h3>
+  <div class="card-text">${e(s.content)}</div>
+</div>`).join("")}
+</div>
+</section>`;
+    }
+  }
+
+  // === SLIDE 9: RISK ANALYSIS ===
+  let slide9 = "";
+  if (bpaFormatted) {
+    const rf = bpaFormatted.risk_flow as Record<string, unknown> | undefined;
+    const steps = rf && Array.isArray(rf.steps) ? rf.steps as Record<string, unknown>[] : [];
+    const caseStudy = rf ? String(rf.case_study ?? "") : "";
+    if (steps.length > 0) {
+      slide9 = `<section class="slide" id="s9">
+<div class="slide-tag">Riskanalys — Kill Chain</div>
+<h2 style="margin-bottom:16px">Vad bryter spelaren?</h2>
+${steps.map(s => `<div class="risk-step">
+  <div class="risk-num">${e(s.step)}</div>
+  <div><div style="font-size:14px;font-weight:600;margin-bottom:2px">${e(s.title)}</div>
+  <div class="card-text">${e(s.description ?? s.desc)}</div></div>
+</div>`).join("")}
+${caseStudy ? `<div class="card" style="margin-top:16px;border-left:3px solid #ef4444"><div class="card-title" style="color:#ef4444">Case Study</div><div class="card-text">${e(caseStudy)}</div></div>` : ""}
+</section>`;
+    }
+  } else {
+    // Fallback: use risk factors from analysis
+    const riskFactors = Array.isArray(analysis.risk_factors) ? analysis.risk_factors as string[] : [];
+    if (riskFactors.length > 0) {
+      slide9 = `<section class="slide" id="s9">
+<div class="slide-tag">Riskanalys</div>
+${riskFactors.map((f, i) => `<div class="risk-step"><div class="risk-num">${i + 1}</div><div class="card-text">${e(f)}</div></div>`).join("")}
+</section>`;
+    }
+  }
+
+  // === SLIDE 10: TRIGGERS ===
+  let slide10 = "";
+  if (bpaFormatted) {
+    const triggers = bpaFormatted.triggers as Record<string, unknown> | undefined;
+    const best = triggers && Array.isArray(triggers.activates_best ?? triggers.best) ? (triggers.activates_best ?? triggers.best) as string[] : [];
+    const worst = triggers && Array.isArray(triggers.activates_worst ?? triggers.worst) ? (triggers.activates_worst ?? triggers.worst) as string[] : [];
+    if (best.length > 0 || worst.length > 0) {
+      slide10 = `<section class="slide" id="s10">
+<div class="slide-tag">Beteendetriggers</div>
+<div class="trigger-grid">
+  <div class="trigger-col"><h3 style="color:#00d4aa">Aktiverar bästa</h3>
+    ${best.map(b => `<div class="trigger-item">✓ ${e(b)}</div>`).join("")}
+  </div>
+  <div class="trigger-col"><h3 style="color:#ef4444">Aktiverar sämsta</h3>
+    ${worst.map(w => `<div class="trigger-item">⚠ ${e(w)}</div>`).join("")}
+  </div>
+</div>
+</section>`;
+    }
+  }
+
+  // === SLIDE 11: CAREER ANALYSIS ===
+  let slide11 = "";
+  if (narrative) {
+    const chapters = Array.isArray(narrative.career_chapters) ? narrative.career_chapters as Record<string, unknown>[] : [];
+    if (chapters.length > 0) {
+      slide11 = `<section class="slide" id="s11">
+<div class="slide-tag">Karriäranalys</div>
+<div class="timeline">
+${chapters.map(ch => `<div class="tl-item"><div class="tl-title">${e(ch.title)}</div><div class="tl-text">${e(ch.content)}</div></div>`).join("")}
+</div>
+${narrative.player_summary ? `<div class="text" style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)">${e(narrative.player_summary)}</div>` : ""}
+</section>`;
+    }
+  }
+
+  // === SLIDE 12: COMPATIBILITY PROFILE ===
+  let slide12 = "";
+  if (bpaFormatted) {
+    const compat = bpaFormatted.compatibility_profile ?? bpaFormatted.compatibility;
+    if (compat && typeof compat === "object") {
+      const c = compat as Record<string, unknown>;
+      slide12 = `<section class="slide" id="s12">
+<div class="slide-tag">Kompatibilitetsprofil</div>
+<h2 style="margin-bottom:16px">Generell spelarprofil</h2>
+<div class="compat-grid">
+  <div class="compat-item"><div class="compat-label">Spelstil-krav</div><div class="compat-text">${e(c.play_style ?? c.play_style_requirement ?? "Ej tillgänglig")}</div></div>
+  <div class="compat-item"><div class="compat-label">Liga-nivå</div><div class="compat-text">${e(c.league_level ?? "Ej tillgänglig")}</div></div>
+  <div class="compat-item"><div class="compat-label">Kulturprofil</div><div class="compat-text">${e(c.culture_profile ?? c.culture ?? "Ej tillgänglig")}</div></div>
+  <div class="compat-item"><div class="compat-label">Idealmiljö</div><div class="compat-text">${e(c.ideal_environment ?? c.ideal_env ?? "Ej tillgänglig")}</div></div>
+</div>
+</section>`;
+    }
+  }
+
+  // === SLIDE 13: COACHING BLUEPRINT ===
+  let slide13 = "";
+  if (bpaFormatted) {
+    const steps = Array.isArray(bpaFormatted.coaching_blueprint) ? bpaFormatted.coaching_blueprint as Record<string, unknown>[] : [];
+    if (steps.length > 0) {
+      slide13 = `<section class="slide" id="s13">
+<div class="slide-tag">Coaching Blueprint</div>
+${steps.map(s => `<div class="coach-step">
+  <div class="coach-num">${e(s.step)}</div>
+  <div><div style="font-size:14px;font-weight:600;margin-bottom:2px">${e(s.title)}</div>
+  <div class="card-text">${e(s.description ?? s.desc)}</div></div>
+</div>`).join("")}
+</section>`;
+    }
+  } else if (bpa) {
+    // Fallback: raw coaching approach from BPA
+    const coaching = Array.isArray(bpa.coaching_approach) ? bpa.coaching_approach as string[] : [];
+    if (coaching.length > 0) {
+      slide13 = `<section class="slide" id="s13">
+<div class="slide-tag">Coaching Blueprint</div>
+${coaching.map((c, i) => `<div class="coach-step"><div class="coach-num">${i + 1}</div><div class="card-text">${e(c)}</div></div>`).join("")}
+</section>`;
+    }
+  }
+
+  // === SLIDE 14: EXPERT REVIEW ===
+  let slide14 = "";
+  if (advisorReview) {
+    const opinions = Array.isArray(advisorReview.opinions) ? advisorReview.opinions as Record<string, unknown>[] : [];
+    const consensus = advisorReview.consensus ? String(advisorReview.consensus) : "";
+    const VERDICT_COLORS: Record<string, string> = { AGREE: "#00d4aa", CHALLENGE: "#f4c430", FLAG: "#ef4444" };
+    const VERDICT_LABELS: Record<string, string> = { AGREE: "Godkänd", CHALLENGE: "Invändning", FLAG: "Varning" };
+    if (opinions.length > 0) {
+      slide14 = `<section class="slide" id="s14">
+<div class="slide-tag">Sport Advisory Board</div>
+${consensus ? `<div style="margin-bottom:20px;padding:14px 18px;border-radius:12px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.15);font-size:14px;color:rgba(255,255,255,.85)">${e(consensus)}</div>` : ""}
+${opinions.map(o => {
+  const v = String(o.verdict ?? "CHALLENGE");
+  const color = VERDICT_COLORS[v] ?? "#f4c430";
+  const label = VERDICT_LABELS[v] ?? v;
+  const flags = Array.isArray(o.risk_flags) ? o.risk_flags as string[] : [];
+  const recs = Array.isArray(o.recommendations) ? o.recommendations as string[] : [];
+  return `<div class="advisor-card" style="border-left-color:${color}">
+  <div class="advisor-hdr">
+    <div><span class="advisor-name">${e(o.advisor_name)}</span><span class="advisor-domain" style="margin-left:8px">${e(o.domain)}</span></div>
+    <span class="badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${e(label)}</span>
+  </div>
+  <div class="card-text" style="margin-bottom:8px">${e(o.summary)}</div>
+  ${String(o.detail ?? "").length > 0 ? `<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:12px;color:rgba(255,255,255,.4)">Visa detaljanalys</summary><div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:6px;white-space:pre-wrap">${e(o.detail)}</div></details>` : ""}
+  ${flags.length > 0 ? flags.map(f => `<div style="font-size:12px;color:#ef4444;padding:2px 0">⚠ ${e(f)}</div>`).join("") : ""}
+  ${recs.length > 0 ? recs.map(r => `<div style="font-size:12px;color:#00d4aa;padding:2px 0">→ ${e(r)}</div>`).join("") : ""}
+</div>`;
+}).join("")}
+</section>`;
+    }
+  }
+
+  // === SLIDE 15: QA METADATA (customer-safe — no internal agent/KB names) ===
+  const agentCount = Array.isArray(analysis.agents_used) ? (analysis.agents_used as string[]).length : 0;
+  const kbCount = Array.isArray(analysis.kb_files_used) ? (analysis.kb_files_used as string[]).length : 0;
+  const slideCount = [slide1, slide2, slide3, slide4, slide5, slide6, slide7, slide8, slide9, slide10, slide11, slide12, slide13, slide14].filter(s => s.length > 0).length + 1;
+  const verificationData = bpa?.verification as Record<string, unknown> | undefined;
+
+  const slide15 = `<section class="slide" id="s15">
+<div class="slide-tag">Kvalitetssäkring</div>
+<h2 style="margin-bottom:16px">Rapport-metadata</h2>
+<div class="meta-row"><span class="meta-label">Rapport genererad</span><span class="meta-value">${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC</span></div>
+<div class="meta-row"><span class="meta-label">Spelare</span><span class="meta-value">${e(player.name)}</span></div>
+<div class="meta-row"><span class="meta-label">Overall Score</span><span class="meta-value">${overall.toFixed(1)} / 10</span></div>
+<div class="meta-row"><span class="meta-label">Confidence</span><span class="meta-value">${(confidence * 100).toFixed(0)}%</span></div>
+<div class="meta-row"><span class="meta-label">Recommendation</span><span class="meta-value">${e(rec)}</span></div>
+<div class="meta-row"><span class="meta-label">Dimensioner analyserade</span><span class="meta-value">${scores.length} / 16</span></div>
+<div class="meta-row"><span class="meta-label">Beteendeprofil (BPA)</span><span class="meta-value">${bpa ? "Ja — 12 dimensioner" : "Ej tillgänglig"}</span></div>
+<div class="meta-row"><span class="meta-label">Sport Advisory Board</span><span class="meta-value">${advisorReview ? `${(advisorReview.opinions as unknown[])?.length ?? 0} granskare` : "Ej tillgänglig"}</span></div>
+<div class="meta-row"><span class="meta-label">AI-analyslager</span><span class="meta-value">${agentCount > 0 ? `${agentCount} specialiserade modeller` : "Standard"}</span></div>
+<div class="meta-row"><span class="meta-label">Datakällor</span><span class="meta-value">${kbCount > 0 ? `${kbCount} kunskapsbaser` : "Grunddata"}</span></div>
+<div class="meta-row"><span class="meta-label">Oberoende verifiering</span><span class="meta-value">${verificationData?.vet06_gate ? `${e(String(verificationData.vet06_gate))}` : bpa ? "Genomförd" : "Ej tillämplig"}</span></div>
+<div class="meta-row" style="border:none"><span class="meta-label">Antal sektioner</span><span class="meta-value">${slideCount}</span></div>
+</section>`;
+
+  // === ASSEMBLE ===
+  const slides = [slide1, slide2, slide3, slide4, slide5, slide6, slide7, slide8, slide9, slide10, slide11, slide12, slide13, slide14, slide15].filter(s => s.length > 0).join("\n");
+
+  return `<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>${escapeHtml(title)} — Vault AI Scout</title><style>${VAULT_CSS}</style></head>
-<body>${body}
-<div class="wm">Vault AI Scout — ${new Date().toISOString().slice(0, 10)}</div>
+<title>${escapeHtml(player.name)} — Vault AI Scout Report</title>
+<style>${VAULT_REPORT_CSS}</style></head>
+<body><div class="report">${slides}</div>
+<div class="watermark">Vault AI Scout &mdash; Behavioral Football Intelligence &mdash; ${new Date().toISOString().slice(0, 10)}</div>
 </body></html>`;
 }
 
 // ---------------------------------------------------------------------------
-// Action: generate — full scouting report for a single player
+// Action: generate — multi-step scouting report (SRR01 + SRR02 + code rendering)
 // ---------------------------------------------------------------------------
 async function handleGenerate(body: Record<string, unknown>, corsHeaders: Record<string, string>): Promise<Response> {
   const playerId = body.player_id;
@@ -176,196 +704,140 @@ async function handleGenerate(body: Record<string, unknown>, corsHeaders: Record
   const { data: scores } = await db.from("scout_scores").select("*")
     .eq("analysis_id", analysis.id).order("dimension_id", { ascending: true });
 
-  // Fetch personality analysis (BPA — analysis_type = 'personality')
+  // Extract BPA from analysis_data (full_scout stores bpa_scores inline)
+  // Also check for separate personality analysis as fallback
   let bpaProfile: Record<string, unknown> | null = null;
   {
-    const { data: paRows } = await db
-      .from("scout_analyses")
-      .select("id,analysis_data,created_at")
-      .eq("player_id", playerId)
-      .eq("analysis_type", "personality")
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const paRow = Array.isArray(paRows) && paRows.length > 0 ? paRows[0] : null;
-    if (paRow?.analysis_data && typeof paRow.analysis_data === "object") {
-      const ad = paRow.analysis_data as Record<string, unknown>;
-      // analysis_data = { success, player_id, profile: {...dims...}, duration_ms }
-      bpaProfile = (ad.profile && typeof ad.profile === "object" ? ad.profile : ad) as Record<string, unknown>;
+    const ad = analysis.analysis_data as Record<string, unknown> | null;
+    if (ad?.bpa_scores && typeof ad.bpa_scores === "object") {
+      // BPA embedded in the full_scout analysis_data
+      bpaProfile = {
+        bpa_scores: ad.bpa_scores,
+        composite_archetype: ad.bpa_archetype ?? null,
+        stress_archetype: ad.stress_archetype ?? null,
+        contradiction_score: (ad.bpa_scores as Record<string, unknown>)?.contradiction_score ?? null,
+        bosse_review: ad.bosse_review ?? null,
+        bosse_override: ad.bosse_override ?? null,
+        dif_compatibility: ad.dif_compatibility ?? null,
+        verification: ad.verification ?? null,
+      };
+    } else {
+      // Fallback: separate personality analysis
+      const { data: paRows } = await db.from("scout_analyses").select("id,analysis_data,created_at")
+        .eq("player_id", playerId).eq("analysis_type", "personality")
+        .order("created_at", { ascending: false }).limit(1);
+      const paRow = Array.isArray(paRows) && paRows.length > 0 ? paRows[0] : null;
+      if (paRow?.analysis_data && typeof paRow.analysis_data === "object") {
+        const pad = paRow.analysis_data as Record<string, unknown>;
+        bpaProfile = (pad.profile && typeof pad.profile === "object" ? pad.profile : pad) as Record<string, unknown>;
+      }
     }
   }
 
-  // Optional: comparable players
-  let comparisons: unknown[] = [];
-  if (body.include_comparisons === true) {
-    const { data: sim } = await db.from("scout_players").select("id,name,position_primary,tier,current_league,date_of_birth,current_club")
-      .eq("position_primary", player.position_primary).eq("tier", player.tier).neq("id", playerId).limit(3);
-    comparisons = sim ?? [];
-  }
-
-  // Load dimension framework from DB (SSOT)
-  let dimFramework = "";
-  try {
-    const { data: dimText } = await db.rpc("get_dimension_framework_prompt", { p_type: "performance" });
-    dimFramework = typeof dimText === "string" ? dimText : "";
-  } catch (e) { console.warn("[scout-report] Failed to load dim framework:", e); }
-
-  const systemPrompt = `Du är en världsledande fotbollsscout-analytiker för Vault AI Scout.
-Generera en professionell scoutingrapport på SVENSKA. Var specifik, datadriven och beslutsam.
-Använd dimensionspoängen (0-10) för att grunda din analys.
-
-${dimFramework || "Dimensionsramverk (DIM-01→DIM-16): Taktisk 22%, Teknisk 27%, Fysisk 18%, Mental 23%, Social 10%."}
-
-Returnera valid JSON med: overview(string), strengths(string[3-5]), weaknesses(string[2-4]),
-dimensions([{name,score,comment}] — använd de svenska dimensionsnamnen),
-transfer_recommendation({verdict:"SIGN"|"MONITOR"|"PASS",confidence:1-10,reasoning,estimated_value_eur}),
-risk_assessment({level:"LOW"|"MEDIUM"|"HIGH",factors:string[]}), development_notes(string).
-Allt på svenska.`;
+  // Extract advisor review from analysis_data
+  const advisorReview = (analysis.analysis_data as Record<string, unknown>)?.advisor_review as Record<string, unknown> | null ?? null;
 
   const playerAge = computeAge(player.date_of_birth);
-  const userPrompt = `Player: ${player.name}
-Position: ${player.position_primary} | Age: ${playerAge ?? "unknown"} | Club: ${player.current_club}
-League: ${player.current_league} | Nationality: ${player.nationality}
-Tier: ${player.tier} | Phase: ${player.career_phase}
-Analysis: ${analysis.summary ?? "N/A"}
-Detail: ${JSON.stringify(analysis.analysis_data ?? {})}
-Scores:
-${(scores ?? []).map((s: Record<string, unknown>) => `- ${s.dimension_name}: ${s.score}/10`).join("\n")}
-${comparisons.length > 0 ? `\nComparables:\n${comparisons.map((c: Record<string, unknown>) => `- ${c.name} (${c.current_club}, ${c.current_league}, age ${computeAge(c.date_of_birth) ?? "?"})`).join("\n")}` : ""}
-${bpaProfile ? `\nBPA Personality Profile:
-- Composite Archetype: ${bpaProfile.composite_archetype ?? "N/A"}
-- Stress Archetype: ${bpaProfile.stress_archetype ?? "N/A"}
-- BPA Dimensions (1-10): ${["decision_tempo","risk_appetite","structure_need","team_orientation","tactical_understanding","ambition_level","career_motivation","ego","resilience","coachability","x_factor"].map((k) => { const d = bpaProfile![k]; return `${k}=${typeof d === "object" && d !== null ? (d as Record<string, unknown>).score ?? "?" : "?"}`;}).join(", ")}
-- Contradiction Score (0-1 scale, NOT 1-10): ${(() => { const cs = bpaProfile!.contradiction_score; return typeof cs === "object" && cs !== null ? (cs as Record<string, unknown>).score ?? "?" : "?"; })()}
-- Coaching: ${Array.isArray(bpaProfile.coaching_approach) ? (bpaProfile.coaching_approach as string[]).join("; ") : "N/A"}
-- Integration Risks: ${Array.isArray(bpaProfile.integration_risks) ? (bpaProfile.integration_risks as string[]).join("; ") : "N/A"}` : ""}
-Generate the scouting report JSON.`;
+  const scoresCtx = (scores ?? []).map((s: Record<string, unknown>) => `${s.dimension_id}: ${s.dimension_name} = ${s.score}/10`).join("\n");
 
-  let report: Record<string, unknown>;
-  try { report = parseAiJson(await callClaude(systemPrompt, userPrompt)); }
-  catch (e) { return errorResponse(`Report generation failed: ${e}`, corsHeaders, 502); }
-
-  // JSON format — return raw structured data
+  // JSON format — return structured data only (no LLM calls)
   if (format === "json") {
     return jsonResponse({
       success: true,
       player: { id: player.id, name: player.name, position_primary: player.position_primary },
-      analysis_id: analysis.id, report,
+      analysis_id: analysis.id,
+      analysis: { overall_score: analysis.overall_score, confidence: analysis.confidence, recommendation: analysis.recommendation, summary: analysis.summary, strengths: analysis.strengths, weaknesses: analysis.weaknesses },
+      scores: scores ?? [],
+      bpa_profile: bpaProfile,
+      advisor_review: advisorReview,
     }, corsHeaders);
   }
 
-  // HTML format — build premium report
-  const dims = Array.isArray(report.dimensions) ? report.dimensions : (Array.isArray(report.dimension_scores) ? report.dimension_scores : []);
-  const strengths = Array.isArray(report.strengths) ? report.strengths : [];
-  const weaknesses = Array.isArray(report.weaknesses) ? report.weaknesses : [];
-  const recRaw = report.transfer_recommendation ?? report.recommendation_detail ?? (typeof report.recommendation === "object" && report.recommendation !== null ? report.recommendation : typeof report.recommendation === "string" ? { verdict: report.recommendation } : {});
-  const rec = recRaw as Record<string, unknown>;
-  const risk = (report.risk_assessment ?? report.risk ?? {}) as Record<string, unknown>;
-  const riskFactors = Array.isArray(risk.factors) ? risk.factors : [];
-  const verdictClass = rec.verdict === "SIGN" ? "bgr" : rec.verdict === "PASS" ? "br" : "bg";
-  const riskClass = risk.level === "HIGH" ? "rh" : risk.level === "MEDIUM" ? "rm" : "rl";
+  // --- STEP 1: SRR01 Narrative Writer (Opus) ---
+  let narrative: Record<string, unknown> | null = null;
+  try {
+    const narrativeSystem = `Du är SRR01 Narrative Writer — en världsledande fotbollsanalytiker för Vault AI Scout.
+Skriv en fängslande men faktabaserad karriärberättelse på SVENSKA.
+Returnera ENBART valid JSON (inga kommentarer):
+{"first_impression":"2 stycken om spelaren","career_chapters":[{"title":"Kapitelrubrik","content":"2-4 meningar"}],"player_summary":"1 stycke sammanfattning"}
+Stil: Professionell, dramatisk. Em-dash (—) för pauser. GENERELL — nämn aldrig en köpande klubb.
+5-7 kapitel: bakgrund, genombrott, spelstil, mental profil, nuvarande form, framtid.
+ANTI-HALLUCINATION: Basera ALLT på given data. Fabricera aldrig klubbbyten, mål, eller händelser.`;
 
-  const htmlBody = `
-<div class="card">
-  <div class="ch">Scouting Report</div>
-  <h1>${escapeHtml(player.name)}</h1>
-  <div class="sub">${escapeHtml(player.position_primary)} &bull; ${escapeHtml(player.current_club)} &bull; ${escapeHtml(player.current_league)}</div>
-  <div><span class="b ba">${escapeHtml(player.tier)}</span><span class="b bg">${escapeHtml(player.career_phase)}</span>
-  <span class="b ba">Age ${escapeHtml(playerAge ?? "N/A")}</span><span class="b bg">${escapeHtml(player.nationality ?? "N/A")}</span></div>
-</div>
-<div class="card"><div class="ch">Overview</div><div class="st">${escapeHtml(report.overview ?? "")}</div></div>
-<div class="card"><div class="ch">Dimension Scores</div>
-${dims.map((d: Record<string, unknown>) => `<div class="dr"><div class="dl">${escapeHtml(d.name)}</div><div class="db"><div class="df" style="width:${Math.max(0, Math.min(100, Number(d.score) || 0))}%"></div></div><div class="ds">${escapeHtml(d.score)}</div></div>`).join("")}
-</div>
-<div class="card"><div class="ch">Strengths</div>
-${strengths.map((s: string) => `<div class="si">${escapeHtml(s)}</div>`).join("")}</div>
-<div class="card"><div class="ch">Weaknesses</div>
-${weaknesses.map((w: string) => `<div class="wi">${escapeHtml(w)}</div>`).join("")}</div>
-<div class="card"><div class="ch">Transfer Recommendation</div>
-  <div style="margin-bottom:12px"><span class="b ${verdictClass}" style="font-size:14px;padding:6px 14px">${escapeHtml(rec.verdict ?? "N/A")}</span>
-  <span class="meta" style="margin-left:8px">Confidence: ${escapeHtml(rec.confidence ?? "?")}/10</span></div>
-  <div class="st">${escapeHtml(rec.reasoning ?? "")}</div>
-  ${rec.estimated_value_eur ? `<div class="meta" style="margin-top:8px">Est. value: ${escapeHtml(rec.estimated_value_eur)}</div>` : ""}
-</div>
-<div class="card"><div class="ch">Risk Assessment</div>
-  <h2 class="${riskClass}">${escapeHtml(risk.level ?? "N/A")} Risk</h2>
-  ${riskFactors.map((f: string) => `<div class="wi">${escapeHtml(f)}</div>`).join("")}
-</div>
-${(() => {
-  if (!bpaProfile) return "";
-  const ARCH_LABELS: Record<string, string> = {
-    MENTALITY_MONSTER: "Mentalitetsmonster", HIGH_PERFORMING_SOLO: "Högpresterande Solist",
-    COMPLETE_PROFESSIONAL: "Komplett Proffs", SILENT_LEADER: "Tyst Ledare",
-    COACHABLE_RAW_TALENT: "Formbar Råtalang", TOXIC_HIGH_PERFORMER: "Toxisk Stjärna",
-    RELIABLE_SOLDIER: "Pålitlig Soldat",
-  };
-  const archRaw = String(bpaProfile.composite_archetype ?? "");
-  const archLabel = ARCH_LABELS[archRaw] ?? archRaw;
-  const stressRaw = String(bpaProfile.stress_archetype ?? "");
-  const BPA_DIMS = [
-    { key: "decision_tempo", label: "Beslutstempo" }, { key: "risk_appetite", label: "Riskvillighet" },
-    { key: "structure_need", label: "Strukturbehov" }, { key: "team_orientation", label: "Lagkänsla" },
-    { key: "tactical_understanding", label: "Spelförståelse" }, { key: "ambition_level", label: "Ambitionsnivå" },
-    { key: "career_motivation", label: "Karriärmotivation" }, { key: "ego", label: "Ego" },
-    { key: "resilience", label: "Resiliens" }, { key: "coachability", label: "Träningsbarhet" },
-    { key: "x_factor", label: "X-faktor" },
-  ];
-  const csRaw = bpaProfile.contradiction_score;
-  const csVal = typeof csRaw === "object" && csRaw !== null ? Number((csRaw as Record<string, unknown>).score ?? 0) : 0;
-  const csPct = Math.round(Math.min(1, Math.max(0, csVal)) * 100);
-  const csClass = csPct >= 70 ? "rh" : csPct >= 40 ? "rm" : "rl";
-  const coaching = Array.isArray(bpaProfile.coaching_approach) ? bpaProfile.coaching_approach as string[] : [];
-  const risks = Array.isArray(bpaProfile.integration_risks) ? bpaProfile.integration_risks as string[] : [];
-  return `<div class="card"><div class="ch">BPA — Beteendeprofil</div>
-<div style="margin-bottom:14px">
-  <span class="b ba" style="font-size:13px;padding:5px 12px">${escapeHtml(archLabel || "Okänd")}</span>
-  ${stressRaw ? `<span class="b bg" style="font-size:12px">Stress: ${escapeHtml(stressRaw)}</span>` : ""}
-</div>
-${BPA_DIMS.map((dim) => {
-  const d = bpaProfile![dim.key];
-  const score = typeof d === "object" && d !== null ? Number((d as Record<string, unknown>).score ?? 0) : 0;
-  const pct = Math.max(0, Math.min(100, score * 10));
-  return `<div class="dr"><div class="dl">${escapeHtml(dim.label)}</div><div class="db"><div class="df" style="width:${pct}%"></div></div><div class="ds">${score > 0 ? score.toFixed(1) : "–"}</div></div>`;
-}).join("")}
-<div class="dr"><div class="dl">Motsägelsefullhet</div><div class="db"><div class="df" style="width:${csPct}%;background:linear-gradient(90deg,#00B894,#EF4444)"></div></div><div class="ds ${csClass}">${csPct}%</div></div>
-${coaching.length > 0 ? `<div style="margin-top:14px"><div class="meta" style="margin-bottom:6px;font-weight:600">Coaching-approach</div>${coaching.map((c) => `<div class="si">${escapeHtml(c)}</div>`).join("")}</div>` : ""}
-${risks.length > 0 ? `<div style="margin-top:14px"><div class="meta" style="margin-bottom:6px;font-weight:600">Integrationsrisker</div>${risks.map((r) => `<div class="wi">${escapeHtml(r)}</div>`).join("")}</div>` : ""}
-</div>`;
-})()}
-${(() => {
-  const advReview = (analysis.analysis_data as Record<string, unknown>)?.advisor_review as Record<string, unknown> | undefined;
-  if (!advReview) return "";
-  const opinions = Array.isArray(advReview.opinions) ? advReview.opinions as Array<Record<string, unknown>> : [];
-  if (opinions.length === 0) return "";
-  const consensusText = advReview.consensus ? String(advReview.consensus) : "";
-  const VERDICT_CLASS: Record<string, string> = { AGREE: "bgr", CHALLENGE: "bg", FLAG: "br" };
-  const VERDICT_LABEL: Record<string, string> = { AGREE: "Godkänd", CHALLENGE: "Invändning", FLAG: "Varning" };
-  return `<div class="card"><div class="ch">Sport Advisory Board</div>
-${consensusText ? `<div style="margin-bottom:14px;padding:10px 14px;background:#f0f9ff;border-radius:8px;font-size:13px;color:#1e40af">${escapeHtml(consensusText)}</div>` : ""}
-${opinions.map((o) => {
-  const v = String(o.verdict ?? "CHALLENGE");
-  const flags = Array.isArray(o.risk_flags) ? o.risk_flags as string[] : [];
-  const recs = Array.isArray(o.recommendations) ? o.recommendations as string[] : [];
-  return `<div style="margin-bottom:16px;padding:12px 16px;background:#fafafa;border-radius:8px;border-left:4px solid ${v === "AGREE" ? "#00B894" : v === "FLAG" ? "#EF4444" : "#F59E0B"}">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <div style="font-weight:600;font-size:14px">${escapeHtml(o.advisor_name)}</div>
-    <span class="b ${VERDICT_CLASS[v] ?? "bg"}" style="font-size:11px">${escapeHtml(VERDICT_LABEL[v] ?? v)}</span>
-  </div>
-  <div class="meta" style="margin-bottom:4px">${escapeHtml(o.domain)} &bull; Confidence: ${Number(o.confidence ?? 0).toFixed(1)}</div>
-  <div style="font-size:13px;color:#374151;margin-bottom:8px">${escapeHtml(o.summary)}</div>
-  ${String(o.detail ?? "").length > 0 ? `<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:12px;color:#6B7280">Visa detaljanalys</summary><div style="font-size:12px;color:#4B5563;margin-top:6px;white-space:pre-wrap">${escapeHtml(o.detail)}</div></details>` : ""}
-  ${flags.length > 0 ? `<div style="margin-bottom:6px">${flags.map((f: string) => `<div style="font-size:12px;color:#DC2626;padding:2px 0">\u26A0 ${escapeHtml(f)}</div>`).join("")}</div>` : ""}
-  ${recs.length > 0 ? `<div>${recs.map((r: string) => `<div style="font-size:12px;color:#059669;padding:2px 0">\u2192 ${escapeHtml(r)}</div>`).join("")}</div>` : ""}
-</div>`;
-}).join("")}
-</div>`;
-})()}
-${report.development_notes ? `<div class="card"><div class="ch">Development Notes</div><div class="st">${escapeHtml(report.development_notes)}</div></div>` : ""}`;
+    const narrativeUser = `Spelare: ${player.name}
+Position: ${player.position_primary} | Ålder: ${playerAge ?? "okänd"} | Klubb: ${player.current_club}
+Liga: ${player.current_league} | Nationalitet: ${player.nationality}
+Tier: ${player.tier} | Karriärfas: ${player.career_phase}
+Sammanfattning: ${analysis.summary ?? "N/A"}
+Overall: ${analysis.overall_score}/10 | Confidence: ${analysis.confidence}
+Recommendation: ${analysis.recommendation}
+Styrkor: ${(analysis.strengths ?? []).join(", ")}
+Svagheter: ${(analysis.weaknesses ?? []).join(", ")}
+Dimensioner:\n${scoresCtx}
+${bpaProfile ? `BPA Arketyp: ${bpaProfile.composite_archetype ?? "N/A"}
+Stress: ${bpaProfile.stress_archetype ?? "N/A"}` : ""}
+Marknadsvärde: ${player.market_value_eur ? `€${player.market_value_eur}` : "Okänt"}
+Kontrakt: ${player.contract_expires ?? "Okänt"}`;
 
-  return jsonResponse({ success: true, report: wrapHtml(`${player.name} — Scouting Report`, htmlBody) }, corsHeaders);
+    const narrativeRaw = await callClaude(narrativeSystem, narrativeUser, {
+      model: "claude-opus-4-6", maxTokens: 3000, timeoutMs: 60000
+    });
+    narrative = parseAiJson(narrativeRaw);
+  } catch (err) {
+    console.warn("[scout-report] SRR01 narrative failed, using fallback:", err);
+  }
+
+  // --- STEP 2: SRR02 BPA & Dimension Formatter (Sonnet) ---
+  let bpaFormatted: Record<string, unknown> | null = null;
+  if (bpaProfile) {
+    try {
+      const bpaSystem = `Du är SRR02 BPA & Dimension Formatter — sportpsykolog för Vault AI Scout.
+Tolka BPA-scores och skapa strukturerade rapport-sektioner på SVENSKA.
+Returnera ENBART valid JSON:
+{"psychology_cards":[{"title":"Kort titel","content":"2-3 meningar"}],
+"stress_response":[{"title":"...","content":"..."}],
+"risk_flow":{"steps":[{"step":1,"title":"...","description":"..."}],"case_study":"..."},
+"triggers":{"activates_best":["..."],"activates_worst":["..."]},
+"coaching_blueprint":[{"step":1,"title":"...","description":"..."}],
+"compatibility_profile":{"play_style":"...","league_level":"...","culture_profile":"...","ideal_environment":"..."}}
+4 psykologi-kort: omklädningsrum/lagdynamik, ego/drivkraft, beslutsmönster, karriärmotivation.
+3 stressboxar: kärnmekanism, stressrespons, strukturbehov.
+5-6 risk-steg (kill chain — vad bryter spelaren) med case study.
+Bästa/sämsta triggers (3-5 var). 5 coaching-steg.
+GENERELL kompatibilitet (aldrig klubb-specifik).`;
+
+      const bpaDimsCtx = BPA_KEYS.map(d => `${d.label}: ${bpaVal(bpaProfile!, d.key).toFixed(1)}/10`).join("\n");
+      const csVal = bpaProfile.contradiction_score ?? (bpaProfile.bpa_scores as Record<string, unknown> | undefined)?.contradiction_score ?? 0;
+      const csScore = typeof csVal === "number" ? csVal : (typeof csVal === "object" && csVal !== null ? Number((csVal as Record<string, unknown>).score ?? 0) : 0);
+
+      const bpaUser = `Spelare: ${player.name} (${player.position_primary}, ${player.current_club})
+Arketyp: ${bpaProfile.composite_archetype ?? "N/A"}
+Stress-arketyp: ${bpaProfile.stress_archetype ?? "N/A"}
+Contradiction Score: ${csScore.toFixed(2)} (0=konsistent, 1=maximal motsägelse)
+BPA-dimensioner (1-10):\n${bpaDimsCtx}
+Coaching-approach: ${Array.isArray(bpaProfile.coaching_approach) ? (bpaProfile.coaching_approach as string[]).join("; ") : "N/A"}
+Integrationsrisker: ${Array.isArray(bpaProfile.integration_risks) ? (bpaProfile.integration_risks as string[]).join("; ") : "N/A"}
+Overall score: ${analysis.overall_score}/10
+Styrkor: ${(analysis.strengths ?? []).join(", ")}
+Svagheter: ${(analysis.weaknesses ?? []).join(", ")}`;
+
+      const bpaRaw = await callClaude(bpaSystem, bpaUser, { maxTokens: 4000, timeoutMs: 45000 });
+      bpaFormatted = parseAiJson(bpaRaw);
+    } catch (err) {
+      console.warn("[scout-report] SRR02 BPA formatting failed, using raw data:", err);
+    }
+  }
+
+  // --- STEP 3: Build 15-slide HTML (deterministic code rendering) ---
+  const reportHtml = buildReportHtml(
+    player, analysis, scores ?? [], bpaProfile, narrative, bpaFormatted, advisorReview
+  );
+
+  return jsonResponse({ success: true, report: reportHtml }, corsHeaders);
 }
 
 // ---------------------------------------------------------------------------
-// Action: compare — comparison report for 2-4 players
+// Action: compare — comparison report for 2-4 players (unchanged)
 // ---------------------------------------------------------------------------
 async function handleCompare(body: Record<string, unknown>, corsHeaders: Record<string, string>): Promise<Response> {
   const playerIds = body.player_ids;
@@ -381,26 +853,21 @@ async function handleCompare(body: Record<string, unknown>, corsHeaders: Record<
   const { data: players, error: pErr } = await db.from("scout_players").select("*").in("id", playerIds);
   if (pErr || !players || players.length < 2) return errorResponse(`Players not found: ${pErr?.message ?? "none"}`, corsHeaders, 404);
 
-  // Fetch latest analysis + scores per player
   const playerData: Record<string, unknown>[] = [];
   for (const p of players) {
     const { data: aRows } = await db.from("scout_analyses").select("*")
       .eq("player_id", p.id).order("created_at", { ascending: false }).limit(1);
-    const analysis = Array.isArray(aRows) && aRows.length > 0 ? aRows[0] : null;
-    let scores: unknown[] = [];
-    if (analysis) {
-      const { data: sRows } = await db.from("scout_scores").select("*").eq("analysis_id", analysis.id);
-      scores = sRows ?? [];
-    }
-    playerData.push({ player: p, analysis, scores });
+    const a = Array.isArray(aRows) && aRows.length > 0 ? aRows[0] : null;
+    let sc: unknown[] = [];
+    if (a) { const { data: sRows } = await db.from("scout_scores").select("*").eq("analysis_id", a.id); sc = sRows ?? []; }
+    playerData.push({ player: p, analysis: a, scores: sc });
   }
 
-  // Load compact dimension list from DB (SSOT)
   let compactDims = "";
   try {
     const { data: cText } = await db.rpc("get_dimension_framework_prompt", { p_type: "compact" });
     compactDims = typeof cText === "string" ? cText : "";
-  } catch (e) { console.warn("[scout-report] Failed to load compact dims:", e); }
+  } catch (_e) { /* ignore */ }
 
   const compSystemPrompt = `Du är en världsledande fotbollsscout-analytiker för Vault AI Scout.
 Generera en ${compType.replace(/_/g, " ")}-jämförelse på SVENSKA. Var specifik, använd dimensionspoäng.
@@ -422,9 +889,8 @@ Scores: ${s.map(x => `${x.dimension_name}:${x.score}`).join(", ") || "N/A"}`;
   try {
     compareData = parseAiJson(await callClaude(compSystemPrompt,
       `Type: ${compType.replace(/_/g, " ")}\n\n${playersCtx}\n\nGenerate comparison JSON.`));
-  } catch (e) { return errorResponse(`Comparison failed: ${e}`, corsHeaders, 502); }
+  } catch (err) { return errorResponse(`Comparison failed: ${err}`, corsHeaders, 502); }
 
-  // Persist to scout_comparisons (non-blocking)
   try {
     await db.from("scout_comparisons").insert({
       player_ids: playerIds, comparison_type: compType, result_data: compareData,
@@ -440,7 +906,7 @@ Scores: ${s.map(x => `${x.dimension_name}:${x.score}`).join(", ") || "N/A"}`;
 }
 
 // ---------------------------------------------------------------------------
-// Action: watchlist_brief — executive summary of active watchlist
+// Action: watchlist_brief — executive summary of active watchlist (unchanged)
 // ---------------------------------------------------------------------------
 async function handleWatchlistBrief(body: Record<string, unknown>, corsHeaders: Record<string, string>): Promise<Response> {
   const db = getSupabaseClient();
@@ -480,7 +946,7 @@ deadline_alerts(string[])}`;
   try {
     briefData = parseAiJson(await callClaude(systemPrompt,
       `Watchlist (${items.length}):\n${itemsCtx}\nToday: ${new Date().toISOString().slice(0, 10)}\nGenerate brief JSON.`));
-  } catch (e) { return errorResponse(`Brief generation failed: ${e}`, corsHeaders, 502); }
+  } catch (err) { return errorResponse(`Brief generation failed: ${err}`, corsHeaders, 502); }
 
   return jsonResponse({ success: true, count: items.length, brief: briefData }, corsHeaders);
 }
@@ -494,7 +960,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed", corsHeaders, 405);
 
-  // JWT authentication
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return errorResponse("Missing or invalid Authorization header", corsHeaders, 401);
@@ -514,7 +979,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return errorResponse("Authentication failed", corsHeaders, 401);
   }
 
-  // Rate limit check — after auth + after corsHeaders set (W5)
   const rl = checkRateLimit(userId);
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
@@ -540,8 +1004,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       case "watchlist_brief": return await handleWatchlistBrief(body, corsHeaders);
       default: return errorResponse(`Unknown action '${action}'. Valid: generate, compare, watchlist_brief`, corsHeaders);
     }
-  } catch (e) {
-    console.error(`Unhandled error [${action}]:`, e);
+  } catch (err) {
+    console.error(`Unhandled error [${action}]:`, err);
     return errorResponse("Internal error", corsHeaders, 500);
   }
 });
