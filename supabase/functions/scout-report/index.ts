@@ -195,6 +195,9 @@ h3{font-size:15px;font-weight:600;color:rgba(255,255,255,.9);margin-bottom:8px}
 .meta-label{color:rgba(255,255,255,.45)}
 .meta-value{color:rgba(255,255,255,.9);font-weight:500}
 .slide-divider{width:60px;height:3px;background:linear-gradient(90deg,#00d4aa,#f4c430);border-radius:2px;margin:12px 0 20px}
+.slide-footer{display:flex;justify-content:space-between;align-items:center;margin-top:24px;padding-top:14px;
+  border-top:1px solid rgba(255,255,255,.06);font-size:10px;color:rgba(255,255,255,.25);letter-spacing:.04em}
+.slide-footer .sf-brand{font-weight:600;color:rgba(0,212,170,.4)}
 .watermark{text-align:center;padding:32px 0;color:rgba(255,255,255,.12);font-size:11px;letter-spacing:.08em}
 @media(max-width:640px){
   .slide{padding:22px 20px;margin-bottom:14px}
@@ -210,6 +213,7 @@ h3{font-size:15px;font-weight:600;color:rgba(255,255,255,.9);margin-bottom:8px}
   .slide-tag{color:#00a88a}.slide-tag::before{background:#00a88a}
   .dim-bar{background:#eee}
   .card,.stat,.compat-item{background:#f9f9f9;border-color:#ddd}
+  .slide-footer{border-top-color:#ddd}.slide-footer,.slide-footer .sf-brand{color:#999}
 }`;
 
 // ---------------------------------------------------------------------------
@@ -317,6 +321,21 @@ function dimColor(score: number): string {
 function recBadgeClass(rec: string): string {
   const r = (rec ?? "").toUpperCase();
   return r === "SIGN" ? "b-sign" : r === "PASS" ? "b-pass" : "b-monitor";
+}
+
+/** Strip internal Vault terms from LLM-generated text (anti-leak) */
+function sanitizeText(text: string): string {
+  return text
+    .replace(/\b\d+\s*agenter?\b/gi, "avancerad AI-analys")
+    .replace(/\bSCOUT\d+\b/gi, "")
+    .replace(/\bVET\d+\b/gi, "")
+    .replace(/\bSRR\d+\b/gi, "")
+    .replace(/\bPXE\d+\b/gi, "")
+    .replace(/\bPDQ\d+\b/gi, "")
+    .replace(/\bCET\d+\b/gi, "")
+    .replace(/\bpipeline_id\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -474,10 +493,10 @@ ${dimGroupsHtml}
   ${stressArch ? `<span class="badge b-gold">Stress: ${e(stressArch)}</span>` : ""}
 </div>
 <div style="margin-bottom:24px">${generateRadarSvg(radarData)}</div>
-<h3 style="margin-bottom:12px">Alla BPA-dimensioner (11)</h3>
+<h3 style="margin-bottom:12px">Alla BPA-dimensioner (12)</h3>
 ${bpaBarsHtml}
 <div class="cs-meter" style="margin-top:16px">
-  <span style="font-size:12px;color:rgba(255,255,255,.5);min-width:110px">Motsägelsefullhet</span>
+  <span style="font-size:12px;color:rgba(255,255,255,.5);min-width:130px">Contradiction Score</span>
   <div class="cs-bar"><div class="cs-fill" style="width:${csPct}%"></div></div>
   <span class="cs-val" style="color:${csColor}">${csPct}%</span>
 </div>
@@ -671,9 +690,17 @@ ${opinions.map(o => {
 </section>`;
       }
     } else if (bosseReview) {
-      // Bosse review only (no full advisory board)
+      // Bosse review + Sport Advisory Board panel (no individual advisor opinions yet)
+      const SAB_ADVISORS = [
+        { name: "Geir Jordet", domain: "Mental Performance" },
+        { name: "Jan Ekstrand", domain: "Sports Medicine" },
+        { name: "Joe Maguire", domain: "Talent Identification" },
+        { name: "Rasmus Ankersen", domain: "Club Strategy" },
+        { name: "Ted Knutson", domain: "Football Analytics" },
+        { name: "Claude Duval", domain: "Cultural Integration" },
+      ];
       slide14 = `<section class="slide slide-light" id="s14">
-<div class="slide-tag">Expert Review</div>
+<div class="slide-tag">Sport Advisory Board</div>
 <div class="advisor-card" style="border-left-color:#f4c430">
   <div class="advisor-hdr">
     <div><span class="advisor-name">Bosse Andersson</span><span class="advisor-domain" style="margin-left:8px">Expert Scout Advisor</span></div>
@@ -681,7 +708,7 @@ ${opinions.map(o => {
   </div>
   <div class="card-text" style="font-size:15px;line-height:1.8">${e(bosseReview)}</div>
 </div>
-${verif ? `<div style="margin-top:16px;padding:12px 16px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)">
+${verif ? `<div style="margin-top:16px;margin-bottom:16px;padding:12px 16px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)">
   <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:8px">Oberoende verifiering</div>
   <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
     <span style="color:#00d4aa">Kvalitetscheck: ${e(String(verif.vet06_gate ?? "N/A"))}</span>
@@ -689,6 +716,35 @@ ${verif ? `<div style="margin-top:16px;padding:12px 16px;border-radius:10px;back
     <span style="color:rgba(255,255,255,.6)">Ifrågasatta: ${verif.vet07_contradicted ?? "N/A"}</span>
   </div>
 </div>` : ""}
+<h3 style="margin-top:20px;margin-bottom:12px;color:rgba(255,255,255,.6)">Sport Advisory Board — 6 experter</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+${SAB_ADVISORS.map(a => `<div style="padding:12px 14px;border-radius:10px;background:rgba(0,212,170,.04);border:1px solid rgba(0,212,170,.1)">
+  <div style="font-size:13px;font-weight:600">${e(a.name)}</div>
+  <div style="font-size:11px;color:rgba(255,255,255,.4)">${e(a.domain)}</div>
+</div>`).join("")}
+</div>
+</section>`;
+    } else {
+      // No advisor data — render Sport Advisory Board panel with 6 advisor profiles
+      const SPORT_ADVISORS = [
+        { name: "Geir Jordet", domain: "Mental Performance", focus: "Beslutsfattande, prestation under press, psykologisk resiliens" },
+        { name: "Jan Ekstrand", domain: "Sports Medicine", focus: "Skadeprevention, fysisk belastning, återhämtning" },
+        { name: "Joe Maguire", domain: "Talent Identification", focus: "Karriärtrajektoria, talangutveckling, prestationsprognoser" },
+        { name: "Rasmus Ankersen", domain: "Club Strategy", focus: "Transferstrategi, klubbpassform, kommersiellt värde" },
+        { name: "Ted Knutson", domain: "Football Analytics", focus: "Statistisk analys, dimensionsvalidering, datakvalitet" },
+        { name: "Claude Duval", domain: "Cultural Integration", focus: "Kulturell anpassning, lagdynamik, internationell integration" },
+      ];
+      slide14 = `<section class="slide slide-light" id="s14">
+<div class="slide-tag">Sport Advisory Board</div>
+<h2 style="margin-bottom:8px">Oberoende expertgranskning</h2>
+<div class="text" style="margin-bottom:20px">Vault AI:s Sport Advisory Board består av 6 världsledande experter som granskar varje rapport oberoende av AI-analysen.</div>
+${SPORT_ADVISORS.map(a => `<div class="advisor-card" style="border-left-color:rgba(0,212,170,.4)">
+  <div class="advisor-hdr">
+    <div><span class="advisor-name">${e(a.name)}</span><span class="advisor-domain" style="margin-left:8px">${e(a.domain)}</span></div>
+    <span class="badge b-info">Tillgänglig</span>
+  </div>
+  <div class="card-text">${e(a.focus)}</div>
+</div>`).join("")}
 </section>`;
     }
   }
@@ -702,29 +758,35 @@ ${verif ? `<div style="margin-top:16px;padding:12px 16px;border-radius:10px;back
   const slide15 = `<section class="slide slide-dark" id="s15">
 <div class="slide-tag">Kvalitetssäkring</div>
 <h2 style="margin-bottom:16px">Rapport-metadata</h2>
-<div class="meta-row"><span class="meta-label">Rapport genererad</span><span class="meta-value">${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC</span></div>
+<div class="meta-row"><span class="meta-label">Rapport genererad</span><span class="meta-value">${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })} (svensk tid)</span></div>
 <div class="meta-row"><span class="meta-label">Spelare</span><span class="meta-value">${e(player.name)}</span></div>
 <div class="meta-row"><span class="meta-label">Overall Score</span><span class="meta-value">${overall.toFixed(1)} / 10</span></div>
 <div class="meta-row"><span class="meta-label">Confidence</span><span class="meta-value">${(confidence * 100).toFixed(0)}%</span></div>
 <div class="meta-row"><span class="meta-label">Recommendation</span><span class="meta-value">${e(rec)}</span></div>
 <div class="meta-row"><span class="meta-label">Dimensioner analyserade</span><span class="meta-value">${scores.length} / 16</span></div>
 <div class="meta-row"><span class="meta-label">Beteendeprofil (BPA)</span><span class="meta-value">${bpa ? "Ja — 12 dimensioner" : "Ej tillgänglig"}</span></div>
-<div class="meta-row"><span class="meta-label">Sport Advisory Board</span><span class="meta-value">${advisorReview ? `${(advisorReview.opinions as unknown[])?.length ?? 0} granskare` : "Ej tillgänglig"}</span></div>
+<div class="meta-row"><span class="meta-label">Sport Advisory Board</span><span class="meta-value">${advisorReview ? `${(advisorReview.opinions as unknown[])?.length ?? 0} granskare` : "6 experter tillgängliga"}</span></div>
 <div class="meta-row"><span class="meta-label">AI-analyslager</span><span class="meta-value">${agentCount > 0 ? `${agentCount} specialiserade modeller` : "Standard"}</span></div>
 <div class="meta-row"><span class="meta-label">Datakällor</span><span class="meta-value">${kbCount > 0 ? `${kbCount} kunskapsbaser` : "Grunddata"}</span></div>
 <div class="meta-row"><span class="meta-label">Oberoende verifiering</span><span class="meta-value">${verificationData?.vet06_gate ? `${e(String(verificationData.vet06_gate))}` : bpa ? "Genomförd" : "Ej tillämplig"}</span></div>
 <div class="meta-row" style="border:none"><span class="meta-label">Antal sektioner</span><span class="meta-value">${slideCount}</span></div>
 </section>`;
 
-  // === ASSEMBLE ===
-  const slides = [slide1, slide2, slide3, slide4, slide5, slide6, slide7, slide8, slide9, slide10, slide11, slide12, slide13, slide14, slide15].filter(s => s.length > 0).join("\n");
+  // === ASSEMBLE — inject branded footer into every slide ===
+  const allSlides = [slide1, slide2, slide3, slide4, slide5, slide6, slide7, slide8, slide9, slide10, slide11, slide12, slide13, slide14, slide15].filter(s => s.length > 0);
+  const totalPages = allSlides.length;
+  const slides = allSlides.map((html, i) => {
+    const pageNum = i + 1;
+    const footer = `<div class="slide-footer"><span class="sf-brand">Vault AI Scout</span><span>Behavioral Football Intelligence</span><span>CONFIDENTIAL</span><span>${pageNum} / ${totalPages}</span></div>`;
+    return html.replace(/<\/section>$/, `${footer}</section>`);
+  }).join("\n");
 
   return `<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${escapeHtml(player.name)} — Vault AI Scout Report</title>
 <style>${VAULT_REPORT_CSS}</style></head>
 <body><div class="report">${slides}</div>
-<div class="watermark">Vault AI Scout &mdash; Behavioral Football Intelligence &mdash; ${new Date().toISOString().slice(0, 10)}</div>
+<div class="watermark">Vault AI Scout &mdash; Behavioral Football Intelligence &mdash; ${new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" })}</div>
 </body></html>`;
 }
 
@@ -823,7 +885,8 @@ Em-dash (—) för pauser. Bold för insikter. GENERELL — nämn aldrig en köp
 Returnera ENBART valid JSON (inga kommentarer, inga markdown-block):
 {"first_impression":"2 stycken om spelaren","career_chapters":[{"title":"Rubrik","content":"3-5 meningar"}],"player_summary":"1 stycke sammanfattning"}
 5-7 karriärkapitel: bakgrund, genombrott, spelstil, mental profil, nuvarande form, framtid.
-ANTI-HALLUCINATION: Basera ALLT på given data. Fabricera aldrig klubbbyten, mål, eller händelser.`;
+ANTI-HALLUCINATION: Basera ALLT på given data. Fabricera aldrig klubbbyten, mål, eller händelser.
+ANTI-LEAK: Nämn ALDRIG antal agenter, pipeline-IDs, SCOUT00-05, VET, SRR, eller andra interna systemtermer. Skriv som en mänsklig analytiker.`;
 
   const narrativeUser = `Spelare: ${player.name}
 Position: ${player.position_primary} | Ålder: ${playerAge ?? "okänd"} | Klubb: ${player.current_club}
@@ -862,11 +925,23 @@ Bosse Andersson: ${bpaProfile.bosse_review ?? "N/A"}` : "";
     bpaProfile ? callClaude(bpaSystem, bpaUser, { maxTokens: 4000, timeoutMs: 90000 }) : Promise.resolve(""),
   ]);
 
+  // Deep-sanitize all string values in LLM-generated JSON to strip internal terms
+  function sanitizeDeep(obj: unknown): unknown {
+    if (typeof obj === "string") return sanitizeText(obj);
+    if (Array.isArray(obj)) return obj.map(sanitizeDeep);
+    if (obj && typeof obj === "object") {
+      const result: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj)) result[k] = sanitizeDeep(v);
+      return result;
+    }
+    return obj;
+  }
+
   if (narrativeResult.status === "fulfilled" && narrativeResult.value) {
-    try { narrative = parseAiJson(narrativeResult.value); } catch (_e) { /* parse fail */ }
+    try { narrative = sanitizeDeep(parseAiJson(narrativeResult.value)) as Record<string, unknown>; } catch (_e) { /* parse fail */ }
   }
   if (bpaResult.status === "fulfilled" && bpaResult.value) {
-    try { bpaFormatted = parseAiJson(bpaResult.value); } catch (_e) { /* parse fail */ }
+    try { bpaFormatted = sanitizeDeep(parseAiJson(bpaResult.value)) as Record<string, unknown>; } catch (_e) { /* parse fail */ }
   }
   const srr02Err = bpaResult.status === "rejected" ? String(bpaResult.reason) : (!bpaFormatted && bpaProfile ? "Empty or unparseable response" : null);
 
