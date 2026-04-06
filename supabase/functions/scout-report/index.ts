@@ -82,7 +82,7 @@ async function callClaude(
 ): Promise<string> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const model = opts.model ?? "claude-sonnet-4-6-20250514";
+  const model = opts.model ?? "claude-sonnet-4-6";
   const maxTokens = opts.maxTokens ?? 4096;
   const timeoutMs = opts.timeoutMs ?? 45000;
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -109,88 +109,105 @@ const VAULT_REPORT_CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0a1628;color:#e8edf5;
   line-height:1.6;-webkit-font-smoothing:antialiased;padding:24px 16px}
-.report{max-width:800px;margin:0 auto}
-.slide{background:#111d35;border-radius:16px;border:1px solid rgba(255,255,255,.06);
-  padding:32px;margin-bottom:24px;page-break-inside:avoid}
-.slide-tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;
-  color:#00d4aa;margin-bottom:16px}
-h1{font-size:28px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
-h2{font-size:20px;font-weight:700;color:#f4c430;margin-bottom:12px}
+.report{max-width:900px;margin:0 auto}
+
+/* Vault Pitch Design System — 3 slide types */
+.slide{border-radius:16px;padding:36px 40px;margin-bottom:20px;page-break-inside:avoid;
+  position:relative;overflow:hidden}
+.slide-dark{background:#111d35;border:1px solid rgba(255,255,255,.06)}
+.slide-light{background:linear-gradient(135deg,#152040 0%,#1a2a4a 100%);border:1px solid rgba(255,255,255,.08)}
+.slide-accent{background:linear-gradient(135deg,rgba(0,212,170,.08) 0%,#111d35 100%);
+  border:1px solid rgba(0,212,170,.15)}
+
+.slide-tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;
+  color:#00d4aa;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.slide-tag::before{content:'';width:24px;height:2px;background:#00d4aa;border-radius:1px}
+h1{font-size:32px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px;
+  background:linear-gradient(90deg,#e8edf5,rgba(255,255,255,.7));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{font-size:22px;font-weight:700;color:#f4c430;margin-bottom:14px}
 h3{font-size:15px;font-weight:600;color:rgba(255,255,255,.9);margin-bottom:8px}
-.sub{color:rgba(255,255,255,.6);font-size:14px}
-.text{color:rgba(255,255,255,.85);font-size:14px;line-height:1.8}
-.badge{display:inline-block;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;margin-right:8px;margin-bottom:4px}
+.sub{color:rgba(255,255,255,.55);font-size:14px}
+.text{color:rgba(255,255,255,.85);font-size:14px;line-height:1.85}
+.badge{display:inline-block;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;
+  margin-right:8px;margin-bottom:4px;backdrop-filter:blur(4px)}
 .b-sign{background:rgba(0,212,170,.15);color:#00d4aa;border:1px solid rgba(0,212,170,.3)}
 .b-monitor{background:rgba(244,196,48,.15);color:#f4c430;border:1px solid rgba(244,196,48,.3)}
 .b-pass{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
 .b-info{background:rgba(99,102,241,.12);color:#818cf8;border:1px solid rgba(99,102,241,.25)}
 .b-gold{background:rgba(244,196,48,.12);color:#f4c430;border:1px solid rgba(244,196,48,.25)}
 .dim-group{margin-bottom:20px}
-.dim-group-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;
-  padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.06)}
+.dim-group-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;
+  padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.06)}
 .dim-group-label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#00d4aa}
-.dim-group-weight{font-size:11px;color:rgba(255,255,255,.4)}
-.dim-row{display:flex;align-items:center;padding:5px 0}
+.dim-group-weight{font-size:11px;color:rgba(255,255,255,.35)}
+.dim-row{display:flex;align-items:center;padding:6px 0}
 .dim-name{width:200px;font-size:13px;color:rgba(255,255,255,.75)}
-.dim-bar{flex:1;height:7px;background:rgba(255,255,255,.06);border-radius:4px;margin:0 12px;overflow:hidden}
-.dim-fill{height:100%;border-radius:4px}
+.dim-bar{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;margin:0 12px;overflow:hidden}
+.dim-fill{height:100%;border-radius:4px;transition:width .3s ease}
 .dim-score{width:36px;text-align:right;font-size:13px;font-weight:600}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-top:16px}
-.stat{text-align:center;padding:16px 12px;background:rgba(255,255,255,.03);border-radius:12px;
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-top:16px}
+.stat{text-align:center;padding:18px 14px;background:rgba(255,255,255,.03);border-radius:12px;
   border:1px solid rgba(255,255,255,.05)}
-.stat-val{font-size:26px;font-weight:800;color:#00d4aa}
-.stat-lbl{font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+.stat-val{font-size:28px;font-weight:800;color:#00d4aa}
+.stat-lbl{font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;margin-top:6px}
 .card-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.card{padding:20px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
-.card-title{font-size:14px;font-weight:600;margin-bottom:8px}
-.card-text{font-size:13px;color:rgba(255,255,255,.7);line-height:1.7}
-.timeline{position:relative;padding-left:24px}
-.timeline::before{content:'';position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:rgba(0,212,170,.3)}
-.tl-item{position:relative;margin-bottom:20px}
-.tl-item::before{content:'';position:absolute;left:-20px;top:6px;width:10px;height:10px;
-  border-radius:50%;background:#00d4aa;border:2px solid #111d35}
-.tl-title{font-size:14px;font-weight:600;margin-bottom:4px}
-.tl-text{font-size:13px;color:rgba(255,255,255,.7);line-height:1.7}
-.risk-step{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
-.risk-num{width:28px;height:28px;border-radius:50%;background:rgba(239,68,68,.15);color:#ef4444;
-  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
-.trigger-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.trigger-col h3{margin-bottom:10px}
-.trigger-item{font-size:13px;padding:6px 0;color:rgba(255,255,255,.75);border-bottom:1px solid rgba(255,255,255,.04)}
-.coach-step{display:flex;gap:14px;margin-bottom:16px}
-.coach-num{width:32px;height:32px;border-radius:10px;background:rgba(0,212,170,.12);color:#00d4aa;
-  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
-.advisor-card{padding:16px;border-radius:12px;background:rgba(255,255,255,.02);
-  border-left:4px solid #f4c430;margin-bottom:14px}
-.advisor-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.advisor-name{font-size:14px;font-weight:600}
+.card{padding:22px;border-radius:12px;background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);transition:border-color .2s}
+.card-title{font-size:14px;font-weight:700;margin-bottom:10px}
+.card-text{font-size:13px;color:rgba(255,255,255,.7);line-height:1.75}
+.timeline{position:relative;padding-left:28px}
+.timeline::before{content:'';position:absolute;left:8px;top:4px;bottom:4px;width:2px;
+  background:linear-gradient(180deg,#00d4aa,rgba(0,212,170,.15))}
+.tl-item{position:relative;margin-bottom:22px}
+.tl-item::before{content:'';position:absolute;left:-23px;top:6px;width:12px;height:12px;
+  border-radius:50%;background:#00d4aa;border:2px solid #111d35;box-shadow:0 0 8px rgba(0,212,170,.3)}
+.tl-title{font-size:15px;font-weight:700;margin-bottom:6px}
+.tl-text{font-size:13px;color:rgba(255,255,255,.7);line-height:1.75}
+.risk-step{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px}
+.risk-num{width:30px;height:30px;border-radius:50%;background:rgba(239,68,68,.15);color:#ef4444;
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;
+  box-shadow:0 0 8px rgba(239,68,68,.15)}
+.trigger-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.trigger-col h3{margin-bottom:12px}
+.trigger-item{font-size:13px;padding:8px 0;color:rgba(255,255,255,.75);border-bottom:1px solid rgba(255,255,255,.04)}
+.coach-step{display:flex;gap:16px;margin-bottom:18px}
+.coach-num{width:34px;height:34px;border-radius:10px;background:rgba(0,212,170,.12);color:#00d4aa;
+  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0}
+.advisor-card{padding:20px;border-radius:12px;background:rgba(255,255,255,.02);
+  border-left:4px solid #f4c430;margin-bottom:16px}
+.advisor-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.advisor-name{font-size:15px;font-weight:600}
 .advisor-domain{font-size:11px;color:rgba(255,255,255,.4)}
 .compat-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.compat-item{padding:16px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)}
-.compat-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#00d4aa;font-weight:600;margin-bottom:6px}
-.compat-text{font-size:13px;color:rgba(255,255,255,.75);line-height:1.6}
-.cs-meter{display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px 16px;
-  background:rgba(255,255,255,.03);border-radius:10px}
+.compat-item{padding:18px;border-radius:12px;background:rgba(0,212,170,.04);
+  border:1px solid rgba(0,212,170,.12)}
+.compat-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#00d4aa;font-weight:700;margin-bottom:8px}
+.compat-text{font-size:13px;color:rgba(255,255,255,.8);line-height:1.7}
+.cs-meter{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px 18px;
+  background:rgba(255,255,255,.03);border-radius:12px;border:1px solid rgba(255,255,255,.05)}
 .cs-bar{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
 .cs-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#00d4aa,#f4c430,#ef4444)}
-.cs-val{font-size:14px;font-weight:700;min-width:40px;text-align:right}
-.cover-rec{margin-top:20px;padding:16px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.08)}
-.meta-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);
+.cs-val{font-size:15px;font-weight:700;min-width:40px;text-align:right}
+.cover-rec{margin-top:24px;padding:20px 24px;border-radius:14px;border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.02)}
+.meta-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);
   font-size:13px}
-.meta-label{color:rgba(255,255,255,.5)}
-.meta-value{color:rgba(255,255,255,.85);font-weight:500}
-.watermark{text-align:center;padding:24px 0;color:rgba(255,255,255,.15);font-size:11px;letter-spacing:.05em}
+.meta-label{color:rgba(255,255,255,.45)}
+.meta-value{color:rgba(255,255,255,.9);font-weight:500}
+.slide-divider{width:60px;height:3px;background:linear-gradient(90deg,#00d4aa,#f4c430);border-radius:2px;margin:12px 0 20px}
+.watermark{text-align:center;padding:32px 0;color:rgba(255,255,255,.12);font-size:11px;letter-spacing:.08em}
 @media(max-width:640px){
-  .slide{padding:20px;margin-bottom:16px}
+  .slide{padding:22px 20px;margin-bottom:14px}
   .card-grid,.trigger-grid,.compat-grid{grid-template-columns:1fr}
   .dim-name{width:120px;font-size:12px}
-  h1{font-size:22px}
+  h1{font-size:24px}
   .stats-grid{grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}
 }
 @media print{
   body{background:#fff;color:#111;padding:0}
-  .slide{border:1px solid #ddd;background:#fff;box-shadow:none}
-  .slide-tag{color:#00a88a}
+  .slide,.slide-dark,.slide-light,.slide-accent{border:1px solid #ddd;background:#fff!important;box-shadow:none}
+  h1{-webkit-text-fill-color:#111;background:none}
+  .slide-tag{color:#00a88a}.slide-tag::before{background:#00a88a}
   .dim-bar{background:#eee}
   .card,.stat,.compat-item{background:#f9f9f9;border-color:#ddd}
 }`;
@@ -328,8 +345,8 @@ function buildReportHtml(
     scoreMap.set(String(s.dimension_id), { name: String(s.dimension_name ?? s.dimension_id), score: Number(s.score ?? 0) });
   }
 
-  // === SLIDE 1: COVER ===
-  const slide1 = `<section class="slide" id="s1">
+  // === SLIDE 1: COVER (dark) ===
+  const slide1 = `<section class="slide slide-dark" id="s1">
 <div class="slide-tag">Vault AI Scout Report</div>
 <h1>${e(player.name)}</h1>
 <div class="sub" style="margin:8px 0 16px">${e(player.position_primary)} &bull; ${e(player.current_club)} &bull; ${e(player.current_league)}</div>
@@ -352,20 +369,20 @@ function buildReportHtml(
 </div>
 </section>`;
 
-  // === SLIDE 2: FIRST IMPRESSION ===
+  // === SLIDE 2: FIRST IMPRESSION (light) ===
   const firstImpression = narrative?.first_impression ?? summary;
-  const slide2 = `<section class="slide" id="s2">
+  const slide2 = `<section class="slide slide-light" id="s2">
 <div class="slide-tag">Första Intrycket</div>
 <div class="text" style="font-size:15px;line-height:1.9">${e(firstImpression)}</div>
 </section>`;
 
-  // === SLIDE 3: PLAYER PROFILE ===
+  // === SLIDE 3: PLAYER PROFILE (dark) ===
   const initials = String(player.name ?? "").split(" ").map(w => (w[0] ?? "").toUpperCase()).join("").substring(0, 2);
   const strengths = Array.isArray(analysis.strengths) ? analysis.strengths as string[] : [];
   const weaknesses = Array.isArray(analysis.weaknesses) ? analysis.weaknesses as string[] : [];
   const marketValue = player.market_value_eur ? `€${(Number(player.market_value_eur) / 1e6).toFixed(1)}M` : "Okänt";
   const contractEnd = player.contract_expires ? String(player.contract_expires).substring(0, 10) : "Okänt";
-  const slide3 = `<section class="slide" id="s3">
+  const slide3 = `<section class="slide slide-dark" id="s3">
 <div class="slide-tag">Spelarprofil</div>
 <div style="display:flex;align-items:center;gap:20px;margin-bottom:20px">
   <div style="width:64px;height:64px;border-radius:50%;background:rgba(0,212,170,.15);border:2px solid #00d4aa;
@@ -388,7 +405,7 @@ function buildReportHtml(
   const recReasoning = typeof analysis.analysis_data === "object" && analysis.analysis_data !== null
     ? String((analysis.analysis_data as Record<string, unknown>).recommendation_reasoning ?? summary)
     : summary;
-  const slide4 = `<section class="slide" id="s4">
+  const slide4 = `<section class="slide slide-accent" id="s4">
 <div class="slide-tag">Overall Score</div>
 <div style="text-align:center;margin-bottom:24px">
   ${generateScoreCircleSvg(overall)}
@@ -421,7 +438,7 @@ function buildReportHtml(
     return `<div class="dim-group"><div class="dim-group-hdr"><span class="dim-group-label">${e(g.label)}</span><span class="dim-group-weight">${e(g.weight)}</span></div>${rows}</div>`;
   }).join("");
 
-  const slide5 = `<section class="slide" id="s5">
+  const slide5 = `<section class="slide slide-light" id="s5">
 <div class="slide-tag">16 Dimensioner</div>
 <h2 style="margin-bottom:20px">Dimensionsanalys</h2>
 ${dimGroupsHtml}
@@ -450,7 +467,7 @@ ${dimGroupsHtml}
       return `<div class="dim-row"><div class="dim-name">${e(dim.label)}</div><div class="dim-bar"><div class="dim-fill" style="width:${pct}%;background:${dimColor(score)}"></div></div><div class="dim-score" style="color:${dimColor(score)}">${score > 0 ? score.toFixed(1) : "–"}</div></div>`;
     }).join("");
 
-    slide6 = `<section class="slide" id="s6">
+    slide6 = `<section class="slide slide-dark" id="s6">
 <div class="slide-tag">Beteendeprofil (BPA)</div>
 <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
   <span class="badge b-info" style="font-size:13px;padding:6px 16px">${e(archLabel || "Okänd arketyp")}</span>
@@ -473,8 +490,8 @@ ${bpaBarsHtml}
     const cards = Array.isArray(bpaFormatted.psychology_cards) ? bpaFormatted.psychology_cards as Record<string, unknown>[] : [];
     if (cards.length > 0) {
       const CARD_ACCENTS = ["#00d4aa", "#f4c430", "#818cf8", "#f97316"];
-      slide7 = `<section class="slide" id="s7">
-<div class="slide-tag">Karaktär & Psykologi</div>
+      slide7 = `<section class="slide slide-dark" id="s7">
+<div class="slide-tag">Karaktär &amp; Psykologi</div>
 <div class="card-grid">
 ${cards.map((c, i) => `<div class="card" style="border-left:3px solid ${CARD_ACCENTS[i % 4]}">
   <div class="card-title" style="color:${CARD_ACCENTS[i % 4]}">${e(c.title)}</div>
@@ -490,7 +507,7 @@ ${cards.map((c, i) => `<div class="card" style="border-left:3px solid ${CARD_ACC
   if (bpaFormatted) {
     const stressItems = Array.isArray(bpaFormatted.stress_response) ? bpaFormatted.stress_response as Record<string, unknown>[] : [];
     if (stressItems.length > 0) {
-      slide8 = `<section class="slide" id="s8">
+      slide8 = `<section class="slide slide-light" id="s8">
 <div class="slide-tag">Stressrespons</div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
 ${stressItems.map(s => `<div class="card">
@@ -509,7 +526,7 @@ ${stressItems.map(s => `<div class="card">
     const steps = rf && Array.isArray(rf.steps) ? rf.steps as Record<string, unknown>[] : [];
     const caseStudy = rf ? String(rf.case_study ?? "") : "";
     if (steps.length > 0) {
-      slide9 = `<section class="slide" id="s9">
+      slide9 = `<section class="slide slide-light" id="s9">
 <div class="slide-tag">Riskanalys — Kill Chain</div>
 <h2 style="margin-bottom:16px">Vad bryter spelaren?</h2>
 ${steps.map(s => `<div class="risk-step">
@@ -524,7 +541,7 @@ ${caseStudy ? `<div class="card" style="margin-top:16px;border-left:3px solid #e
     // Fallback: use risk factors from analysis
     const riskFactors = Array.isArray(analysis.risk_factors) ? analysis.risk_factors as string[] : [];
     if (riskFactors.length > 0) {
-      slide9 = `<section class="slide" id="s9">
+      slide9 = `<section class="slide slide-light" id="s9">
 <div class="slide-tag">Riskanalys</div>
 ${riskFactors.map((f, i) => `<div class="risk-step"><div class="risk-num">${i + 1}</div><div class="card-text">${e(f)}</div></div>`).join("")}
 </section>`;
@@ -538,7 +555,7 @@ ${riskFactors.map((f, i) => `<div class="risk-step"><div class="risk-num">${i + 
     const best = triggers && Array.isArray(triggers.activates_best ?? triggers.best) ? (triggers.activates_best ?? triggers.best) as string[] : [];
     const worst = triggers && Array.isArray(triggers.activates_worst ?? triggers.worst) ? (triggers.activates_worst ?? triggers.worst) as string[] : [];
     if (best.length > 0 || worst.length > 0) {
-      slide10 = `<section class="slide" id="s10">
+      slide10 = `<section class="slide slide-dark" id="s10">
 <div class="slide-tag">Beteendetriggers</div>
 <div class="trigger-grid">
   <div class="trigger-col"><h3 style="color:#00d4aa">Aktiverar bästa</h3>
@@ -557,7 +574,7 @@ ${riskFactors.map((f, i) => `<div class="risk-step"><div class="risk-num">${i + 
   if (narrative) {
     const chapters = Array.isArray(narrative.career_chapters) ? narrative.career_chapters as Record<string, unknown>[] : [];
     if (chapters.length > 0) {
-      slide11 = `<section class="slide" id="s11">
+      slide11 = `<section class="slide slide-light" id="s11">
 <div class="slide-tag">Karriäranalys</div>
 <div class="timeline">
 ${chapters.map(ch => `<div class="tl-item"><div class="tl-title">${e(ch.title)}</div><div class="tl-text">${e(ch.content)}</div></div>`).join("")}
@@ -573,7 +590,7 @@ ${narrative.player_summary ? `<div class="text" style="margin-top:20px;padding-t
     const compat = bpaFormatted.compatibility_profile ?? bpaFormatted.compatibility;
     if (compat && typeof compat === "object") {
       const c = compat as Record<string, unknown>;
-      slide12 = `<section class="slide" id="s12">
+      slide12 = `<section class="slide slide-accent" id="s12">
 <div class="slide-tag">Kompatibilitetsprofil</div>
 <h2 style="margin-bottom:16px">Generell spelarprofil</h2>
 <div class="compat-grid">
@@ -591,7 +608,7 @@ ${narrative.player_summary ? `<div class="text" style="margin-top:20px;padding-t
   if (bpaFormatted) {
     const steps = Array.isArray(bpaFormatted.coaching_blueprint) ? bpaFormatted.coaching_blueprint as Record<string, unknown>[] : [];
     if (steps.length > 0) {
-      slide13 = `<section class="slide" id="s13">
+      slide13 = `<section class="slide slide-dark" id="s13">
 <div class="slide-tag">Coaching Blueprint</div>
 ${steps.map(s => `<div class="coach-step">
   <div class="coach-num">${e(s.step)}</div>
@@ -604,24 +621,36 @@ ${steps.map(s => `<div class="coach-step">
     // Fallback: raw coaching approach from BPA
     const coaching = Array.isArray(bpa.coaching_approach) ? bpa.coaching_approach as string[] : [];
     if (coaching.length > 0) {
-      slide13 = `<section class="slide" id="s13">
+      slide13 = `<section class="slide slide-dark" id="s13">
 <div class="slide-tag">Coaching Blueprint</div>
 ${coaching.map((c, i) => `<div class="coach-step"><div class="coach-num">${i + 1}</div><div class="card-text">${e(c)}</div></div>`).join("")}
 </section>`;
     }
   }
 
-  // === SLIDE 14: EXPERT REVIEW ===
+  // === SLIDE 14: EXPERT REVIEW (Sport Advisory Board + Bosse) ===
   let slide14 = "";
-  if (advisorReview) {
-    const opinions = Array.isArray(advisorReview.opinions) ? advisorReview.opinions as Record<string, unknown>[] : [];
-    const consensus = advisorReview.consensus ? String(advisorReview.consensus) : "";
-    const VERDICT_COLORS: Record<string, string> = { AGREE: "#00d4aa", CHALLENGE: "#f4c430", FLAG: "#ef4444" };
-    const VERDICT_LABELS: Record<string, string> = { AGREE: "Godkänd", CHALLENGE: "Invändning", FLAG: "Varning" };
-    if (opinions.length > 0) {
-      slide14 = `<section class="slide" id="s14">
+  {
+    const bosseReview = bpa ? String(bpa.bosse_review ?? "") : "";
+    const bosseOverride = bpa ? Boolean(bpa.bosse_override) : false;
+    const verif = bpa?.verification as Record<string, unknown> | undefined;
+
+    if (advisorReview) {
+      const opinions = Array.isArray(advisorReview.opinions) ? advisorReview.opinions as Record<string, unknown>[] : [];
+      const consensus = advisorReview.consensus ? String(advisorReview.consensus) : "";
+      const VERDICT_COLORS: Record<string, string> = { AGREE: "#00d4aa", CHALLENGE: "#f4c430", FLAG: "#ef4444" };
+      const VERDICT_LABELS: Record<string, string> = { AGREE: "Godkänd", CHALLENGE: "Invändning", FLAG: "Varning" };
+      if (opinions.length > 0) {
+        slide14 = `<section class="slide slide-light" id="s14">
 <div class="slide-tag">Sport Advisory Board</div>
 ${consensus ? `<div style="margin-bottom:20px;padding:14px 18px;border-radius:12px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.15);font-size:14px;color:rgba(255,255,255,.85)">${e(consensus)}</div>` : ""}
+${bosseReview ? `<div class="advisor-card" style="border-left-color:#f4c430">
+  <div class="advisor-hdr">
+    <div><span class="advisor-name">Bosse Andersson</span><span class="advisor-domain" style="margin-left:8px">Expert Scout</span></div>
+    <span class="badge" style="background:rgba(244,196,48,.15);color:#f4c430;border:1px solid rgba(244,196,48,.3)">${bosseOverride ? "Override" : "Bedömning"}</span>
+  </div>
+  <div class="card-text">${e(bosseReview)}</div>
+</div>` : ""}
 ${opinions.map(o => {
   const v = String(o.verdict ?? "CHALLENGE");
   const color = VERDICT_COLORS[v] ?? "#f4c430";
@@ -640,6 +669,27 @@ ${opinions.map(o => {
 </div>`;
 }).join("")}
 </section>`;
+      }
+    } else if (bosseReview) {
+      // Bosse review only (no full advisory board)
+      slide14 = `<section class="slide slide-light" id="s14">
+<div class="slide-tag">Expert Review</div>
+<div class="advisor-card" style="border-left-color:#f4c430">
+  <div class="advisor-hdr">
+    <div><span class="advisor-name">Bosse Andersson</span><span class="advisor-domain" style="margin-left:8px">Expert Scout Advisor</span></div>
+    <span class="badge" style="background:rgba(244,196,48,.15);color:#f4c430;border:1px solid rgba(244,196,48,.3)">${bosseOverride ? "Override" : "Bedömning"}</span>
+  </div>
+  <div class="card-text" style="font-size:15px;line-height:1.8">${e(bosseReview)}</div>
+</div>
+${verif ? `<div style="margin-top:16px;padding:12px 16px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)">
+  <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:8px">Oberoende verifiering</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+    <span style="color:#00d4aa">Kvalitetscheck: ${e(String(verif.vet06_gate ?? "N/A"))}</span>
+    <span style="color:rgba(255,255,255,.6)">Verifierade claims: ${verif.vet07_verified ?? "N/A"}</span>
+    <span style="color:rgba(255,255,255,.6)">Ifrågasatta: ${verif.vet07_contradicted ?? "N/A"}</span>
+  </div>
+</div>` : ""}
+</section>`;
     }
   }
 
@@ -649,7 +699,7 @@ ${opinions.map(o => {
   const slideCount = [slide1, slide2, slide3, slide4, slide5, slide6, slide7, slide8, slide9, slide10, slide11, slide12, slide13, slide14].filter(s => s.length > 0).length + 1;
   const verificationData = bpa?.verification as Record<string, unknown> | undefined;
 
-  const slide15 = `<section class="slide" id="s15">
+  const slide15 = `<section class="slide slide-dark" id="s15">
 <div class="slide-tag">Kvalitetssäkring</div>
 <h2 style="margin-bottom:16px">Rapport-metadata</h2>
 <div class="meta-row"><span class="meta-label">Rapport genererad</span><span class="meta-value">${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC</span></div>
@@ -753,80 +803,72 @@ async function handleGenerate(body: Record<string, unknown>, corsHeaders: Record
     }, corsHeaders);
   }
 
-  // --- STEP 1: SRR01 Narrative Writer (Opus) ---
+  // --- STEP 1: SRR01 Narrative Writer (Opus) — generates ALL text content ---
+  // Single Opus call generates: career narrative + psychology + triggers + coaching + compatibility
   let narrative: Record<string, unknown> | null = null;
-  try {
-    const narrativeSystem = `Du är SRR01 Narrative Writer — en världsledande fotbollsanalytiker för Vault AI Scout.
-Skriv en fängslande men faktabaserad karriärberättelse på SVENSKA.
-Returnera ENBART valid JSON (inga kommentarer):
-{"first_impression":"2 stycken om spelaren","career_chapters":[{"title":"Kapitelrubrik","content":"2-4 meningar"}],"player_summary":"1 stycke sammanfattning"}
-Stil: Professionell, dramatisk. Em-dash (—) för pauser. GENERELL — nämn aldrig en köpande klubb.
-5-7 kapitel: bakgrund, genombrott, spelstil, mental profil, nuvarande form, framtid.
+  let bpaFormatted: Record<string, unknown> | null = null;
+  const rawSummary = String(analysis.summary ?? "");
+
+  const bpaDimsCtx = bpaProfile
+    ? BPA_KEYS.map(d => `${d.label}: ${bpaVal(bpaProfile!, d.key).toFixed(1)}/10`).join("\n")
+    : "";
+  const csValForPrompt = bpaProfile
+    ? (() => { const v = bpaProfile!.contradiction_score ?? (bpaProfile!.bpa_scores as Record<string, unknown> | undefined)?.contradiction_score ?? 0; return typeof v === "number" ? v : 0; })()
+    : 0;
+
+  // STEP 1: Run SRR01 (Opus, narrative) and SRR02 (Sonnet, BPA text) IN PARALLEL
+  const narrativeSystem = `Du är SRR01 — världsledande fotbollsanalytiker för Vault AI Scout.
+Skriv på SVENSKA. Professionell, dramatisk, beskrivande text.
+Em-dash (—) för pauser. Bold för insikter. GENERELL — nämn aldrig en köpande klubb.
+Returnera ENBART valid JSON (inga kommentarer, inga markdown-block):
+{"first_impression":"2 stycken om spelaren","career_chapters":[{"title":"Rubrik","content":"3-5 meningar"}],"player_summary":"1 stycke sammanfattning"}
+5-7 karriärkapitel: bakgrund, genombrott, spelstil, mental profil, nuvarande form, framtid.
 ANTI-HALLUCINATION: Basera ALLT på given data. Fabricera aldrig klubbbyten, mål, eller händelser.`;
 
-    const narrativeUser = `Spelare: ${player.name}
+  const narrativeUser = `Spelare: ${player.name}
 Position: ${player.position_primary} | Ålder: ${playerAge ?? "okänd"} | Klubb: ${player.current_club}
 Liga: ${player.current_league} | Nationalitet: ${player.nationality}
 Tier: ${player.tier} | Karriärfas: ${player.career_phase}
-Sammanfattning: ${analysis.summary ?? "N/A"}
+Sammanfattning: ${rawSummary}
 Overall: ${analysis.overall_score}/10 | Confidence: ${analysis.confidence}
 Recommendation: ${analysis.recommendation}
 Styrkor: ${(analysis.strengths ?? []).join(", ")}
 Svagheter: ${(analysis.weaknesses ?? []).join(", ")}
 Dimensioner:\n${scoresCtx}
-${bpaProfile ? `BPA Arketyp: ${bpaProfile.composite_archetype ?? "N/A"}
-Stress: ${bpaProfile.stress_archetype ?? "N/A"}` : ""}
 Marknadsvärde: ${player.market_value_eur ? `€${player.market_value_eur}` : "Okänt"}
 Kontrakt: ${player.contract_expires ?? "Okänt"}`;
 
-    const narrativeRaw = await callClaude(narrativeSystem, narrativeUser, {
-      model: "claude-opus-4-6", maxTokens: 3000, timeoutMs: 60000
-    });
-    narrative = parseAiJson(narrativeRaw);
-  } catch (err) {
-    console.warn("[scout-report] SRR01 narrative failed, using fallback:", err);
-  }
+  const bpaSystem = bpaProfile ? `Du är SRR02 — sportpsykolog och beteendeanalytiker för Vault AI Scout.
+Skriv på SVENSKA. RIK BESKRIVANDE TEXT — tolka BPA-poängen till djupa insikter, inte siffror.
+Professionell, empatisk, specifik. GENERELL — nämn aldrig en köpande klubb.
+Returnera ENBART valid JSON (inga kommentarer, inga markdown-block):
+{"psychology_cards":[{"title":"Omklädningsrummet","content":"2-3 meningar"},{"title":"Ego & drivkraft","content":"2-3 meningar"},{"title":"Beslutsmönster","content":"2-3 meningar"},{"title":"Karriärmotivation","content":"2-3 meningar"}],"stress_response":[{"title":"Kärnmekanism","content":"2-3 meningar"},{"title":"Stressrespons","content":"2-3 meningar"},{"title":"Strukturbehov","content":"2-3 meningar"}],"risk_flow":{"steps":[{"step":1,"title":"Titel","description":"2 meningar"}],"case_study":"Scenario"},"triggers":{"activates_best":["trigger1","trigger2","trigger3"],"activates_worst":["trigger1","trigger2","trigger3"]},"coaching_blueprint":[{"step":1,"title":"Steg","description":"2-3 meningar"}],"compatibility_profile":{"play_style":"Krav","league_level":"Nivå","culture_profile":"Profil","ideal_environment":"Miljö"}}
+Fyll varje fält med rik beskrivande text baserad på BPA-data. 5-6 risk-steg. 5 coaching-steg.` : "";
 
-  // --- STEP 2: SRR02 BPA & Dimension Formatter (Sonnet) ---
-  let bpaFormatted: Record<string, unknown> | null = null;
-  if (bpaProfile) {
-    try {
-      const bpaSystem = `Du är SRR02 BPA & Dimension Formatter — sportpsykolog för Vault AI Scout.
-Tolka BPA-scores och skapa strukturerade rapport-sektioner på SVENSKA.
-Returnera ENBART valid JSON:
-{"psychology_cards":[{"title":"Kort titel","content":"2-3 meningar"}],
-"stress_response":[{"title":"...","content":"..."}],
-"risk_flow":{"steps":[{"step":1,"title":"...","description":"..."}],"case_study":"..."},
-"triggers":{"activates_best":["..."],"activates_worst":["..."]},
-"coaching_blueprint":[{"step":1,"title":"...","description":"..."}],
-"compatibility_profile":{"play_style":"...","league_level":"...","culture_profile":"...","ideal_environment":"..."}}
-4 psykologi-kort: omklädningsrum/lagdynamik, ego/drivkraft, beslutsmönster, karriärmotivation.
-3 stressboxar: kärnmekanism, stressrespons, strukturbehov.
-5-6 risk-steg (kill chain — vad bryter spelaren) med case study.
-Bästa/sämsta triggers (3-5 var). 5 coaching-steg.
-GENERELL kompatibilitet (aldrig klubb-specifik).`;
-
-      const bpaDimsCtx = BPA_KEYS.map(d => `${d.label}: ${bpaVal(bpaProfile!, d.key).toFixed(1)}/10`).join("\n");
-      const csVal = bpaProfile.contradiction_score ?? (bpaProfile.bpa_scores as Record<string, unknown> | undefined)?.contradiction_score ?? 0;
-      const csScore = typeof csVal === "number" ? csVal : (typeof csVal === "object" && csVal !== null ? Number((csVal as Record<string, unknown>).score ?? 0) : 0);
-
-      const bpaUser = `Spelare: ${player.name} (${player.position_primary}, ${player.current_club})
+  const bpaUser = bpaProfile ? `Spelare: ${player.name} (${player.position_primary}, ${player.current_club})
+Ålder: ${playerAge ?? "okänd"} | Tier: ${player.tier} | Karriärfas: ${player.career_phase}
+Overall: ${analysis.overall_score}/10 | Recommendation: ${analysis.recommendation}
+Styrkor: ${(analysis.strengths ?? []).join(", ")}
+Svagheter: ${(analysis.weaknesses ?? []).join(", ")}
 Arketyp: ${bpaProfile.composite_archetype ?? "N/A"}
 Stress-arketyp: ${bpaProfile.stress_archetype ?? "N/A"}
-Contradiction Score: ${csScore.toFixed(2)} (0=konsistent, 1=maximal motsägelse)
-BPA-dimensioner (1-10):\n${bpaDimsCtx}
-Coaching-approach: ${Array.isArray(bpaProfile.coaching_approach) ? (bpaProfile.coaching_approach as string[]).join("; ") : "N/A"}
-Integrationsrisker: ${Array.isArray(bpaProfile.integration_risks) ? (bpaProfile.integration_risks as string[]).join("; ") : "N/A"}
-Overall score: ${analysis.overall_score}/10
-Styrkor: ${(analysis.strengths ?? []).join(", ")}
-Svagheter: ${(analysis.weaknesses ?? []).join(", ")}`;
+Contradiction Score: ${csValForPrompt.toFixed(2)}
+BPA-dimensioner:\n${bpaDimsCtx}
+Bosse Andersson: ${bpaProfile.bosse_review ?? "N/A"}` : "";
 
-      const bpaRaw = await callClaude(bpaSystem, bpaUser, { maxTokens: 4000, timeoutMs: 45000 });
-      bpaFormatted = parseAiJson(bpaRaw);
-    } catch (err) {
-      console.warn("[scout-report] SRR02 BPA formatting failed, using raw data:", err);
-    }
+  // Run BOTH calls in parallel — dramatically faster
+  const [narrativeResult, bpaResult] = await Promise.allSettled([
+    callClaude(narrativeSystem, narrativeUser, { model: "claude-opus-4-6", maxTokens: 3000, timeoutMs: 90000 }),
+    bpaProfile ? callClaude(bpaSystem, bpaUser, { maxTokens: 4000, timeoutMs: 90000 }) : Promise.resolve(""),
+  ]);
+
+  if (narrativeResult.status === "fulfilled" && narrativeResult.value) {
+    try { narrative = parseAiJson(narrativeResult.value); } catch (_e) { /* parse fail */ }
   }
+  if (bpaResult.status === "fulfilled" && bpaResult.value) {
+    try { bpaFormatted = parseAiJson(bpaResult.value); } catch (_e) { /* parse fail */ }
+  }
+  const srr02Err = bpaResult.status === "rejected" ? String(bpaResult.reason) : (!bpaFormatted && bpaProfile ? "Empty or unparseable response" : null);
 
   // --- STEP 3: Build 15-slide HTML (deterministic code rendering) ---
   const reportHtml = buildReportHtml(
