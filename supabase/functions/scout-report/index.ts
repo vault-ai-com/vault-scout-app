@@ -433,6 +433,28 @@ function sanitizeText(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// P0 Input sanitization — strip prompt injection patterns from DB-sourced data
+// BEFORE injecting into Claude prompts. Protects against poisoned player profiles.
+// ---------------------------------------------------------------------------
+function sanitizePromptInput(text: unknown): string {
+  if (text == null) return "";
+  let s = String(text);
+  // Strip common prompt injection patterns
+  s = s.replace(/ignore\s+(all\s+)?(previous|above|prior)\s+(instructions?|prompts?|rules?)/gi, "");
+  s = s.replace(/you\s+are\s+(now|actually|really)\s+/gi, "");
+  s = s.replace(/system\s*:\s*/gi, "");
+  s = s.replace(/\bassistant\s*:\s*/gi, "");
+  s = s.replace(/\bhuman\s*:\s*/gi, "");
+  s = s.replace(/\buser\s*:\s*/gi, "");
+  s = s.replace(/<\/?(?:system|instruction|prompt|role|context|command|override|secret|inject)[^>]*>/gi, "");
+  s = s.replace(/(?:do\s+not|don'?t|never)\s+follow\s+(your\s+)?(original|previous|system)\s+/gi, "");
+  s = s.replace(/\bDAN\b|\bjailbreak\b|\bprompt\s*inject/gi, "");
+  // Limit length per field to prevent context stuffing
+  if (s.length > 2000) s = s.slice(0, 2000) + "…";
+  return s.trim();
+}
+
+// ---------------------------------------------------------------------------
 // 15-Slide Report Builder
 // ---------------------------------------------------------------------------
 function buildReportHtml(
@@ -873,6 +895,9 @@ ${EXPERT_DOMAINS.map(a => `<div class="advisor-card" style="border-left-color:rg
 <div class="meta-row"><span class="meta-label">Datakällor</span><span class="meta-value">${kbCount > 0 ? `${kbCount} kunskapsbaser` : "Grunddata"}</span></div>
 <div class="meta-row"><span class="meta-label">Oberoende verifiering</span><span class="meta-value">${verificationData?.vet06_gate ? `${e(String(verificationData.vet06_gate))}` : bpa ? "Genomförd" : "Ej tillämplig"}</span></div>
 <div class="meta-row" style="border:none"><span class="meta-label">Antal sektioner</span><span class="meta-value">${slideCount}</span></div>
+<div style="margin-top:20px;padding:14px 18px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:11px;color:rgba(255,255,255,.45);line-height:1.7">
+<strong style="color:rgba(255,255,255,.6)">Disclaimer:</strong> Behavioral screening — ej klinisk bedömning. Denna rapport bygger på AI-baserad beteendeanalys och bör ej ersätta professionell psykologisk utvärdering. All data behandlas i enlighet med GDPR. © ${new Date().getFullYear()} Vault AI.
+</div>
 </section>`;
 
   // === ASSEMBLE — transform to pitch-deck 16:9 slide structure ===
@@ -966,7 +991,7 @@ async function handleGenerate(body: Record<string, unknown>, corsHeaders: Record
   const advisorReview = (analysis.analysis_data as Record<string, unknown>)?.advisor_review as Record<string, unknown> | null ?? null;
 
   const playerAge = computeAge(player.date_of_birth);
-  const scoresCtx = (scores ?? []).map((s: Record<string, unknown>) => `${s.dimension_id}: ${s.dimension_name} = ${s.score}/10`).join("\n");
+  const scoresCtx = (scores ?? []).map((s: Record<string, unknown>) => `${sanitizePromptInput(s.dimension_id)}: ${sanitizePromptInput(s.dimension_name)} = ${s.score}/10`).join("\n");
 
   // JSON format — return structured data only (no LLM calls)
   if (format === "json") {
@@ -1004,15 +1029,17 @@ Returnera ENBART valid JSON (inga kommentarer, inga markdown-block):
 ANTI-HALLUCINATION: Basera ALLT på given data. Fabricera aldrig klubbbyten, mål, eller händelser.
 ANTI-LEAK: Nämn ALDRIG antal agenter, pipeline-IDs, SCOUT00-05, VET, SRR, eller andra interna systemtermer. Skriv som en mänsklig analytiker.`;
 
-  const narrativeUser = `Spelare: ${player.name}
-Position: ${player.position_primary} | Ålder: ${playerAge ?? "okänd"} | Klubb: ${player.current_club}
-Liga: ${player.current_league} | Nationalitet: ${player.nationality}
-Tier: ${player.tier} | Karriärfas: ${player.career_phase}
-Sammanfattning: ${rawSummary}
+  // P0: sanitize all DB-sourced fields before injecting into Claude prompt
+  const spi = sanitizePromptInput;
+  const narrativeUser = `Spelare: ${spi(player.name)}
+Position: ${spi(player.position_primary)} | Ålder: ${playerAge ?? "okänd"} | Klubb: ${spi(player.current_club)}
+Liga: ${spi(player.current_league)} | Nationalitet: ${spi(player.nationality)}
+Tier: ${spi(player.tier)} | Karriärfas: ${spi(player.career_phase)}
+Sammanfattning: ${spi(rawSummary)}
 Overall: ${analysis.overall_score}/10 | Confidence: ${analysis.confidence}
 Recommendation: ${analysis.recommendation}
-Styrkor: ${(analysis.strengths ?? []).join(", ")}
-Svagheter: ${(analysis.weaknesses ?? []).join(", ")}
+Styrkor: ${(analysis.strengths ?? []).map(s => spi(s)).join(", ")}
+Svagheter: ${(analysis.weaknesses ?? []).map(s => spi(s)).join(", ")}
 Dimensioner:\n${scoresCtx}
 Marknadsvärde: ${player.market_value_eur ? `€${player.market_value_eur}` : "Okänt"}
 Kontrakt: ${player.contract_expires ?? "Okänt"}`;
@@ -1028,16 +1055,16 @@ big_question = den ENA frågan en sportchef måste ställa sig om denna spelare.
 coaching_blueprint steg 1 MÅSTE vara "Coach vecka 1" — konkret first-week intervention.
 Fyll varje fält med rik beskrivande text baserad på BPA-data. 5-6 risk-steg. 5 coaching-steg.` : "";
 
-  const bpaUser = bpaProfile ? `Spelare: ${player.name} (${player.position_primary}, ${player.current_club})
-Ålder: ${playerAge ?? "okänd"} | Tier: ${player.tier} | Karriärfas: ${player.career_phase}
+  const bpaUser = bpaProfile ? `Spelare: ${spi(player.name)} (${spi(player.position_primary)}, ${spi(player.current_club)})
+Ålder: ${playerAge ?? "okänd"} | Tier: ${spi(player.tier)} | Karriärfas: ${spi(player.career_phase)}
 Overall: ${analysis.overall_score}/10 | Recommendation: ${analysis.recommendation}
-Styrkor: ${(analysis.strengths ?? []).join(", ")}
-Svagheter: ${(analysis.weaknesses ?? []).join(", ")}
-Arketyp: ${bpaProfile.composite_archetype ?? "N/A"}
-Stress-arketyp: ${bpaProfile.stress_archetype ?? "N/A"}
+Styrkor: ${(analysis.strengths ?? []).map(s => spi(s)).join(", ")}
+Svagheter: ${(analysis.weaknesses ?? []).map(s => spi(s)).join(", ")}
+Arketyp: ${spi(bpaProfile.composite_archetype ?? "N/A")}
+Stress-arketyp: ${spi(bpaProfile.stress_archetype ?? "N/A")}
 Contradiction Score: ${csValForPrompt.toFixed(2)}
 BPA-dimensioner:\n${bpaDimsCtx}
-Bosse Andersson: ${bpaProfile.bosse_review ?? "N/A"}` : "";
+Bosse Andersson: ${spi(bpaProfile.bosse_review ?? "N/A")}` : "";
 
   // Run BOTH calls in parallel — dramatically faster
   const [narrativeResult, bpaResult] = await Promise.allSettled([
@@ -1184,13 +1211,15 @@ Returnera valid JSON: {summary(string), rankings([{player_name,rank,overall_scor
 key_differentiators(string[3-5]), recommendation(string),
 dimension_comparison([{dimension,scores:{player_name:score}}])}. Allt på svenska.`;
 
+  // P0: sanitize DB-sourced fields in comparison prompts (defense-in-depth)
+  const spiC = sanitizePromptInput;
   const playersCtx = playerData.map((pd: Record<string, unknown>) => {
     const p = pd.player as Record<string, unknown>;
     const a = pd.analysis as Record<string, unknown> | null;
     const s = pd.scores as Record<string, unknown>[];
-    return `${p.name} (${p.position_primary}, ${p.current_club}, ${p.current_league}, tier ${p.tier})
-Analysis: ${a?.summary ?? "N/A"}
-Scores: ${s.map(x => `${x.dimension_name}:${x.score}`).join(", ") || "N/A"}`;
+    return `${spiC(p.name)} (${spiC(p.position_primary)}, ${spiC(p.current_club)}, ${spiC(p.current_league)}, tier ${spiC(p.tier)})
+Analysis: ${spiC(a?.summary ?? "N/A")}
+Scores: ${s.map(x => `${spiC(x.dimension_name)}:${x.score}`).join(", ") || "N/A"}`;
   }).join("\n\n");
 
   let compareData: Record<string, unknown>;
@@ -1245,9 +1274,10 @@ Returnera valid JSON: {executive_summary(string), priority_actions(string[3]),
 items([{name,status_note,urgency:"critical"|"high"|"normal"|"low"}]),
 deadline_alerts(string[])}`;
 
+  // P0: sanitize DB-sourced fields in watchlist prompts (defense-in-depth)
   const itemsCtx = items.map((i: Record<string, unknown>) => {
     const p = (i.scout_players ?? {}) as Record<string, unknown>;
-    return `- ${p.name ?? "?"} (${p.position_primary ?? "?"}, ${p.current_club ?? "?"}) | Pri: ${i.priority} | Deadline: ${i.deadline ?? "none"} | ${i.notes ?? ""}`;
+    return `- ${sanitizePromptInput(p.name ?? "?")} (${sanitizePromptInput(p.position_primary ?? "?")}, ${sanitizePromptInput(p.current_club ?? "?")}) | Pri: ${i.priority} | Deadline: ${i.deadline ?? "none"} | ${sanitizePromptInput(i.notes ?? "")}`;
   }).join("\n");
 
   let briefData: Record<string, unknown>;
