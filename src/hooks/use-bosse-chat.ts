@@ -8,14 +8,22 @@ import { ChatSessionSchema, ChatMessageSchema, safeChatArray } from "@/types/cha
 import type { ChatSession, ChatMessage } from "@/types/chat";
 
 // --- Session queries ---
-export function useChatSessions() {
+export function useChatSessions(agentId?: string | null) {
   return useQuery<ChatSession[]>({
-    queryKey: ["bosse-chat-sessions"],
+    queryKey: ["bosse-chat-sessions", agentId ?? "bosse"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("scout_chat_sessions")
         .select("*")
         .order("updated_at", { ascending: false });
+
+      if (agentId) {
+        query = query.eq("agent_id", agentId);
+      } else {
+        query = query.is("agent_id", null);
+      }
+
+      const { data, error } = await query;
       if (error) throw new Error(error.message);
       return safeChatArray(ChatSessionSchema, data);
     },
@@ -44,13 +52,18 @@ export function useChatMessages(sessionId: string | null) {
 // --- Create session ---
 export function useCreateSession() {
   const qc = useQueryClient();
-  return useMutation<ChatSession, Error, { title?: string; player_id?: string }>({
-    mutationFn: async ({ title, player_id }) => {
+  return useMutation<ChatSession, Error, { title?: string; player_id?: string; agent_id?: string | null }>({
+    mutationFn: async ({ title, player_id, agent_id }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("scout_chat_sessions")
-        .insert({ user_id: session.user.id, title: title ?? null, player_id: player_id ?? null })
+        .insert({
+          user_id: session.user.id,
+          title: title ?? null,
+          player_id: player_id ?? null,
+          agent_id: agent_id ?? null,
+        })
         .select()
         .single();
       if (error) throw new Error(error.message);
@@ -82,6 +95,7 @@ interface SendMessageArgs {
   message: string;
   sessionId: string;
   playerId?: string;
+  agentId?: string | null;
 }
 
 export function useSendMessage() {
@@ -106,7 +120,7 @@ export function useSendMessage() {
     };
   }, []);
 
-  const send = useCallback(async ({ message, sessionId, playerId }: SendMessageArgs): Promise<string> => {
+  const send = useCallback(async ({ message, sessionId, playerId, agentId }: SendMessageArgs): Promise<string> => {
     setStreaming(true);
     setStreamContent("");
     setError(null);
@@ -130,7 +144,7 @@ export function useSendMessage() {
           "Authorization": `Bearer ${session.access_token}`,
           "apikey": SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ message, session_id: sessionId, player_id: playerId }),
+        body: JSON.stringify({ message, session_id: sessionId, player_id: playerId, agent_id: agentId ?? undefined }),
         signal: abortRef.current.signal,
       });
 

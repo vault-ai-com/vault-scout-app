@@ -6,6 +6,7 @@ export const ChatSessionSchema = z.object({
   user_id: z.string(),
   title: z.string().nullable(),
   player_id: z.string().nullable(),
+  agent_id: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
   message_count: z.number(),
