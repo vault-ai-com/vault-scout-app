@@ -1,5 +1,6 @@
 // Scout API types — matching edge function contracts
 import { z } from "zod";
+import { VideoEntriesSchema } from "@/lib/videoUtils";
 
 // --- Zod helpers (ISP-mönster) ---
 function safeArray<T>(schema: z.ZodType<T>, data: unknown): T[] {
@@ -55,6 +56,7 @@ export const ScoutPlayerSchema = z.object({
   latest_score: z.number().optional().nullable(),
   latest_recommendation: z.string().optional().nullable(),
   latest_analysis_date: z.string().optional().nullable(),
+  video_urls: VideoEntriesSchema.optional().nullable(),
 });
 
 export type ScoutPlayer = z.infer<typeof ScoutPlayerSchema>;
@@ -66,6 +68,7 @@ export const GetPlayerResponseSchema = z.object({
   action: z.string(),
   player: ScoutPlayerSchema.extend({
     profile_data: z.record(z.unknown()).nullable().optional(),
+    video_urls: VideoEntriesSchema.optional().nullable(),
   }),
 });
 export type GetPlayerResponse = z.infer<typeof GetPlayerResponseSchema>;

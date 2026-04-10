@@ -17,8 +17,10 @@ import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { PersonalityPanel } from "@/components/PersonalityPanel";
 import { AdvisorReviewPanel } from "@/components/AdvisorReviewPanel";
 import { ComparablePlayersPanel } from "@/components/ComparablePlayersPanel";
-import { TIER_LABELS, TIER_COLORS } from "@/types/scout";
+import { VideoSection } from "@/components/VideoSection";
+import { TIER_LABELS, TIER_COLORS, safeArray } from "@/types/scout";
 import type { AnalysisType, AnalysisResult, PersonalityProfile, AdvisorReviewResponse } from "@/types/scout";
+import { VideoEntrySchema } from "@/lib/videoUtils";
 
 const phaseLabels: Record<string, string> = {
   EMERGENCE: "Genombrott",
@@ -44,7 +46,7 @@ function StatPill({ icon: Icon, label, value }: { icon: typeof Trophy; label: st
 
 const PlayerDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { data: playerData, isLoading: loadingPlayer } = useGetPlayer(id);
+  const { data: playerData, isLoading: loadingPlayer, refetch: refetchPlayer } = useGetPlayer(id);
   const { data: watchlistData } = useIsOnWatchlist(id ?? "");
   const isOnWatchlist = watchlistData?.isOnWatchlist ?? false;
   const watchlistId = watchlistData?.watchlistId ?? null;
@@ -274,6 +276,17 @@ const PlayerDetail = () => {
       {player && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <ComparablePlayersPanel player={player} />
+        </motion.div>
+      )}
+
+      {/* Video section */}
+      {player && id && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+          <VideoSection
+            playerId={id}
+            videos={safeArray(VideoEntrySchema, player.video_urls ?? [])}
+            onUpdate={() => void refetchPlayer()}
+          />
         </motion.div>
       )}
 
