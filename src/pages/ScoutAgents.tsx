@@ -37,16 +37,69 @@ const FEATURED_AGENT_IDS = [
   "scout_compatibility_engine",
 ];
 
-const SCOUT_CLUSTERS = ["vault_ai_scout", "vault_scout_report", "brutal_person_analysis"];
+// All scout-relevant clusters per playbook (scout-terminal.md)
+const SCOUT_CLUSTERS = [
+  // Core analysis
+  "vault_ai_scout",
+  "vault_scout_report",
+  "brutal_person_analysis",
+  // Sport advisors
+  "vault_sport_advisors",
+  // Quality pipeline (F0.5–F4.5)
+  "kb_alignment_quality",
+  "vault_evidence_investigation",
+  "vault_improvement_verifier",
+  "vault_unified_enforcement",
+  // Support (UCF + eval)
+  "universal_clone_factory",
+  "ucf_eval",
+];
+
+// Display order for cluster sections
+const CLUSTER_ORDER = [
+  "vault_ai_scout",
+  "vault_sport_advisors",
+  "vault_scout_report",
+  "brutal_person_analysis",
+  "kb_alignment_quality",
+  "vault_evidence_investigation",
+  "vault_improvement_verifier",
+  "vault_unified_enforcement",
+  "universal_clone_factory",
+  "ucf_eval",
+];
 
 // --- Helpers ---
 function getClusterLabel(cluster: string): string {
   switch (cluster) {
-    case "vault_ai_scout": return "Scout";
+    case "vault_ai_scout": return "Scout Core";
     case "vault_scout_report": return "Rapport";
-    case "brutal_person_analysis": return "BPA";
+    case "brutal_person_analysis": return "Personanalys";
     case "person_clones": return "Klon";
+    case "vault_sport_advisors": return "Sport Advisors";
+    case "kb_alignment_quality": return "KB Quality";
+    case "vault_evidence_investigation": return "Forensik";
+    case "vault_improvement_verifier": return "Verifiering";
+    case "vault_unified_enforcement": return "Enforcement";
+    case "universal_clone_factory": return "UCF";
+    case "ucf_eval": return "UCF Eval";
     default: return cluster;
+  }
+}
+
+function getClusterDescription(cluster: string): string {
+  switch (cluster) {
+    case "vault_ai_scout": return "Spelaranalys, taktik och anti-hallucination";
+    case "vault_scout_report": return "HTML-rapporter och narrativ";
+    case "brutal_person_analysis": return "Djup personlighets- och beteendeanalys";
+    case "vault_sport_advisors": return "Expertgranskning av analyser";
+    case "kb_alignment_quality": return "Knowledge Base-validering (F0.5)";
+    case "vault_evidence_investigation": return "Forensisk utredning (F3.5)";
+    case "vault_improvement_verifier": return "Korrekturverifiering (F4.5)";
+    case "vault_unified_enforcement": return "Regelefterlevnad (F5)";
+    case "universal_clone_factory": return "OSINT, psykologi och nätverksanalys";
+    case "ucf_eval": return "Evidenskedjor och konsistenskontroll";
+    default: return "";
   }
 }
 
@@ -227,35 +280,51 @@ export default function ScoutAgents() {
           </section>
         )}
 
-        {/* All agents */}
+        {/* All agents grouped by cluster */}
         <section>
-          <h2 className="font-display text-lg font-semibold text-foreground mb-4">
+          <h2 className="font-display text-lg font-semibold text-foreground mb-2">
             Alla agenter ({agents.length})
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {others.map((agent) => (
-              <motion.button
-                key={agent.agent_id}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={() => setSelectedAgent(agent)}
-                className="group flex items-center gap-3 p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-card hover:border-border hover:shadow-md transition-all text-left"
-              >
-                <AgentAvatar name={agent.name} size="md" />
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-medium text-foreground text-sm truncate">{agent.name}</h3>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{getClusterLabel(agent.cluster)}</span>
-                    {getModelBadge(agent.llm_model) && (
-                      <span className="text-[10px] text-muted-foreground/60">{getModelBadge(agent.llm_model)}</span>
-                    )}
-                  </div>
-                  {agent.purpose && <p className="text-xs text-muted-foreground truncate mt-0.5">{agent.purpose}</p>}
+          <p className="text-xs text-muted-foreground mb-6">{SCOUT_CLUSTERS.length} kluster &middot; Enhanced pipeline F0–F5</p>
+
+          {CLUSTER_ORDER.map((clusterKey) => {
+            const clusterAgents = others.filter((a) => a.cluster === clusterKey);
+            if (clusterAgents.length === 0) return null;
+            return (
+              <div key={clusterKey} className="mb-8">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-accent/10 text-accent uppercase tracking-wider">
+                    {getClusterLabel(clusterKey)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{clusterAgents.length} agenter</span>
+                  <span className="text-xs text-muted-foreground/50 hidden sm:inline">{getClusterDescription(clusterKey)}</span>
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-              </motion.button>
-            ))}
-          </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {clusterAgents.map((agent) => (
+                    <motion.button
+                      key={agent.agent_id}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      onClick={() => setSelectedAgent(agent)}
+                      className="group flex items-center gap-3 p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-card hover:border-border hover:shadow-md transition-all text-left"
+                    >
+                      <AgentAvatar name={agent.name} size="md" />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-medium text-foreground text-sm truncate">{agent.name}</h3>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {getModelBadge(agent.llm_model) && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{getModelBadge(agent.llm_model)}</span>
+                          )}
+                        </div>
+                        {agent.purpose && <p className="text-xs text-muted-foreground truncate mt-0.5">{agent.purpose}</p>}
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </section>
 
         {loadingAgents && (
