@@ -1,72 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
+
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
 // Key: userId | Window: 15 min | Max: 20 requests
 // ---------------------------------------------------------------------------
-
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
-const RATE_LIMIT_MAX_REQUESTS = 20;
-
-const rateLimitStore = new Map<string, number[]>();
-
-function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
-
-  // Periodic cleanup every 100 entries
-  if (rateLimitStore.size > 100) {
-    for (const [k, v] of rateLimitStore) {
-      const valid = v.filter(ts => ts > windowStart);
-      if (valid.length === 0) rateLimitStore.delete(k);
-      else rateLimitStore.set(k, valid);
-    }
-  }
-
-  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
-    const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
-    rateLimitStore.set(key, timestamps);
-    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs), remaining: 0, limit: RATE_LIMIT_MAX_REQUESTS };
-  }
-  timestamps.push(now);
-  rateLimitStore.set(key, timestamps);
-  return { allowed: true, retryAfterMs: 0, remaining: RATE_LIMIT_MAX_REQUESTS - timestamps.length, limit: RATE_LIMIT_MAX_REQUESTS };
-}
-
-function getRateLimitHeaders(rl: { remaining: number; limit: number; retryAfterMs: number }): Record<string, string> {
-  return {
-    'X-RateLimit-Limit': String(rl.limit),
-    'X-RateLimit-Remaining': String(rl.remaining),
-    'X-RateLimit-Reset': String(Math.ceil(rl.retryAfterMs / 1000)),
-  };
-}
-
-const ALLOWED_ORIGINS = [
-  "https://vault-scout-app.vercel.app",
-  "https://vaultai.se",
-  "https://www.vaultai.se",
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:5174",
-];
+const rateLimiter = createRateLimiter(20);
 
 function isValidUUID(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
-
-function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
-  const origin =
-    requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
-      ? requestOrigin
-      : ALLOWED_ORIGINS[0];
-  return {
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -76,7 +21,7 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  let rl: { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } | null = null;
+  let rl: RateLimitResult | null = null;
 
   try {
     // Auth
@@ -106,7 +51,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Rate limit check — after auth, before any expensive work
-    rl = checkRateLimit(user.id);
+    rl = rateLimiter.check(user.id);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
       return new Response(
