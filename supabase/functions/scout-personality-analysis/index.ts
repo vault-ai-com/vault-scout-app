@@ -14,18 +14,36 @@ const RATE_LIMIT_MAX_REQUESTS = 5;
 
 const rateLimitStore = new Map<string, number[]>();
 
-function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number } {
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
   const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
+
+  // Periodic cleanup every 100 entries
+  if (rateLimitStore.size > 100) {
+    for (const [k, v] of rateLimitStore) {
+      const valid = v.filter(ts => ts > windowStart);
+      if (valid.length === 0) rateLimitStore.delete(k);
+      else rateLimitStore.set(k, valid);
+    }
+  }
+
   if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
     const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
     rateLimitStore.set(key, timestamps);
-    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs), remaining: 0, limit: RATE_LIMIT_MAX_REQUESTS };
   }
   timestamps.push(now);
   rateLimitStore.set(key, timestamps);
-  return { allowed: true, retryAfterMs: 0 };
+  return { allowed: true, retryAfterMs: 0, remaining: RATE_LIMIT_MAX_REQUESTS - timestamps.length, limit: RATE_LIMIT_MAX_REQUESTS };
+}
+
+function getRateLimitHeaders(rl: { remaining: number; limit: number; retryAfterMs: number }): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': String(rl.limit),
+    'X-RateLimit-Remaining': String(rl.remaining),
+    'X-RateLimit-Reset': String(Math.ceil(rl.retryAfterMs / 1000)),
+  };
 }
 
 const ALLOWED_ORIGINS = [
@@ -152,10 +170,12 @@ Deno.serve(async (req: Request) => {
 
   const _corsHeaders = getCorsHeaders(req.headers.get("origin"));
 
-  const respond = (body: unknown, status = 200) => new Response(
+  const respond = (body: unknown, status = 200, extra: Record<string, string> = {}) => new Response(
     JSON.stringify({ ...(typeof body === 'object' ? body as object : { data: body }), _v: VERSION }),
-    { status, headers: { ..._corsHeaders, 'Content-Type': 'application/json' } }
+    { status, headers: { ..._corsHeaders, 'Content-Type': 'application/json', ...extra } }
   );
+
+  let rl: { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } | null = null;
 
   try {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -175,14 +195,16 @@ Deno.serve(async (req: Request) => {
     }
 
     // Rate limit check — keyed on player_id (no JWT in this function)
-    const rl = checkRateLimit(player_id);
+    rl = checkRateLimit(player_id);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
       return new Response(
         JSON.stringify({ success: false, error: 'Rate limit exceeded. Max 5 personality analyses per 15 minutes per player.', retry_after_seconds: retryAfterSec, _v: VERSION }),
-        { status: 429, headers: { ..._corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retryAfterSec) } }
+        { status: 429, headers: { ..._corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retryAfterSec), ...getRateLimitHeaders(rl) } }
       );
     }
+
+    const rlHeaders = getRateLimitHeaders(rl);
 
     // Check cache (48h) — FIX: use analysis_data column + maybeSingle
     const { data: cached } = await supabase
@@ -198,7 +220,7 @@ Deno.serve(async (req: Request) => {
     if (cached?.analysis_data) {
       return new Response(
         JSON.stringify({ ...(cached.analysis_data as object), _v: VERSION }),
-        { headers: { ..._corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ..._corsHeaders, 'Content-Type': 'application/json', ...rlHeaders } }
       );
     }
 
@@ -215,7 +237,7 @@ Deno.serve(async (req: Request) => {
         error: 'PLAYER_NOT_FOUND_V21',
         db_error: playerErr ? JSON.stringify(playerErr) : 'NO_ROWS',
         player_id,
-      }, 404);
+      }, 404, rlHeaders);
     }
 
     // Load KB context
@@ -305,7 +327,7 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
 
     if (!llmResp.ok) {
       const errText = await llmResp.text();
-      return respond({ success: false, error: 'LLM error: ' + errText.slice(0, 200) }, 500);
+      return respond({ success: false, error: 'LLM error: ' + errText.slice(0, 200) }, 500, rlHeaders);
     }
 
     const llmData = await llmResp.json();
@@ -439,11 +461,11 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
 
     return new Response(
       JSON.stringify({ ...result, _v: VERSION }),
-      { headers: { ..._corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ..._corsHeaders, 'Content-Type': 'application/json', ...rlHeaders } }
     );
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return respond({ success: false, error: msg }, 500);
+    return respond({ success: false, error: msg }, 500, rl ? getRateLimitHeaders(rl) : {});
   }
 });

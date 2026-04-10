@@ -11,18 +11,36 @@ const RATE_LIMIT_MAX_REQUESTS = 20;
 
 const rateLimitStore = new Map<string, number[]>();
 
-function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number } {
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
   const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
+
+  // Periodic cleanup every 100 entries
+  if (rateLimitStore.size > 100) {
+    for (const [k, v] of rateLimitStore) {
+      const valid = v.filter(ts => ts > windowStart);
+      if (valid.length === 0) rateLimitStore.delete(k);
+      else rateLimitStore.set(k, valid);
+    }
+  }
+
   if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
     const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
     rateLimitStore.set(key, timestamps);
-    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs), remaining: 0, limit: RATE_LIMIT_MAX_REQUESTS };
   }
   timestamps.push(now);
   rateLimitStore.set(key, timestamps);
-  return { allowed: true, retryAfterMs: 0 };
+  return { allowed: true, retryAfterMs: 0, remaining: RATE_LIMIT_MAX_REQUESTS - timestamps.length, limit: RATE_LIMIT_MAX_REQUESTS };
+}
+
+function getRateLimitHeaders(rl: { remaining: number; limit: number; retryAfterMs: number }): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': String(rl.limit),
+    'X-RateLimit-Remaining': String(rl.remaining),
+    'X-RateLimit-Reset': String(Math.ceil(rl.retryAfterMs / 1000)),
+  };
 }
 
 const ALLOWED_ORIGINS = [
@@ -58,6 +76,8 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  let rl: { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } | null = null;
+
   try {
     // Auth
     const authHeader = req.headers.get("Authorization");
@@ -86,12 +106,12 @@ Deno.serve(async (req: Request) => {
     }
 
     // Rate limit check — after auth, before any expensive work
-    const rl = checkRateLimit(user.id);
+    rl = checkRateLimit(user.id);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
       return new Response(
         JSON.stringify({ code: 429, message: "Rate limit exceeded. Max 20 messages per 15 minutes.", retry_after_seconds: retryAfterSec }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec), ...getRateLimitHeaders(rl) } }
       );
     }
 
@@ -339,7 +359,7 @@ Deno.serve(async (req: Request) => {
       console.error("Claude API error:", claudeRes.status, errText);
       return new Response(JSON.stringify({ code: 502, message: "Claude API error" }), {
         status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json", ...getRateLimitHeaders(rl) },
       });
     }
 
@@ -411,13 +431,14 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
+        ...getRateLimitHeaders(rl),
       },
     });
   } catch (err) {
     console.error("Function error:", err);
     return new Response(JSON.stringify({ code: 500, message: "Internal error" }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json", ...(rl ? getRateLimitHeaders(rl) : {}) },
     });
   }
 });

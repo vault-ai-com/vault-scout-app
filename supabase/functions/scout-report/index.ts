@@ -8,18 +8,36 @@ const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 10;
 const rateLimitStore = new Map<string, number[]>();
 
-function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: number } {
+function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
   const timestamps = (rateLimitStore.get(userId) ?? []).filter(ts => ts > windowStart);
+
+  // Periodic cleanup every 100 entries
+  if (rateLimitStore.size > 100) {
+    for (const [k, v] of rateLimitStore) {
+      const valid = v.filter(ts => ts > windowStart);
+      if (valid.length === 0) rateLimitStore.delete(k);
+      else rateLimitStore.set(k, valid);
+    }
+  }
+
   if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
     const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
     rateLimitStore.set(userId, timestamps);
-    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs), remaining: 0, limit: RATE_LIMIT_MAX_REQUESTS };
   }
   timestamps.push(now);
   rateLimitStore.set(userId, timestamps);
-  return { allowed: true, retryAfterMs: 0 };
+  return { allowed: true, retryAfterMs: 0, remaining: RATE_LIMIT_MAX_REQUESTS - timestamps.length, limit: RATE_LIMIT_MAX_REQUESTS };
+}
+
+function getRateLimitHeaders(rl: { remaining: number; limit: number; retryAfterMs: number }): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': String(rl.limit),
+    'X-RateLimit-Remaining': String(rl.remaining),
+    'X-RateLimit-Reset': String(Math.ceil(rl.retryAfterMs / 1000)),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -41,11 +59,11 @@ function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
   };
 }
 
-function jsonResponse(data: unknown, corsHeaders: Record<string, string>, status = 200): Response {
-  return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+function jsonResponse(data: unknown, corsHeaders: Record<string, string>, status = 200, extra: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json", ...extra } });
 }
-function errorResponse(msg: string, corsHeaders: Record<string, string>, status = 400): Response {
-  return jsonResponse({ error: msg }, corsHeaders, status);
+function errorResponse(msg: string, corsHeaders: Record<string, string>, status = 400, extra: Record<string, string> = {}): Response {
+  return jsonResponse({ error: msg }, corsHeaders, status, extra);
 }
 
 function isValidUUID(id: string): boolean {
@@ -1322,28 +1340,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(
       JSON.stringify({ error: "Rate limit exceeded. Max 10 report requests per 15 minutes.", retry_after_seconds: retryAfterSec }),
-      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec), ...getRateLimitHeaders(rl) } }
     );
   }
 
+  // Merge rate-limit headers into cors so all subsequent responses include them
+  const rlHeaders = getRateLimitHeaders(rl);
+  const corsHeadersWithRl = { ...corsHeaders, ...rlHeaders };
+
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return errorResponse("Invalid JSON body", corsHeaders); }
+  try { body = await req.json(); } catch { return errorResponse("Invalid JSON body", corsHeadersWithRl); }
   body._userId = userId;
 
   const action = body.action;
   if (!action || typeof action !== "string") {
-    return errorResponse("Missing 'action'. Valid: generate, compare, watchlist_brief", corsHeaders);
+    return errorResponse("Missing 'action'. Valid: generate, compare, watchlist_brief", corsHeadersWithRl);
   }
 
   try {
     switch (action) {
-      case "generate": return await handleGenerate(body, corsHeaders);
-      case "compare": return await handleCompare(body, corsHeaders);
-      case "watchlist_brief": return await handleWatchlistBrief(body, corsHeaders);
-      default: return errorResponse(`Unknown action '${action}'. Valid: generate, compare, watchlist_brief`, corsHeaders);
+      case "generate": return await handleGenerate(body, corsHeadersWithRl);
+      case "compare": return await handleCompare(body, corsHeadersWithRl);
+      case "watchlist_brief": return await handleWatchlistBrief(body, corsHeadersWithRl);
+      default: return errorResponse(`Unknown action '${action}'. Valid: generate, compare, watchlist_brief`, corsHeadersWithRl);
     }
   } catch (err) {
     console.error(`Unhandled error [${action}]:`, err);
-    return errorResponse("Internal error", corsHeaders, 500);
+    return errorResponse("Internal error", corsHeadersWithRl, 500);
   }
 });

@@ -11,18 +11,36 @@ const RATE_LIMIT_MAX_REQUESTS = 30;
 
 const rateLimitStore = new Map<string, number[]>();
 
-function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number } {
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
   const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
+
+  // Periodic cleanup every 100 entries
+  if (rateLimitStore.size > 100) {
+    for (const [k, v] of rateLimitStore) {
+      const valid = v.filter(ts => ts > windowStart);
+      if (valid.length === 0) rateLimitStore.delete(k);
+      else rateLimitStore.set(k, valid);
+    }
+  }
+
   if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
     const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
     rateLimitStore.set(key, timestamps);
-    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs), remaining: 0, limit: RATE_LIMIT_MAX_REQUESTS };
   }
   timestamps.push(now);
   rateLimitStore.set(key, timestamps);
-  return { allowed: true, retryAfterMs: 0 };
+  return { allowed: true, retryAfterMs: 0, remaining: RATE_LIMIT_MAX_REQUESTS - timestamps.length, limit: RATE_LIMIT_MAX_REQUESTS };
+}
+
+function getRateLimitHeaders(rl: { remaining: number; limit: number; retryAfterMs: number }): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': String(rl.limit),
+    'X-RateLimit-Remaining': String(rl.remaining),
+    'X-RateLimit-Reset': String(Math.ceil(rl.retryAfterMs / 1000)),
+  };
 }
 
 const ALLOWED_ORIGINS = [
@@ -47,10 +65,10 @@ function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
   };
 }
 
-function json(data: unknown, status = 200, origin: string | null = null) {
+function json(data: unknown, status = 200, origin: string | null = null, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...getCorsHeaders(origin), "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(origin), "Content-Type": "application/json", ...extra },
   });
 }
 
@@ -120,9 +138,11 @@ Deno.serve(async (req: Request) => {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(
       JSON.stringify({ error: "Rate limit exceeded. Max 30 requests per 15 minutes.", retry_after_seconds: retryAfterSec }),
-      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec), ...getRateLimitHeaders(rl) } }
     );
   }
+
+  const rlHeaders = getRateLimitHeaders(rl);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -186,7 +206,7 @@ Deno.serve(async (req: Request) => {
           recent_analyses: recentAnalyses,
           critical_watchlist: critWatchlist.length > 0 ? critWatchlist : null,
         },
-      }, 200, reqOrigin);
+      }, 200, reqOrigin, rlHeaders);
     }
 
     // --- SEARCH (pg_trgm fuzzy via RPC) ---
@@ -196,7 +216,7 @@ Deno.serve(async (req: Request) => {
       const tier = typeof body.tier === "string" ? body.tier : null;
       const limit = Math.min(typeof body.limit === "number" ? body.limit : 50, 100);
 
-      if (!rawQuery) return json({ action: "search", count: 0, players: [] }, 200, reqOrigin);
+      if (!rawQuery) return json({ action: "search", count: 0, players: [] }, 200, reqOrigin, rlHeaders);
 
       const { data, error } = await sb.rpc("search_scout_players", {
         p_query: rawQuery,
@@ -204,7 +224,7 @@ Deno.serve(async (req: Request) => {
         p_tier: tier,
         p_limit: limit,
       });
-      if (error) return json({ error: error.message }, 500, reqOrigin);
+      if (error) return json({ error: error.message }, 500, reqOrigin, rlHeaders);
 
       // Strip internal scoring fields from RPC result
       const players = (data ?? []).map((r: Record<string, unknown>) => {
@@ -212,20 +232,20 @@ Deno.serve(async (req: Request) => {
         return player;
       });
 
-      return json({ action: "search", count: players.length, players }, 200, reqOrigin);
+      return json({ action: "search", count: players.length, players }, 200, reqOrigin, rlHeaders);
     }
 
     // --- GET PLAYER ---
     if (action === "get_player") {
       const playerId = body.player_id;
-      if (!playerId) return json({ error: "player_id required" }, 400, reqOrigin);
-      if (typeof playerId !== "string" || !isValidUUID(playerId)) return json({ error: "Invalid player_id format" }, 400, reqOrigin);
+      if (!playerId) return json({ error: "player_id required" }, 400, reqOrigin, rlHeaders);
+      if (typeof playerId !== "string" || !isValidUUID(playerId)) return json({ error: "Invalid player_id format" }, 400, reqOrigin, rlHeaders);
 
       const { data, error } = await sb.from("scout_players").select("*").eq("id", playerId).single();
-      if (error || !data) return json({ error: "Player not found" }, 404, reqOrigin);
+      if (error || !data) return json({ error: "Player not found" }, 404, reqOrigin, rlHeaders);
 
       const player = { ...mapPlayer(data), profile_data: data.profile_data ?? null };
-      return json({ action: "get_player", player }, 200, reqOrigin);
+      return json({ action: "get_player", player }, 200, reqOrigin, rlHeaders);
     }
 
     // --- DISCOVER (keyword-based) ---
@@ -262,12 +282,12 @@ Deno.serve(async (req: Request) => {
         reasoning: criteria ? `Sökte efter: ${criteria}` : null,
         count: players.length,
         players,
-      }, 200, reqOrigin);
+      }, 200, reqOrigin, rlHeaders);
     }
 
-    return json({ error: `Unknown action: ${action}` }, 400, reqOrigin);
+    return json({ error: `Unknown action: ${action}` }, 400, reqOrigin, rlHeaders);
   } catch (err) {
     console.error("scout-search unhandled error:", err);
-    return json({ error: "Internal error" }, 500, reqOrigin);
+    return json({ error: "Internal error" }, 500, reqOrigin, rlHeaders);
   }
 });

@@ -75,18 +75,36 @@ const RATE_LIMIT_MAX_REQUESTS = 5;
 
 const rateLimitStore = new Map<string, number[]>();
 
-function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number } {
+function checkRateLimit(key: string): { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
   const timestamps = (rateLimitStore.get(key) ?? []).filter(ts => ts > windowStart);
+
+  // Periodic cleanup every 100 entries
+  if (rateLimitStore.size > 100) {
+    for (const [k, v] of rateLimitStore) {
+      const valid = v.filter(ts => ts > windowStart);
+      if (valid.length === 0) rateLimitStore.delete(k);
+      else rateLimitStore.set(k, valid);
+    }
+  }
+
   if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
     const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
     rateLimitStore.set(key, timestamps);
-    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs), remaining: 0, limit: RATE_LIMIT_MAX_REQUESTS };
   }
   timestamps.push(now);
   rateLimitStore.set(key, timestamps);
-  return { allowed: true, retryAfterMs: 0 };
+  return { allowed: true, retryAfterMs: 0, remaining: RATE_LIMIT_MAX_REQUESTS - timestamps.length, limit: RATE_LIMIT_MAX_REQUESTS };
+}
+
+function getRateLimitHeaders(rl: { remaining: number; limit: number; retryAfterMs: number }): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': String(rl.limit),
+    'X-RateLimit-Remaining': String(rl.remaining),
+    'X-RateLimit-Reset': String(Math.ceil(rl.retryAfterMs / 1000)),
+  };
 }
 
 function getClientIp(req: Request): string {
@@ -444,10 +462,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(
       JSON.stringify({ error: "Rate limit exceeded. Max 5 advisor reviews per 15 minutes.", retry_after_seconds: retryAfterSec }),
-      { status: 429, headers: { ...cors, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) } }
+      { status: 429, headers: { ...cors, "Content-Type": "application/json", "Retry-After": String(retryAfterSec), ...getRateLimitHeaders(rl) } }
     );
   }
 
+  const rlHeaders = getRateLimitHeaders(rl);
   const startTime = Date.now();
 
   try {
@@ -457,7 +476,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!analysisId || typeof analysisId !== "string" || !isValidUUID(analysisId)) {
       return new Response(
         JSON.stringify({ error: "analysis_id (UUID) required" }),
-        { status: 400, headers: { ...cors, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...cors, "Content-Type": "application/json", ...rlHeaders } }
       );
     }
 
@@ -472,7 +491,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!Array.isArray(analyses) || analyses.length === 0) {
       return new Response(
         JSON.stringify({ error: "Analysis not found or not completed" }),
-        { status: 404, headers: { ...cors, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...cors, "Content-Type": "application/json", ...rlHeaders } }
       );
     }
 
@@ -500,7 +519,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!Array.isArray(players) || players.length === 0) {
       return new Response(
         JSON.stringify({ error: "Player not found" }),
-        { status: 404, headers: { ...cors, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...cors, "Content-Type": "application/json", ...rlHeaders } }
       );
     }
 
@@ -524,7 +543,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           opinions: [],
           consensus: "Inga sport-advisors tillgängliga för denna analystyp.",
         }),
-        { status: 200, headers: { ...cors, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...cors, "Content-Type": "application/json", ...rlHeaders } }
       );
     }
 
@@ -626,7 +645,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json", ...rlHeaders },
     });
   } catch (err) {
     console.error("[advisor-review] Error:", err);
@@ -634,7 +653,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       err instanceof Error ? err.message : "Internal server error";
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...cors, "Content-Type": "application/json", ...rlHeaders } }
     );
   }
 });

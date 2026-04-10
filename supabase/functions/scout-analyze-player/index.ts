@@ -18,18 +18,36 @@ const RATE_LIMIT_MAX_REQUESTS = 10;
 
 const rateLimitStore = new Map<string, number[]>();
 
-function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: number } {
+function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: number; remaining: number; limit: number } {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
   const timestamps = (rateLimitStore.get(userId) ?? []).filter(ts => ts > windowStart);
+
+  // Periodic cleanup every 100 entries
+  if (rateLimitStore.size > 100) {
+    for (const [k, v] of rateLimitStore) {
+      const valid = v.filter(ts => ts > windowStart);
+      if (valid.length === 0) rateLimitStore.delete(k);
+      else rateLimitStore.set(k, valid);
+    }
+  }
+
   if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
     const retryAfterMs = timestamps[0] + RATE_LIMIT_WINDOW_MS - now;
     rateLimitStore.set(userId, timestamps);
-    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+    return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs), remaining: 0, limit: RATE_LIMIT_MAX_REQUESTS };
   }
   timestamps.push(now);
   rateLimitStore.set(userId, timestamps);
-  return { allowed: true, retryAfterMs: 0 };
+  return { allowed: true, retryAfterMs: 0, remaining: RATE_LIMIT_MAX_REQUESTS - timestamps.length, limit: RATE_LIMIT_MAX_REQUESTS };
+}
+
+function getRateLimitHeaders(rl: { remaining: number; limit: number; retryAfterMs: number }): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': String(rl.limit),
+    'X-RateLimit-Remaining': String(rl.remaining),
+    'X-RateLimit-Reset': String(Math.ceil(rl.retryAfterMs / 1000)),
+  };
 }
 
 const ALLOWED_ORIGINS = [
@@ -1004,7 +1022,8 @@ function validateRequest(body: unknown): RequestBody {
 function errorResponse(
   message: string,
   status: number,
-  corsHeaders?: Record<string, string>
+  corsHeaders?: Record<string, string>,
+  extra?: Record<string, string>
 ): Response {
   return new Response(
     JSON.stringify({ success: false, error: message }),
@@ -1013,6 +1032,7 @@ function errorResponse(
       headers: {
         ...(corsHeaders ?? getCorsHeaders(null)),
         "Content-Type": "application/json",
+        ...(extra ?? {}),
       },
     }
   );
@@ -1072,10 +1092,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       JSON.stringify({ success: false, error: "Rate limit exceeded. Max 10 analyses per 15 minutes.", retry_after_seconds: retryAfterSec }),
       {
         status: 429,
-        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec) },
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSec), ...getRateLimitHeaders(rl) },
       }
     );
   }
+
+  const rlHeaders = getRateLimitHeaders(rl);
 
   let analysisId: string | undefined;
   try {
@@ -1112,7 +1134,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }),
         {
           status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders, "Content-Type": "application/json", ...rlHeaders },
         }
       );
     }
@@ -1213,7 +1235,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }),
       {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json", ...rlHeaders },
       }
     );
   } catch (err) {
@@ -1234,20 +1256,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Classify error for status code
     if (message.includes("not found")) {
-      return errorResponse(message, 404);
+      return errorResponse(message, 404, corsHeaders, rlHeaders);
     }
     if (
       message.includes("required") ||
       message.includes("must be") ||
       message.includes("analysis_type")
     ) {
-      return errorResponse(message, 400);
+      return errorResponse(message, 400, corsHeaders, rlHeaders);
     }
     if (message.includes("Missing") && message.includes("environment")) {
-      return errorResponse("Server configuration error", 500);
+      return errorResponse("Server configuration error", 500, corsHeaders, rlHeaders);
     }
     if (message.includes("Anthropic API error")) {
-      return errorResponse(`Analysis engine error: ${message}`, 502);
+      return errorResponse(`Analysis engine error: ${message}`, 502, corsHeaders, rlHeaders);
     }
     if (
       (err instanceof DOMException && err.name === "TimeoutError") ||
@@ -1257,10 +1279,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     ) {
       return errorResponse(
         "Analysis timed out. Try again or use quick_scan.",
-        504
+        504,
+        corsHeaders,
+        rlHeaders
       );
     }
 
-    return errorResponse("Internal error", 500);
+    return errorResponse("Internal error", 500, corsHeaders, rlHeaders);
   }
 });
