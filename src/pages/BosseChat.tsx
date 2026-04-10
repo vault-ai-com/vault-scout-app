@@ -7,20 +7,7 @@ import {
   useChatSessions, useChatMessages, useCreateSession, useDeleteSession, useSendMessage,
 } from "@/hooks/use-bosse-chat";
 import type { ChatSession } from "@/types/chat";
-
-// --- Markdown-lite: bold + line breaks ---
-function formatContent(text: string) {
-  return text.split("\n").map((line, i) => (
-    <span key={i}>
-      {i > 0 && <br />}
-      {line.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
-        part.startsWith("**") && part.endsWith("**")
-          ? <strong key={j} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>
-          : part
-      )}
-    </span>
-  ));
-}
+import { formatContent } from "@/lib/format-content";
 
 const BosseChat = () => {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);

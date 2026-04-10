@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   useChatSessions, useChatMessages, useCreateSession, useDeleteSession, useSendMessage,
 } from "@/hooks/use-bosse-chat";
+import { formatContent } from "@/lib/format-content";
 import { supabase } from "@/integrations/supabase/client";
 import type { ChatSession } from "@/types/chat";
 
@@ -70,19 +71,6 @@ function AgentAvatar({ name, size = "md", featured = false }: { name: string; si
       {initials}
     </div>
   );
-}
-
-function formatContent(text: string) {
-  return text.split("\n").map((line, i) => (
-    <span key={i}>
-      {i > 0 && <br />}
-      {line.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
-        part.startsWith("**") && part.endsWith("**")
-          ? <strong key={j} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>
-          : part
-      )}
-    </span>
-  ));
 }
 
 // --- Hook: load scout agents ---
