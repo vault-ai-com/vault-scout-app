@@ -30,6 +30,30 @@ export function clamp(val: number, min: number, max: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// ClampEvent — tracks when a value was forced into bounds
+// ---------------------------------------------------------------------------
+export interface ClampEvent {
+  dim: string;
+  original: number;
+  clamped: number;
+  boundary: 'min' | 'max';
+}
+
+export function createClampTracker() {
+  const events: ClampEvent[] = [];
+  return {
+    clamp(val: number, min: number, max: number, dim: string): number {
+      const result = Math.max(min, Math.min(max, val));
+      if (result !== val) {
+        events.push({ dim, original: val, clamped: result, boundary: val < min ? 'min' : 'max' });
+      }
+      return result;
+    },
+    getEvents(): ClampEvent[] { return events; },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // resolveArchetype — deterministic rule set + score-based fallback
 // ---------------------------------------------------------------------------
 export function resolveArchetype(profile: Record<string, number>): string {

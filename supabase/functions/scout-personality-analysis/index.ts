@@ -6,7 +6,7 @@ const VERSION = "v23-12dim-bpa";
 
 import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { ARCHETYPES, clamp, resolveArchetype, resolveRecommendation, computeConfidence } from '../_shared/personality-logic.ts';
+import { ARCHETYPES, clamp, createClampTracker, resolveArchetype, resolveRecommendation, computeConfidence } from '../_shared/personality-logic.ts';
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -195,11 +195,12 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
     } catch { parsed = {}; }
 
     const dims = (parsed.dimensions as Record<string, { score: number; evidence: string }>) ?? {};
+    const ct = createClampTracker();
 
     const getDim = (key: string): { score: number; evidence: string } => {
       const d = dims[key];
       if (d && typeof d.score === 'number') {
-        return { score: clamp(Math.round(d.score), 1, 10), evidence: String(d.evidence || 'Baserat på tillgänglig data').slice(0, 500) };
+        return { score: ct.clamp(Math.round(d.score), 1, 10, key), evidence: String(d.evidence || 'Baserat på tillgänglig data').slice(0, 500) };
       }
       return { score: 5, evidence: 'Otillräcklig data för dimension' };
     };
@@ -219,7 +220,7 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
     // Contradiction score: 0-1 scale (separate from 1-10 dimensions)
     const csRaw = parsed.contradiction_score as { score?: number; evidence?: string } | undefined;
     const contradictionScore = csRaw && typeof csRaw.score === 'number'
-      ? clamp(Math.round(csRaw.score * 100) / 100, 0, 1)
+      ? ct.clamp(Math.round(csRaw.score * 100) / 100, 0, 1, 'contradiction_score')
       : 0.3;
     const contradictionEvidence = String(csRaw?.evidence || 'Otillräcklig data för motsägelsebedömning').slice(0, 500);
 
@@ -284,19 +285,21 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
       data_source_quality: dataSourceQuality,
     };
 
+    const clampEvents = ct.getEvents();
     const result = {
       success: true,
       player_id,
       profile,
       duration_ms,
       cache_hit: false,
+      ...(clampEvents.length > 0 ? { clamp_events: clampEvents } : {}),
     };
 
     // Overall score: weighted average of all 11 scored dims (7 generic 70% + 4 KB 30%)
     const avg7 = (dt.score + ra.score + al.score + to.score + tu.score + sn.score + cm.score) / 7;
     const kbScores = [ego.score, resilience.score, coachability.score, xFactor.score];
     const avgKb = kbScores.reduce((a, b) => a + b, 0) / kbScores.length;
-    const overall_score = clamp(Math.round((avg7 * 0.7 + avgKb * 0.3) * 10) / 10, 1, 10);
+    const overall_score = ct.clamp(Math.round((avg7 * 0.7 + avgKb * 0.3) * 10) / 10, 1, 10, 'overall_score');
 
     const recommendation = resolveRecommendation(composite_archetype, dimScores, contradictionScore, confidence_score);
 
