@@ -41,6 +41,7 @@ const FEATURED_AGENT_IDS = [
 const SCOUT_CLUSTERS = [
   // Core analysis
   "vault_ai_scout",
+  "vault_ai_coach",
   "vault_scout_report",
   "brutal_person_analysis",
   // Sport advisors
@@ -58,6 +59,7 @@ const SCOUT_CLUSTERS = [
 // Display order for cluster sections
 const CLUSTER_ORDER = [
   "vault_ai_scout",
+  "vault_ai_coach",
   "vault_sport_advisors",
   "vault_scout_report",
   "brutal_person_analysis",
@@ -73,6 +75,7 @@ const CLUSTER_ORDER = [
 function getClusterLabel(cluster: string): string {
   switch (cluster) {
     case "vault_ai_scout": return "Scout Core";
+    case "vault_ai_coach": return "Coach Analys";
     case "vault_scout_report": return "Rapport";
     case "brutal_person_analysis": return "Personanalys";
     case "person_clones": return "Klon";
@@ -90,6 +93,7 @@ function getClusterLabel(cluster: string): string {
 function getClusterDescription(cluster: string): string {
   switch (cluster) {
     case "vault_ai_scout": return "Spelaranalys, taktik och anti-hallucination";
+    case "vault_ai_coach": return "Tränaranalys — 16 CDIM + 12 BPA + 7 arketyper";
     case "vault_scout_report": return "HTML-rapporter och narrativ";
     case "brutal_person_analysis": return "Djup personlighets- och beteendeanalys";
     case "vault_sport_advisors": return "Expertgranskning av analyser";
