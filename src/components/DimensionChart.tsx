@@ -4,6 +4,7 @@ import type { DimensionScore } from "@/types/scout";
 
 interface DimensionChartProps {
   scores: DimensionScore[];
+  labelMap?: Record<string, string>;
 }
 
 function scoreColor(score: number | null): string {
@@ -14,7 +15,7 @@ function scoreColor(score: number | null): string {
   return "bg-red-500";
 }
 
-export function DimensionChart({ scores }: DimensionChartProps) {
+export function DimensionChart({ scores, labelMap = DIMENSION_LABELS }: DimensionChartProps) {
   if (!scores.length) {
     return <p className="text-sm text-muted-foreground">Inga dimensionspoäng tillgängliga.</p>;
   }
@@ -28,7 +29,7 @@ export function DimensionChart({ scores }: DimensionChartProps) {
     >
       {scores.map((dim) => {
         const pct = dim.score != null ? Math.max(0, Math.min(100, dim.score * 10)) : 0;
-        const label = DIMENSION_LABELS[dim.dimension_id] ?? dim.dimension_name;
+        const label = labelMap[dim.dimension_id] ?? dim.dimension_name;
 
         return (
           <motion.div

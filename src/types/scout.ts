@@ -389,6 +389,143 @@ export const VERDICT_COLORS: Record<AdvisorVerdict, string> = {
   FLAG: "text-red-400 bg-red-500/10 border-red-500/20",
 };
 
+// --- Coach Career Phase ---
+export const CoachCareerPhaseSchema = z.enum([
+  "EMERGING",
+  "DEVELOPING",
+  "ESTABLISHED",
+  "ELITE",
+  "VETERAN",
+  "LEGENDARY",
+]);
+export type CoachCareerPhase = z.infer<typeof CoachCareerPhaseSchema>;
+
+// --- ScoutCoach Zod schema ---
+export const ScoutCoachSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  nationality: z.string().nullable().optional(),
+  age: z.number(),
+  date_of_birth: z.string().nullable().optional(),
+  current_club: z.string().nullable().optional(),
+  current_league: z.string().nullable().optional(),
+  tier: ScoutTierSchema,
+  career_phase: CoachCareerPhaseSchema,
+  coaching_style: z.string().nullable().optional(),
+  formation_preference: z.string().nullable().optional(),
+  titles: z.array(z.unknown()).nullable().optional(),
+  latest_score: z.number().nullable().optional(),
+  latest_recommendation: z.string().nullable().optional(),
+  latest_analysis_date: z.string().nullable().optional(),
+});
+export type ScoutCoach = z.infer<typeof ScoutCoachSchema>;
+
+// --- Coach search/dashboard response schemas ---
+export const CoachSearchResponseSchema = z.object({
+  action: z.string(),
+  count: z.number(),
+  coaches: z.array(ScoutCoachSchema),
+});
+export type CoachSearchResponse = z.infer<typeof CoachSearchResponseSchema>;
+
+export const CoachDashboardStatsSchema = z.object({
+  action: z.string(),
+  data: z.object({
+    total_coaches: z.number(),
+    total_analyses: z.number(),
+    coaches_by_tier: z.record(z.number()),
+    recent_analyses: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      analysis_type: z.string(),
+      overall_score: z.number(),
+      recommendation: z.string(),
+      completed_at: z.string(),
+    })).nullable(),
+  }),
+});
+export type CoachDashboardStats = z.infer<typeof CoachDashboardStatsSchema>;
+
+export const GetCoachResponseSchema = z.object({
+  action: z.string(),
+  coach: ScoutCoachSchema.extend({
+    career_history: z.array(z.unknown()).nullable().optional(),
+    profile_data: z.record(z.unknown()).nullable().optional(),
+  }),
+});
+export type GetCoachResponse = z.infer<typeof GetCoachResponseSchema>;
+
+// --- Coach analysis response ---
+export const CoachAnalysisResponseSchema = z.object({
+  success: z.boolean(),
+  analysis_id: z.string(),
+  duration_ms: z.number(),
+  cache_hit: z.boolean().optional(),
+  result: AnalysisResultSchema,
+});
+export type CoachAnalysisResponse = z.infer<typeof CoachAnalysisResponseSchema>;
+
+// --- Coach personality types ---
+export const CoachArchetypeSchema = z.enum([
+  "VISIONARY_INNOVATOR",
+  "IRON_DISCIPLINARIAN",
+  "PLAYER_DEVELOPER",
+  "TACTICAL_GENIUS",
+  "MOTIVATIONAL_LEADER",
+  "PRAGMATIC_SURVIVOR",
+  "CULTURE_BUILDER",
+]);
+export type CoachArchetype = z.infer<typeof CoachArchetypeSchema>;
+
+export const COACH_ARCHETYPE_LABELS: Record<string, string> = {
+  VISIONARY_INNOVATOR: "Visionär innovatör",
+  IRON_DISCIPLINARIAN: "Järndisciplinär",
+  PLAYER_DEVELOPER: "Spelarutvecklare",
+  TACTICAL_GENIUS: "Taktiskt geni",
+  MOTIVATIONAL_LEADER: "Inspirerande ledare",
+  PRAGMATIC_SURVIVOR: "Pragmatisk överlevare",
+  CULTURE_BUILDER: "Kulturskapare",
+};
+
+export const COACH_ARCHETYPE_COLORS: Record<string, string> = {
+  VISIONARY_INNOVATOR: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  IRON_DISCIPLINARIAN: "bg-red-500/10 text-red-400 border-red-500/20",
+  PLAYER_DEVELOPER: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  TACTICAL_GENIUS: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  MOTIVATIONAL_LEADER: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  PRAGMATIC_SURVIVOR: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+  CULTURE_BUILDER: "bg-teal-500/10 text-teal-400 border-teal-500/20",
+};
+
+export const COACH_CAREER_PHASE_LABELS: Record<string, string> = {
+  EMERGING: "Uppkommande",
+  DEVELOPING: "Utveckling",
+  ESTABLISHED: "Etablerad",
+  ELITE: "Elit",
+  VETERAN: "Veteran",
+  LEGENDARY: "Legendar",
+};
+
+// 16 Coach Dimensions (CDIM) — parallels player DIM framework
+export const COACH_DIMENSION_LABELS: Record<string, string> = {
+  "CDIM-01": "Taktisk intelligens & systemdesign",
+  "CDIM-02": "Matchcoaching & in-game anpassning",
+  "CDIM-03": "Spelmodell-implementering",
+  "CDIM-04": "Spelarutveckling (track record)",
+  "CDIM-05": "Ungdomsintegration",
+  "CDIM-06": "Taktisk kommunikation & pedagogik",
+  "CDIM-07": "Modern fotbollsanpassning",
+  "CDIM-08": "Man-management & gruppdynamik",
+  "CDIM-09": "Mental motståndskraft & presshantering",
+  "CDIM-10": "Ledarstil & auktoritet",
+  "CDIM-11": "Arbetsintensitet & förberedelse",
+  "CDIM-12": "Resultathistorik & merit",
+  "CDIM-13": "Europaspel & internationell erfarenhet",
+  "CDIM-14": "Resursutnyttjande",
+  "CDIM-15": "Klubbkultur-passform",
+  "CDIM-16": "Karriärtrajektoria & timing",
+};
+
 // --- Comparison Entry schema ---
 export const ComparisonEntrySchema = z.object({
   id: z.string(),
