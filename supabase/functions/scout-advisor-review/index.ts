@@ -97,7 +97,9 @@ async function supabaseRpc(
     );
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text || text.trim() === "") return null;
+  return JSON.parse(text);
 }
 
 async function supabaseQuery(

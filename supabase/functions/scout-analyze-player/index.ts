@@ -203,7 +203,9 @@ async function supabaseRpc(
     );
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text || text.trim() === "") return null;
+  return JSON.parse(text);
 }
 
 async function supabaseQuery(
@@ -1005,6 +1007,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return errorResponse(authResult.error, authResult.status, corsHeaders);
   }
   const userId = authResult.userId;
+  const isServiceRole = authResult.isServiceRole;
 
   // Rate limit check — after auth, before any expensive work
   const rl = rateLimiter.check(userId);
@@ -1067,7 +1070,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const analysisEntry = (await supabaseRpc("start_scout_analysis", {
       p_player_id: player_id,
       p_analysis_type: analysis_type,
-      p_user_id: userId,
+      p_user_id: isServiceRole ? null : userId,
     })) as { analysis_id: string } | string;
 
     analysisId =
@@ -1131,7 +1134,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_analysis_data: result,
       p_agents_used: agentsUsed,
       p_kb_files_used: kbFilesUsed,
-      p_scores: result.dimension_scores ?? [],
+      p_scores: (result.dimension_scores ?? []).filter(d => typeof d.score === "number"),
     });
 
     console.log(

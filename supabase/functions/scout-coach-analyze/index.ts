@@ -89,7 +89,9 @@ async function supabaseRpc(functionName: string, params: Record<string, unknown>
     const errorText = await response.text();
     throw new Error(`RPC ${functionName} failed (${response.status}): ${errorText}`);
   }
-  return response.json();
+  const text = await response.text();
+  if (!text || text.trim() === "") return null;
+  return JSON.parse(text);
 }
 
 async function supabaseQuery(table: string, query: string): Promise<unknown[]> {
@@ -298,6 +300,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: authResult.error }, authResult.status, reqOrigin);
   }
   const userId = authResult.userId;
+  const isServiceRole = authResult.isServiceRole;
 
   // Rate limit
   const rl = rateLimiter.check(userId);
@@ -347,7 +350,7 @@ Deno.serve(async (req: Request) => {
     const startResult = await supabaseRpc("start_scout_coach_analysis", {
       p_coach_id: coachId,
       p_analysis_type: analysisType,
-      p_user_id: userId,
+      p_user_id: isServiceRole ? null : userId,
     }) as Array<{ analysis_id: string }>;
     const analysisId = startResult[0]?.analysis_id;
     if (!analysisId) throw new Error("Failed to start analysis");
