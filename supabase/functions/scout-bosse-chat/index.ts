@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { authenticateRequest } from "../_shared/auth.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -24,31 +25,21 @@ Deno.serve(async (req: Request) => {
   let rl: RateLimitResult | null = null;
 
   try {
-    // Auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ code: 401, message: "Missing Authorization header" }), {
-        status: 401,
+    // JWT authentication (shared helper)
+    const authResult = await authenticateRequest(req);
+    if (!authResult.ok) {
+      return new Response(JSON.stringify({ code: authResult.status, message: authResult.error }), {
+        status: authResult.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const token = authHeader.replace("Bearer ", "");
+    const user = { id: authResult.userId };
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Verify user
-    const supabaseAnon = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") ?? "");
-    const { data: { user }, error: authError } = await supabaseAnon.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(JSON.stringify({ code: 401, message: "Invalid token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     // Rate limit check — after auth, before any expensive work
     rl = rateLimiter.check(user.id);
@@ -122,12 +113,12 @@ Deno.serve(async (req: Request) => {
     // Load agent persona — Bosse (default) or specific agent via agent_id
     let personaText = "";
     let agentName = "Bosse Andersson";
-    let modelToUse = "claude-opus-4-6-20250514"; // Bosse default = Opus
+    let modelToUse = "claude-opus-4-6"; // Bosse default = Opus
 
     const MODEL_MAP: Record<string, string> = {
-      "claude-opus-4-6": "claude-opus-4-6-20250514",
-      "claude-sonnet-4-6": "claude-sonnet-4-6-20250514",
-      "claude-haiku-4-5": "claude-haiku-4-5-20251001",
+      "claude-opus-4-6": "claude-opus-4-6",
+      "claude-sonnet-4-6": "claude-sonnet-4-6",
+      "claude-haiku-4-5": "claude-haiku-4-5",
     };
 
     const isBosse = !agent_id || agent_id === "clone_bosse_andersson";
@@ -166,7 +157,7 @@ Deno.serve(async (req: Request) => {
 
       // Map model — default to Sonnet if unknown
       const rawModel = (agentRow.llm_model ?? "claude-sonnet-4-6").replace(/-\d{8}$/, "");
-      modelToUse = MODEL_MAP[rawModel] ?? "claude-sonnet-4-6-20250514";
+      modelToUse = MODEL_MAP[rawModel] ?? "claude-sonnet-4-6";
     }
 
     // Load scout KB context

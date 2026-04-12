@@ -1,0 +1,264 @@
+// quality-validation.ts — shared deterministic quality validation for scout analyses
+//
+// Used by terminal (Nivå 2+3) as quality-overlay on edge function results.
+// Also usable by edge functions themselves for inline quality checks.
+// Pure functions, no side effects, fully testable.
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+export interface QualityCheck {
+  name: string;
+  status: 'PASS' | 'WARN' | 'HALT';
+  detail: string;
+}
+
+export interface QualityReport {
+  score: number;       // 0-100
+  gate: 'PASS' | 'WARN' | 'HALT';
+  checks: QualityCheck[];
+}
+
+export interface AnalysisResult {
+  overall_score: number;
+  confidence: number;
+  recommendation?: string;
+  dimension_scores?: Record<string, number>;
+  personality_scores?: Record<string, number>;
+  evidence_count?: number;
+  clamp_events?: Array<{ dim: string; original: number; clamped: number }>;
+}
+
+// ---------------------------------------------------------------------------
+// Score uniformity check — all dims within ±1 of each other = suspicious
+// ---------------------------------------------------------------------------
+export function checkScoreUniformity(scores: Record<string, number>): QualityCheck {
+  const values = Object.values(scores);
+  if (values.length < 3) {
+    return { name: 'score_uniformity', status: 'PASS', detail: 'Too few dimensions to check' };
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+
+  if (range <= 1) {
+    return {
+      name: 'score_uniformity',
+      status: 'HALT',
+      detail: `All ${values.length} dimensions within ±1 (range=${range.toFixed(1)}, min=${min.toFixed(1)}, max=${max.toFixed(1)}) — suspekt uniform`,
+    };
+  }
+  if (range <= 2) {
+    return {
+      name: 'score_uniformity',
+      status: 'WARN',
+      detail: `Dimensions within ±2 (range=${range.toFixed(1)}) — low variance`,
+    };
+  }
+  return { name: 'score_uniformity', status: 'PASS', detail: `Range=${range.toFixed(1)}` };
+}
+
+// ---------------------------------------------------------------------------
+// High score + low confidence = suspicious
+// ---------------------------------------------------------------------------
+export function checkScoreConfidenceMismatch(
+  overallScore: number,
+  confidence: number,
+): QualityCheck {
+  if (overallScore > 8 && confidence < 0.5) {
+    return {
+      name: 'score_confidence_mismatch',
+      status: 'HALT',
+      detail: `Score ${overallScore} > 8 but confidence ${confidence} < 0.5`,
+    };
+  }
+  if (overallScore > 7 && confidence < 0.4) {
+    return {
+      name: 'score_confidence_mismatch',
+      status: 'HALT',
+      detail: `Score ${overallScore} > 7 but confidence ${confidence} < 0.4`,
+    };
+  }
+  if (overallScore > 7 && confidence < 0.5) {
+    return {
+      name: 'score_confidence_mismatch',
+      status: 'WARN',
+      detail: `Score ${overallScore} > 7 but confidence ${confidence} < 0.5`,
+    };
+  }
+  return { name: 'score_confidence_mismatch', status: 'PASS', detail: 'OK' };
+}
+
+// ---------------------------------------------------------------------------
+// Recommendation consistency — SIGN + many low dims = suspicious
+// ---------------------------------------------------------------------------
+export function checkRecommendationConsistency(
+  recommendation: string,
+  dimensionScores: Record<string, number>,
+): QualityCheck {
+  const values = Object.values(dimensionScores);
+  const lowCount = values.filter(v => v < 5).length;
+
+  if (recommendation === 'SIGN' && lowCount > 3) {
+    return {
+      name: 'recommendation_consistency',
+      status: 'HALT',
+      detail: `SIGN recommendation but ${lowCount} dimensions < 5`,
+    };
+  }
+  if (recommendation === 'SIGN' && lowCount > 2) {
+    return {
+      name: 'recommendation_consistency',
+      status: 'WARN',
+      detail: `SIGN recommendation but ${lowCount} dimensions < 5`,
+    };
+  }
+  return { name: 'recommendation_consistency', status: 'PASS', detail: 'OK' };
+}
+
+// ---------------------------------------------------------------------------
+// Evidence count threshold
+// ---------------------------------------------------------------------------
+export function checkEvidenceCount(evidenceCount: number): QualityCheck {
+  if (evidenceCount < 2) {
+    return {
+      name: 'evidence_count',
+      status: 'HALT',
+      detail: `Only ${evidenceCount} evidence sources — minimum 2 required`,
+    };
+  }
+  if (evidenceCount < 4) {
+    return {
+      name: 'evidence_count',
+      status: 'WARN',
+      detail: `Only ${evidenceCount} evidence sources — recommend 4+`,
+    };
+  }
+  return { name: 'evidence_count', status: 'PASS', detail: `${evidenceCount} sources` };
+}
+
+// ---------------------------------------------------------------------------
+// Bounds check — verify scores are within valid ranges
+// ---------------------------------------------------------------------------
+export function checkBounds(result: AnalysisResult): QualityCheck {
+  const violations: string[] = [];
+
+  if (result.overall_score < 0 || result.overall_score > 10) {
+    violations.push(`overall_score=${result.overall_score} outside [0,10]`);
+  }
+  if (result.confidence < 0 || result.confidence > 1) {
+    violations.push(`confidence=${result.confidence} outside [0,1]`);
+  }
+  if (result.dimension_scores) {
+    for (const [dim, score] of Object.entries(result.dimension_scores)) {
+      if (score < 0 || score > 10) {
+        violations.push(`${dim}=${score} outside [0,10]`);
+      }
+    }
+  }
+  if (result.personality_scores) {
+    for (const [dim, score] of Object.entries(result.personality_scores)) {
+      if (dim === 'contradiction_score') {
+        if (score < 0 || score > 1) violations.push(`${dim}=${score} outside [0,1]`);
+      } else {
+        if (score < 1 || score > 10) violations.push(`${dim}=${score} outside [1,10]`);
+      }
+    }
+  }
+
+  if (violations.length > 0) {
+    return { name: 'bounds', status: 'HALT', detail: violations.join('; ') };
+  }
+  return { name: 'bounds', status: 'PASS', detail: 'All scores within bounds' };
+}
+
+// ---------------------------------------------------------------------------
+// Clamp events check — many clamps = LLM output was unreliable
+// ---------------------------------------------------------------------------
+export function checkClampEvents(
+  clampEvents: Array<{ dim: string; original: number; clamped: number }>,
+): QualityCheck {
+  if (clampEvents.length >= 4) {
+    return {
+      name: 'clamp_events',
+      status: 'HALT',
+      detail: `${clampEvents.length} values clamped — LLM output unreliable`,
+    };
+  }
+  if (clampEvents.length >= 2) {
+    return {
+      name: 'clamp_events',
+      status: 'WARN',
+      detail: `${clampEvents.length} values clamped`,
+    };
+  }
+  if (clampEvents.length === 1) {
+    return {
+      name: 'clamp_events',
+      status: 'PASS',
+      detail: `1 value clamped: ${clampEvents[0].dim} (${clampEvents[0].original} → ${clampEvents[0].clamped})`,
+    };
+  }
+  return { name: 'clamp_events', status: 'PASS', detail: 'No clamp events' };
+}
+
+// ---------------------------------------------------------------------------
+// validateAnalysis — run all checks and produce a QualityReport
+// ---------------------------------------------------------------------------
+export function validateAnalysis(result: AnalysisResult): QualityReport {
+  const checks: QualityCheck[] = [];
+
+  // Bounds check (always)
+  checks.push(checkBounds(result));
+
+  // Score-confidence mismatch
+  checks.push(checkScoreConfidenceMismatch(result.overall_score, result.confidence));
+
+  // Score uniformity (if dimension_scores provided)
+  if (result.dimension_scores && Object.keys(result.dimension_scores).length >= 3) {
+    checks.push(checkScoreUniformity(result.dimension_scores));
+  }
+
+  // Score uniformity for personality scores
+  if (result.personality_scores && Object.keys(result.personality_scores).length >= 3) {
+    // Exclude contradiction_score from uniformity check (different scale)
+    const filtered = Object.fromEntries(
+      Object.entries(result.personality_scores).filter(([k]) => k !== 'contradiction_score')
+    );
+    if (Object.keys(filtered).length >= 3) {
+      const personalityCheck = checkScoreUniformity(filtered);
+      personalityCheck.name = 'personality_uniformity';
+      checks.push(personalityCheck);
+    }
+  }
+
+  // Recommendation consistency
+  if (result.recommendation && result.dimension_scores) {
+    checks.push(checkRecommendationConsistency(result.recommendation, result.dimension_scores));
+  }
+
+  // Evidence count
+  if (result.evidence_count !== undefined) {
+    checks.push(checkEvidenceCount(result.evidence_count));
+  }
+
+  // Clamp events
+  if (result.clamp_events) {
+    checks.push(checkClampEvents(result.clamp_events));
+  }
+
+  // Calculate score: start at 100, deduct for issues
+  let score = 100;
+  for (const check of checks) {
+    if (check.status === 'HALT') score -= 25;
+    if (check.status === 'WARN') score -= 10;
+  }
+  score = Math.max(0, Math.min(100, score));
+
+  // Calculate gate: HALT if any check is HALT OR score < 60 (quality minimum)
+  const hasHalt = checks.some(c => c.status === 'HALT');
+  const hasWarn = checks.some(c => c.status === 'WARN');
+  const gate: 'PASS' | 'WARN' | 'HALT' = (hasHalt || score < 60) ? 'HALT' : hasWarn ? 'WARN' : 'PASS';
+
+  return { score, gate, checks };
+}

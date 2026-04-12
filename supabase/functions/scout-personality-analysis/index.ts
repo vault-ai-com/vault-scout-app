@@ -6,6 +6,7 @@ const VERSION = "v23-12dim-bpa";
 
 import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { authenticateRequest } from "../_shared/auth.ts";
 import { ARCHETYPES, clamp, createClampTracker, resolveArchetype, resolveRecommendation, computeConfidence } from '../_shared/personality-logic.ts';
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,13 @@ Deno.serve(async (req: Request) => {
     JSON.stringify({ ...(typeof body === 'object' ? body as object : { data: body }), _v: VERSION }),
     { status, headers: { ..._corsHeaders, 'Content-Type': 'application/json', ...extra } }
   );
+
+  // JWT authentication (shared helper)
+  const authResult = await authenticateRequest(req);
+  if (!authResult.ok) {
+    return respond({ success: false, error: authResult.error }, authResult.status);
+  }
+  const _userId = authResult.userId;
 
   let rl: RateLimitResult | null = null;
 

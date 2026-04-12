@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { authenticateRequest } from "../_shared/auth.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -1267,24 +1268,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed", corsHeaders, 405);
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return errorResponse("Missing or invalid Authorization header", corsHeaders, 401);
+  // JWT authentication (shared helper)
+  const authResult = await authenticateRequest(req);
+  if (!authResult.ok) {
+    return errorResponse(authResult.error, corsHeaders, authResult.status);
   }
-
-  let userId: string;
-  try {
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const authClient = createClient(url, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authErr } = await authClient.auth.getUser();
-    if (authErr || !user) return errorResponse("Unauthorized", corsHeaders, 401);
-    userId = user.id;
-  } catch {
-    return errorResponse("Authentication failed", corsHeaders, 401);
-  }
+  const userId = authResult.userId;
 
   const rl = rateLimiter.check(userId);
   if (!rl.allowed) {

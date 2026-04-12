@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { authenticateRequest } from "../_shared/auth.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -56,26 +57,12 @@ Deno.serve(async (req: Request) => {
 
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // JWT authentication
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return json({ error: "Missing or invalid Authorization header" }, 401, reqOrigin);
+  // JWT authentication (user JWT or service_role key for terminal pipeline)
+  const authResult = await authenticateRequest(req);
+  if (!authResult.ok) {
+    return json({ error: authResult.error }, authResult.status, reqOrigin);
   }
-  let userId: string;
-  try {
-    const _supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const authClient = createClient(_supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authErr } = await authClient.auth.getUser();
-    if (authErr || !user) {
-      return json({ error: "Unauthorized" }, 401, reqOrigin);
-    }
-    userId = user.id;
-  } catch {
-    return json({ error: "Authentication failed" }, 401, reqOrigin);
-  }
+  const userId = authResult.userId;
 
   // Rate limit check — after auth, before any work
   const rl = rateLimiter.check(userId);

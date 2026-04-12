@@ -10,6 +10,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { authenticateRequest } from "../_shared/auth.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -400,9 +401,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
   }
 
-  // Rate limit check — IP-based (no JWT auth on this endpoint)
-  const clientIp = getClientIp(req);
-  const rl = rateLimiter.check(clientIp);
+  // JWT authentication (shared helper)
+  const authResult = await authenticateRequest(req);
+  if (!authResult.ok) {
+    return new Response(
+      JSON.stringify({ error: authResult.error }),
+      { status: authResult.status, headers: { ...cors, "Content-Type": "application/json" } }
+    );
+  }
+  const userId = authResult.userId;
+
+  // Rate limit check — keyed on userId
+  const rl = rateLimiter.check(userId);
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(

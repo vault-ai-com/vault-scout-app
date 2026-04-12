@@ -6,6 +6,7 @@ const VERSION = "v1-12dim-coach-bpa";
 
 import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { authenticateRequest } from "../_shared/auth.ts";
 import { clamp, createClampTracker } from '../_shared/personality-logic.ts';
 import { COACH_ARCHETYPES, resolveCoachArchetype, resolveCoachRecommendation, computeCoachConfidence } from '../_shared/coach-personality-logic.ts';
 
@@ -22,6 +23,13 @@ Deno.serve(async (req: Request) => {
     JSON.stringify({ ...(typeof body === 'object' ? body as object : { data: body }), _v: VERSION }),
     { status, headers: { ..._corsHeaders, 'Content-Type': 'application/json', ...extra } }
   );
+
+  // JWT authentication (shared helper)
+  const authResult = await authenticateRequest(req);
+  if (!authResult.ok) {
+    return respond({ success: false, error: authResult.error }, authResult.status);
+  }
+  const _userId = authResult.userId;
 
   let rl: RateLimitResult | null = null;
 
@@ -174,7 +182,7 @@ Return JSON with this structure:
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 3000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],

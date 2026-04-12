@@ -28,7 +28,7 @@ test.describe("Analysis", () => {
     // The analysis should either complete successfully or show an error
     // Both are valid UI states — we're testing the flow, not the edge function
     const success = page.locator("text=Dimensionsanalys");
-    const error = page.locator("text=/Failed to send|Fel vid analys|Edge Function|Nätverksfel/");
+    const error = page.locator("text=/Failed to send|Fel vid analys|Edge Function|Nätverksfel|Internal error|Analysis engine error/");
 
     await expect(success.or(error)).toBeVisible({ timeout: 180_000 });
 

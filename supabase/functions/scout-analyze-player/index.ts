@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // ============================================================================
 // scout-analyze-player — Vault AI Scout Main Analysis Engine
@@ -10,6 +9,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { authenticateRequest } from "../_shared/auth.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -448,7 +448,7 @@ async function runClaudeAnalysis(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 4096,
       system: systemPrompt,
       messages: [
@@ -564,7 +564,7 @@ async function runSingleAgent(
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 2048,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
@@ -999,34 +999,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return errorResponse("Method not allowed. Use POST.", 405, corsHeaders);
   }
 
-  // JWT authentication
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return errorResponse(
-      "Missing or invalid Authorization header",
-      401,
-      corsHeaders
-    );
+  // JWT authentication (shared helper)
+  const authResult = await authenticateRequest(req);
+  if (!authResult.ok) {
+    return errorResponse(authResult.error, authResult.status, corsHeaders);
   }
-
-  let userId: string;
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const {
-      data: { user },
-      error: authErr,
-    } = await authClient.auth.getUser();
-    if (authErr || !user) {
-      return errorResponse("Unauthorized", 401, corsHeaders);
-    }
-    userId = user.id;
-  } catch {
-    return errorResponse("Authentication failed", 401, corsHeaders);
-  }
+  const userId = authResult.userId;
 
   // Rate limit check — after auth, before any expensive work
   const rl = rateLimiter.check(userId);
