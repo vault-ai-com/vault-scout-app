@@ -10,6 +10,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
+import { validateAnalysis, type QualityReport } from "../_shared/quality-validation.ts";
 
 const rateLimiter = createRateLimiter(10);
 
@@ -202,12 +203,23 @@ You provide rigorous, evidence-based coach assessments using 16 CDIM dimensions.
 ## Weighted Overall Score
 overall_score = Tactical*0.22 + Development*0.27 + Mental*0.23 + Results*0.18 + Context*0.10
 
+## CRITICAL: Anti-Hallucination Rules (NEVER VIOLATE)
+- You may ONLY use information explicitly provided in the Coach Profile and Knowledge Bank sections of the user prompt.
+- NEVER use your general training knowledge about specific coaches, clubs, match results, titles, or career histories.
+- If Titles says "No titles recorded" or is empty — the coach has ZERO verified titles. Do NOT invent any.
+- If Career History says "No career history" or is empty — there is NO verified career data. Do NOT fabricate.
+- Every "evidence" field MUST reference ONLY data from the Coach Profile above. NEVER cite achievements, statistics, or events not present in the input.
+- If data is insufficient for a dimension, you MUST score it null and write "Insufficient data — no verified information available".
+- When data is sparse, score LOWER and set confidence LOW. Do NOT generate plausible-sounding but unverified narratives.
+- If you find yourself writing evidence that is not directly traceable to the input data, STOP and write "Insufficient data" instead.
+
 ## Output Rules
 - Be direct and specific. No filler language.
-- Every claim must reference data from the coach profile or verified sources.
+- Every claim must reference data from the coach profile provided above — NOTHING ELSE.
 - If data is insufficient for a dimension, score it null and state "Insufficient data".
-- confidence = 0.0-1.0 based on data completeness and quality.
+- confidence = 0.0-1.0 based on data completeness and quality. Sparse profile = LOW confidence.
 - recommendation must be one of: "SIGN", "MONITOR", "PASS", "INSUFFICIENT_DATA".
+- If fewer than 8 dimensions have sufficient data, recommendation MUST be "INSUFFICIENT_DATA".
 
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.`;
 
@@ -411,7 +423,24 @@ Respond with a JSON object containing:
 
     const durationMs = Date.now() - startTime;
 
+    // Quality validation — deterministic checks on analysis output
+    const dimScoresMap: Record<string, number> = {};
+    for (const d of result.dimension_scores) {
+      dimScoresMap[d.dimension_id] = d.score;
+    }
+    const qualityReport: QualityReport = validateAnalysis({
+      overall_score: result.overall_score,
+      confidence: result.confidence,
+      recommendation: result.recommendation,
+      dimension_scores: dimScoresMap,
+      evidence_count: result.dimension_scores.filter(d => d.evidence && d.evidence.length > 15 && !d.evidence.includes('Insufficient data')).length,
+    });
+    if (qualityReport.gate === 'HALT') {
+      console.warn(`[scout-coach-analyze] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
+    }
+
     // Save via RPC
+    let saveError: string | null = null;
     try {
       await supabaseRpc("complete_scout_coach_analysis", {
         p_analysis_id: analysisId,
@@ -422,19 +451,20 @@ Respond with a JSON object containing:
         p_weaknesses: result.weaknesses,
         p_risk_factors: result.risk_factors,
         p_recommendation: result.recommendation,
-        p_analysis_data: { ...result, _v: "v1-cdim16", analysis_type: analysisType },
+        p_analysis_data: { ...result, _v: "v1-cdim16", analysis_type: analysisType, quality_report: qualityReport },
         p_agents_used: ["COACH00", "claude-sonnet-4-6"],
         p_kb_files_used: COACH_KB_KEYS,
-        p_scores: JSON.stringify(result.dimension_scores.map(d => ({
+        p_scores: result.dimension_scores.map(d => ({
           dimension_id: d.dimension_id,
           dimension_name: d.dimension_name,
           score: d.score,
           confidence: result.confidence,
           evidence: d.evidence,
-        }))),
+        })),
       });
     } catch (saveErr) {
       console.error("[scout-coach-analyze] Failed to save analysis:", saveErr);
+      saveError = String(saveErr);
     }
 
     return json({
@@ -442,6 +472,8 @@ Respond with a JSON object containing:
       analysis_id: analysisId,
       duration_ms: durationMs,
       cache_hit: false,
+      quality_report: qualityReport,
+      ...(saveError ? { save_error: saveError } : {}),
       result,
     }, 200, reqOrigin, rlHeaders);
 

@@ -8,6 +8,7 @@ import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "..
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { ARCHETYPES, clamp, createClampTracker, resolveArchetype, resolveRecommendation, computeConfidence } from '../_shared/personality-logic.ts';
+import { validateAnalysis, type QualityReport } from '../_shared/quality-validation.ts';
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -128,6 +129,16 @@ Deno.serve(async (req: Request) => {
 Din uppgift är att analysera en fotbollsspelares psykologiska profil baserat på tillgänglig information.
 Använd EXAKT dessa 12 dimensioner och returnera JSON.
 
+## KRITISKT: Anti-Hallucineringsregler (BRYT ALDRIG)
+- Du får ENBART använda information som EXPLICIT finns i spelardata nedan (Namn, Position, Klubb, Liga, Ålder, Nationalitet, Profildata).
+- ALDRIG använda din generella träningskunskap om specifika spelare, klubbar, matchresultat, titlar eller karriärhistorik.
+- Om Profildata saknas eller är tom — det finns INGEN verifierad profildata. HITTA INTE PÅ.
+- Varje "evidence"-fält MÅSTE referera ENBART till data som finns i prompten ovan. ALDRIG citera prestationer eller händelser som inte finns i input.
+- Om du inte hittar specifik evidens i inputdatan för en dimension, sätt score till null och evidence till "Otillräcklig verifierad data — ingen evidens tillgänglig".
+- När data är gles, sätt CONFIDENCE_LABEL LÅGT (0.2-0.4) och data_source_quality till "PUBLIC_ONLY".
+- Generera ALDRIG trovärdigt klingande narrativ från din träningskunskap. Vid tvivel, skriv "Otillräcklig data".
+- Om du märker att du skriver evidens som INTE direkt kan spåras till inputdatan, STOPPA och skriv "Otillräcklig data" istället.
+
 Grunddimensioner (alla 1-10):
 - decision_tempo: Hur snabbt fattar spelaren beslut under press
 - risk_appetite: Benägenhet att ta risker på och av planen
@@ -154,6 +165,7 @@ Returformat — EXAKT detta JSON (inga andra fält):
 
 VIKTIGT: composite_archetype MÅSTE vara exakt ett av: ${ARCHETYPES.join(', ')}
 VIKTIGT: stress_archetype = fritext som beskriver spelarens beteende under extrem press (max 100 tecken).
+VIKTIGT: Om färre än 6 dimensioner har tillräcklig data i inputen, sätt CONFIDENCE_LABEL under 0.4 och data_source_quality till "PUBLIC_ONLY".
 
 ${kbContext ? 'Knowledge Bank Context:\n' + kbContext : ''}`;
 
@@ -294,14 +306,6 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
     };
 
     const clampEvents = ct.getEvents();
-    const result = {
-      success: true,
-      player_id,
-      profile,
-      duration_ms,
-      cache_hit: false,
-      ...(clampEvents.length > 0 ? { clamp_events: clampEvents } : {}),
-    };
 
     // Overall score: weighted average of all 11 scored dims (7 generic 70% + 4 KB 30%)
     const avg7 = (dt.score + ra.score + al.score + to.score + tu.score + sn.score + cm.score) / 7;
@@ -311,13 +315,36 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
 
     const recommendation = resolveRecommendation(composite_archetype, dimScores, contradictionScore, confidence_score);
 
+    // Quality validation — deterministic checks on analysis output
+    const qualityReport: QualityReport = validateAnalysis({
+      overall_score,
+      confidence: confidence_score,
+      recommendation,
+      personality_scores: dimScores,
+      evidence_count: evidenceCount,
+      clamp_events: clampEvents,
+    });
+    if (qualityReport.gate === 'HALT') {
+      console.warn(`[scout-personality] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
+    }
+
+    const result = {
+      success: true,
+      player_id,
+      profile,
+      duration_ms,
+      cache_hit: false,
+      quality_report: qualityReport,
+      ...(clampEvents.length > 0 ? { clamp_events: clampEvents } : {}),
+    };
+
     await supabase.from('scout_analyses').insert({
       player_id,
       analysis_type: 'personality',
       overall_score,
       confidence: confidence_score,
       recommendation,
-      summary: `Arketyp: ${composite_archetype} | ${recommendation}`,
+      summary: `Arketyp: ${composite_archetype} | ${recommendation} | Q:${qualityReport.score}/${qualityReport.gate}`,
       analysis_data: result,
     });
 

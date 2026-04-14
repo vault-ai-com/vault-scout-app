@@ -10,6 +10,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
+import { validateAnalysis, type QualityReport } from "../_shared/quality-validation.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -123,14 +124,26 @@ interface AgentResult {
 // ---------------------------------------------------------------------------
 
 const SYSTEM_PROMPT_STATIC = `You are Vault AI Scout, a world-class football scouting analyst built by Vault AI.
-You provide rigorous, evidence-based player assessments. Never speculate beyond the data provided.`;
+You provide rigorous, evidence-based player assessments. Never speculate beyond the data provided.
+
+## CRITICAL: Anti-Hallucination Rules (NEVER VIOLATE)
+- You may ONLY use information explicitly provided in the Player Profile, Statistics, Match History, and Knowledge Bank sections below.
+- NEVER use your general training knowledge about specific players, clubs, match results, titles, transfer fees, or career histories.
+- If Statistics says "No statistical data available" — there are ZERO verified stats. Do NOT invent any.
+- If Match History says "No match history available" — there is NO verified match data. Do NOT fabricate match events.
+- Every "evidence" field MUST reference ONLY data from the input. NEVER cite achievements, statistics, or events not present in the player data provided.
+- If data is insufficient for a dimension, you MUST score it null and write "Insufficient data — no verified information available".
+- When data is sparse, score LOWER and set confidence LOW (0.2-0.4). Do NOT generate plausible-sounding but unverified narratives.
+- If you find yourself writing evidence that is not directly traceable to the input data, STOP and write "Insufficient data" instead.`;
 
 const SYSTEM_PROMPT_RULES = `## Output Rules
 - Be direct and specific. No filler language.
 - Every claim must reference data from the player profile or stats provided.
-- If data is insufficient for a dimension, score it null and state "Insufficient data".
+- If data is insufficient for a dimension, score it null and state "Insufficient data — no verified information available".
 - confidence = 0.0-1.0 based on data completeness and quality.
 - recommendation must be one of: "SIGN", "MONITOR", "PASS", "INSUFFICIENT_DATA".
+- If fewer than 8 dimensions have sufficient data from the input, recommendation MUST be "INSUFFICIENT_DATA".
+- NEVER fabricate statistics, match events, or career details not present in the input data.
 
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.`;
 
@@ -1121,6 +1134,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
       `[scout-analyze-player] Analysis complete in ${durationMs}ms. Score: ${result.overall_score}, Rec: ${result.recommendation}`
     );
 
+    // 6b. Quality validation — deterministic checks on analysis output
+    const dimScoresMap: Record<string, number> = {};
+    for (const d of (result.dimension_scores ?? [])) {
+      if (typeof d.score === "number") {
+        dimScoresMap[d.dimension_id] = d.score;
+      }
+    }
+    const qualityReport: QualityReport = validateAnalysis({
+      overall_score: result.overall_score,
+      confidence: result.confidence,
+      recommendation: result.recommendation,
+      dimension_scores: dimScoresMap,
+      evidence_count: (result.dimension_scores ?? []).filter(d => d.evidence && d.evidence.length > 15 && !d.evidence.includes('Insufficient data')).length,
+    });
+    if (qualityReport.gate === 'HALT') {
+      console.warn(`[scout-analyze-player] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
+    }
+
     // 7. Save results via RPC
     await supabaseRpc("complete_scout_analysis", {
       p_analysis_id: analysisId,
@@ -1131,7 +1162,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_weaknesses: result.weaknesses,
       p_risk_factors: result.risk_factors,
       p_recommendation: result.recommendation,
-      p_analysis_data: result,
+      p_analysis_data: { ...result, quality_report: qualityReport },
       p_agents_used: agentsUsed,
       p_kb_files_used: kbFilesUsed,
       p_scores: (result.dimension_scores ?? []).filter(d => typeof d.score === "number"),
@@ -1147,6 +1178,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         success: true,
         analysis_id: analysisId,
         duration_ms: durationMs,
+        quality_report: qualityReport,
         result: {
           overall_score: result.overall_score,
           confidence: result.confidence,

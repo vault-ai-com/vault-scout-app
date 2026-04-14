@@ -9,6 +9,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { clamp, createClampTracker } from '../_shared/personality-logic.ts';
 import { COACH_ARCHETYPES, resolveCoachArchetype, resolveCoachRecommendation, computeCoachConfidence } from '../_shared/coach-personality-logic.ts';
+import { validateAnalysis, type QualityReport } from '../_shared/quality-validation.ts';
 
 const rateLimiter = createRateLimiter(5);
 
@@ -128,12 +129,22 @@ ${COACH_ARCHETYPES.join(', ')}
 
 ${kbContext}
 
+## CRITICAL: Anti-Hallucination Rules (NEVER VIOLATE)
+- You may ONLY use information explicitly provided in the coach data above (Name, Nationality, Club, Titles, Career History, Profile Data).
+- NEVER use your general training knowledge about specific coaches, clubs, match results, titles, or career histories.
+- If Titles says "None" — the coach has ZERO verified titles. Do NOT invent any.
+- If Career History says "None" — there is NO verified career data. Do NOT fabricate career details.
+- Every "evidence" field MUST reference ONLY the data provided above. NEVER cite achievements or events not in the input.
+- If you cannot find specific evidence in the input data for a dimension, set score to 5 and evidence to "Insufficient verified data — default score applied".
+- When data is sparse, set confidence_score LOW (0.2-0.4) and data_source_quality to "PUBLIC_ONLY".
+- Do NOT generate plausible-sounding narratives from your training knowledge. If in doubt, write "Insufficient data".
+
 ## Rules
-- Score each dimension with specific evidence from the coach data.
-- data_source_quality: PUBLIC_ONLY (media/press only), MIXED (some insider), VERIFIED (official data).
-- stress_archetype: How the coach handles extreme pressure situations.
-- coaching_approach: 3-5 recommendations for how a club board should work with this coach.
-- integration_risks: 2-4 risks when hiring this coach.
+- Score each dimension with specific evidence from the coach data PROVIDED ABOVE ONLY.
+- data_source_quality: PUBLIC_ONLY (media/press only), MIXED (some insider), VERIFIED (official data). Default to PUBLIC_ONLY if uncertain.
+- stress_archetype: How the coach handles extreme pressure situations. Write "Unknown — insufficient data" if no evidence.
+- coaching_approach: 3-5 recommendations. Base ONLY on verified data, not assumptions.
+- integration_risks: 2-4 risks. Base ONLY on verified data.
 
 Return ONLY valid JSON.`;
 
@@ -238,6 +249,20 @@ Return JSON with this structure:
     // Resolve recommendation
     const recommendation = resolveCoachRecommendation(archetype, dimScores, cs, confidence);
 
+    // Quality validation — deterministic checks on analysis output
+    const overallScore = Object.values(dimScores).filter((_, i) => i < 11).reduce((a, b) => a + b, 0) / 11;
+    const qualityReport: QualityReport = validateAnalysis({
+      overall_score: overallScore,
+      confidence,
+      recommendation,
+      personality_scores: dimScores,
+      evidence_count: evidenceCount,
+      clamp_events: ct.getEvents(),
+    });
+    if (qualityReport.gate === 'HALT') {
+      console.warn(`[scout-coach-personality] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
+    }
+
     // Build result
     const result = {
       success: true,
@@ -253,6 +278,7 @@ Return JSON with this structure:
         data_source_quality: dataSourceQuality,
       },
       recommendation,
+      quality_report: qualityReport,
       clamp_events: ct.getEvents(),
       duration_ms: 0, // will be set below
     };
@@ -264,10 +290,10 @@ Return JSON with this structure:
       entity_type: 'coach',
       analysis_type: 'personality',
       status: 'completed',
-      overall_score: Object.values(dimScores).filter((_, i) => i < 11).reduce((a, b) => a + b, 0) / 11,
+      overall_score: overallScore,
       confidence,
       recommendation,
-      summary: `${coach.name}: ${archetype}. Confidence ${(confidence * 100).toFixed(0)}%.`,
+      summary: `${coach.name}: ${archetype}. Confidence ${(confidence * 100).toFixed(0)}%. Q:${qualityReport.score}/${qualityReport.gate}`,
       strengths: dims.filter(d => dimScores[d] >= 7).slice(0, 3),
       weaknesses: dims.filter(d => dimScores[d] <= 4).slice(0, 3),
       analysis_data: result,
