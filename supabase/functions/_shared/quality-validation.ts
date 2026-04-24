@@ -33,7 +33,7 @@ export interface AnalysisResult {
 // Input completeness types — Sprint 151: Data Completeness Gate
 // ---------------------------------------------------------------------------
 export type InputCompletenessLevel = 'EMPTY' | 'MINIMAL' | 'PARTIAL' | 'FULL';
-export type ProvenanceTier = 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3';
+export type ProvenanceTier = 'TIER_UNKNOWN' | 'TIER_1' | 'TIER_2' | 'TIER_3';
 
 export interface InputCompletenessInput {
   profile_data: Record<string, unknown> | null;
@@ -87,7 +87,7 @@ export function checkInputCompleteness(input: InputCompletenessInput): InputComp
   // Determine tier
   let tier: ProvenanceTier;
   if (sourceCount === 0) {
-    tier = 'TIER_0';
+    tier = 'TIER_UNKNOWN';
   } else if (sourceCount === 1) {
     tier = 'TIER_1';
   } else if (sourceCount <= 3) {
