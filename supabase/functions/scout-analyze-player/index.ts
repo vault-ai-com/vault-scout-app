@@ -1108,7 +1108,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // 3b. Data Completeness Gate (Sprint 151) — block analysis if input is EMPTY
     const inputCompleteness: InputCompletenessResult = checkInputCompleteness({
       profile_data: player.profile_data as Record<string, unknown> | null,
-      source_ids: (player as Record<string, unknown>).source_ids as string[] ?? [],
+      source_ids: player.source_urls ?? [],
     });
 
     if (inputCompleteness.level === 'EMPTY') {
