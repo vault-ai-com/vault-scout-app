@@ -16,3 +16,14 @@
 - **Tier direction aligned:** SQL tier now ascending (TIER_1=1 source, TIER_3=4+ sources) matching TS.
 - **Re-backfill:** 141 rows reclassified. 24 impossible combos (PARTIAL+TIER_3+source_count=0) eliminated. 12 players upgraded MINIMAL→FULL (had 9+ profile keys).
 - **Orphaned analyses:** 10 rows with player_id=NULL set to EMPTY/TIER_UNKNOWN.
+
+## Sprint 153 — Scout DB Integrity Hardening (2026-04-24)
+- **DROP duplicate overload:** Removed old `complete_scout_analysis` (without provenance params). 1 overload remains.
+- **Quality trigger BLOCK:** `trg_scout_analysis_quality_check` Check 5 (score>8 + confidence<0.5) now RAISE EXCEPTION instead of WARN-only. Guard: only on INSERT or score/confidence change.
+- **Backfill:** 59 completed analyses got `completed_at = created_at`. 23 got `agents_used = ARRAY['unknown_backfill']`. 0 completed with NULL completed_at or agents_used.
+- **search_path fix:** `batch_update_scout_nivel2` SET search_path = 'public' (was MISSING).
+- **Constraint validated:** `chk_analyses_entity_ref` promoted from NOT VALID to VALID.
+
+## Audit Note — vault_scout_report (2026-04-24)
+- **Status: ARKIVERAD (korrekt).** Alla 13 agenter markerade `[ARKIVERAD 2026-04-11 — ersatt av vault_player_report]` i purpose. is_active=false är avsiktligt.
+- **Ersatt av:** vault_player_report (PR00-PR09, 10 aktiva agenter).
