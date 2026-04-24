@@ -10,7 +10,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
-import { validateAnalysis, type QualityReport } from "../_shared/quality-validation.ts";
+import { validateAnalysis, checkInputCompleteness, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -274,6 +274,8 @@ async function checkCachedAnalysis(
         `&analysis_type=eq.${analysisType}` +
         `&status=eq.completed` +
         `&completed_at=gte.${cutoff}` +
+        `&input_completeness=not.is.null` +
+        `&input_completeness=neq.EMPTY` +
         `&order=completed_at.desc` +
         `&limit=1` +
         `&select=id,analysis_data,duration_ms`
@@ -1103,6 +1105,52 @@ Deno.serve(async (req: Request): Promise<Response> => {
       `[scout-analyze-player] Player loaded: ${player.name} (${player.position_primary}, ${player.current_club})`
     );
 
+    // 3b. Data Completeness Gate (Sprint 151) — block analysis if input is EMPTY
+    const inputCompleteness: InputCompletenessResult = checkInputCompleteness({
+      profile_data: player.profile_data as Record<string, unknown> | null,
+      source_ids: (player as Record<string, unknown>).source_ids as string[] ?? [],
+    });
+
+    if (inputCompleteness.level === 'EMPTY') {
+      console.warn(
+        `[scout-analyze-player] DATA COMPLETENESS GATE: EMPTY input for ${player.name}. Blocking analysis.`
+      );
+      // Save as INSUFFICIENT_DATA instead of running LLM
+      await supabaseRpc("complete_scout_analysis", {
+        p_analysis_id: analysisId,
+        p_overall_score: 0,
+        p_confidence: 0,
+        p_summary: `INSUFFICIENT_DATA: No verified profile data available for ${player.name}. Analysis blocked by Data Completeness Gate.`,
+        p_strengths: [],
+        p_weaknesses: [],
+        p_risk_factors: ["No verified data sources"],
+        p_recommendation: "INSUFFICIENT_DATA",
+        p_analysis_data: { gate: 'BLOCKED', reason: 'EMPTY_INPUT', input_completeness: inputCompleteness },
+        p_agents_used: [],
+        p_kb_files_used: [],
+        p_scores: [],
+        p_input_completeness: inputCompleteness.level,
+        p_provenance_tier: inputCompleteness.tier,
+        p_input_snapshot: inputCompleteness.input_snapshot,
+        p_source_count: inputCompleteness.source_count,
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          analysis_id: analysisId,
+          error: "INSUFFICIENT_DATA",
+          message: `Data Completeness Gate blocked analysis: input is EMPTY for ${player.name}. No verified profile data available.`,
+          input_completeness: inputCompleteness,
+        }),
+        { status: 422, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(
+      `[scout-analyze-player] Input completeness: ${inputCompleteness.level}, tier: ${inputCompleteness.tier}, sources: ${inputCompleteness.source_count}`
+    );
+
     // 4. Load knowledge bank context
     const { context: kbContext, filesUsed: kbFilesUsed } = await loadKnowledgeContext(player, analysis_type);
 
@@ -1147,7 +1195,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       recommendation: result.recommendation,
       dimension_scores: dimScoresMap,
       evidence_count: (result.dimension_scores ?? []).filter(d => d.evidence && d.evidence.length > 15 && !d.evidence.includes('Insufficient data')).length,
-    });
+    }, inputCompleteness);
     if (qualityReport.gate === 'HALT') {
       console.warn(`[scout-analyze-player] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
     }
@@ -1166,6 +1214,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_agents_used: agentsUsed,
       p_kb_files_used: kbFilesUsed,
       p_scores: (result.dimension_scores ?? []).filter(d => typeof d.score === "number"),
+      p_input_completeness: inputCompleteness.level,
+      p_provenance_tier: inputCompleteness.tier,
+      p_input_snapshot: inputCompleteness.input_snapshot,
+      p_source_count: inputCompleteness.source_count,
     });
 
     console.log(

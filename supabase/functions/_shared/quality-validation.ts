@@ -30,6 +30,76 @@ export interface AnalysisResult {
 }
 
 // ---------------------------------------------------------------------------
+// Input completeness types — Sprint 151: Data Completeness Gate
+// ---------------------------------------------------------------------------
+export type InputCompletenessLevel = 'EMPTY' | 'MINIMAL' | 'PARTIAL' | 'FULL';
+export type ProvenanceTier = 'TIER_0' | 'TIER_1' | 'TIER_2' | 'TIER_3';
+
+export interface InputCompletenessInput {
+  profile_data: Record<string, unknown> | null;
+  source_ids: string[];
+}
+
+export interface InputCompletenessResult {
+  level: InputCompletenessLevel;
+  tier: ProvenanceTier;
+  source_count: number;
+  input_snapshot: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// checkInputCompleteness — deterministic gate on input data quality
+// ---------------------------------------------------------------------------
+export function checkInputCompleteness(input: InputCompletenessInput): InputCompletenessResult {
+  const profile = input.profile_data;
+  const sourceCount = input.source_ids.length;
+
+  // Compute input snapshot: which top-level keys have non-null values
+  const snapshot: Record<string, unknown> = {};
+  if (profile && typeof profile === 'object') {
+    for (const [key, val] of Object.entries(profile)) {
+      if (val !== null && val !== undefined && val !== '') {
+        if (typeof val === 'object') {
+          const inner = val as Record<string, unknown>;
+          const nonNullKeys = Object.keys(inner).filter(k => inner[k] !== null && inner[k] !== undefined);
+          snapshot[key] = nonNullKeys.length > 0 ? `${nonNullKeys.length} fields` : 'empty_object';
+        } else {
+          snapshot[key] = typeof val;
+        }
+      }
+    }
+  }
+
+  const fieldCount = Object.keys(snapshot).length;
+
+  // Determine level
+  let level: InputCompletenessLevel;
+  if (!profile || fieldCount === 0) {
+    level = 'EMPTY';
+  } else if (fieldCount <= 3) {
+    level = 'MINIMAL';
+  } else if (fieldCount <= 8) {
+    level = 'PARTIAL';
+  } else {
+    level = 'FULL';
+  }
+
+  // Determine tier
+  let tier: ProvenanceTier;
+  if (sourceCount === 0) {
+    tier = 'TIER_0';
+  } else if (sourceCount === 1) {
+    tier = 'TIER_1';
+  } else if (sourceCount <= 3) {
+    tier = 'TIER_2';
+  } else {
+    tier = 'TIER_3';
+  }
+
+  return { level, tier, source_count: sourceCount, input_snapshot: snapshot };
+}
+
+// ---------------------------------------------------------------------------
 // Score uniformity check — all dims within ±1 of each other = suspicious
 // ---------------------------------------------------------------------------
 export function checkScoreUniformity(scores: Record<string, number>): QualityCheck {
@@ -205,8 +275,31 @@ export function checkClampEvents(
 // ---------------------------------------------------------------------------
 // validateAnalysis — run all checks and produce a QualityReport
 // ---------------------------------------------------------------------------
-export function validateAnalysis(result: AnalysisResult): QualityReport {
+export function validateAnalysis(result: AnalysisResult, inputCompleteness?: InputCompletenessResult): QualityReport {
   const checks: QualityCheck[] = [];
+
+  // Input completeness check (Sprint 151) — if provided, check data quality
+  if (inputCompleteness) {
+    if (inputCompleteness.level === 'EMPTY') {
+      checks.push({
+        name: 'input_completeness',
+        status: 'HALT',
+        detail: `Input data is EMPTY (0 fields, ${inputCompleteness.source_count} sources) — analysis should not have proceeded`,
+      });
+    } else if (inputCompleteness.level === 'MINIMAL') {
+      checks.push({
+        name: 'input_completeness',
+        status: 'WARN',
+        detail: `Input data is MINIMAL (tier=${inputCompleteness.tier}, sources=${inputCompleteness.source_count})`,
+      });
+    } else {
+      checks.push({
+        name: 'input_completeness',
+        status: 'PASS',
+        detail: `Input: ${inputCompleteness.level}, tier=${inputCompleteness.tier}, sources=${inputCompleteness.source_count}`,
+      });
+    }
+  }
 
   // Bounds check (always)
   checks.push(checkBounds(result));
@@ -250,7 +343,10 @@ export function validateAnalysis(result: AnalysisResult): QualityReport {
   // Calculate score: start at 100, deduct for issues
   let score = 100;
   for (const check of checks) {
-    if (check.status === 'HALT') score -= 25;
+    if (check.status === 'HALT') {
+      // EMPTY input = -40 (more severe than standard -25)
+      score -= check.name === 'input_completeness' ? 40 : 25;
+    }
     if (check.status === 'WARN') score -= 10;
   }
   score = Math.max(0, Math.min(100, score));
