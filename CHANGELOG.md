@@ -1,5 +1,12 @@
 # Changelog
 
+## Sprint 157 — Scout Pipeline Alignment (2026-04-25)
+- **phase_gates 3-nivå:** DEFAULT ändrat från 11 faser (inkl .5-sub-faser) till 6 faser (F0-F5). Matchar 3-nivå-arkitekturen.
+- **complete_scout_pipeline() SKIP-logik:** Detekterar 3-level pipelines (`? 'F0.5'`). Saknade .5-faser → max score. Legacy-pipelines oförändrade.
+- **Orphan fix:** Pipeline 20c48551 (running 13+ dagar, 0 agenter) → cancelled. CHECK constraint utökad med 'cancelled'.
+- **link_violations_to_pipeline(uuid, uuid):** Ny RPC kopplar violations till pipeline. SECURITY INVOKER, search_path public.
+- **V64 GO 15/18.** VCE09 WARN (W1 SKIP=100 acceptabelt). V50+V53+VET09 alla körda.
+
 ## Sprint 156 — Violations Feedback RPCs (2026-04-24)
 - **get_violations_for_analysis(uuid):** Returns all violations for a specific analysis. SECURITY INVOKER, search_path public.
 - **get_violations_for_player(uuid):** Returns violations across all analyses for a player (JOIN scout_analyses). SECURITY INVOKER, search_path public.
