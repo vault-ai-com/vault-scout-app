@@ -1,5 +1,12 @@
 # Changelog
 
+## Sprint 155 — Scout DB Hardening Phase 2 + P0 Fix (2026-04-24)
+- **updated_at column:** New `updated_at` timestamptz on scout_analyses with auto-update trigger. Backfilled 141 rows.
+- **HALT expansion:** Check 7 (SIGN + >3 dims <5) and Check 8 (uniform dims ±1) added to `complete_scout_analysis` RPC as RAISE EXCEPTION gates. Mirrors quality-validation.ts.
+- **DB completeness gate:** EMPTY input_completeness → RAISE EXCEPTION in RPC. VCE09 W2 guard: allows INSUFFICIENT_DATA only if score=0 AND confidence=0.
+- **P0 fix:** Edge fn EMPTY+INSUFFICIENT_DATA path (rad 1119) was blocked by original gate. Fixed with score/confidence guard.
+- **V64 GO 17/18.** VCE09 WARN (W2 adopterad). V50+V53+VET09 alla körda.
+
 ## Sprint 151 — Data Completeness Gate + Provenance Schema (2026-04-24)
 - **Data Completeness Gate:** Deterministic check blocks EMPTY player analyses before LLM runs (422 response). Saves ~$0.40/analysis on empty profiles.
 - **Provenance Schema:** 4 new columns on scout_analyses: input_completeness, provenance_tier, input_snapshot, source_count.
