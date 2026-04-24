@@ -1,5 +1,10 @@
 # Changelog
 
+## Sprint 156 — Violations Feedback RPCs (2026-04-24)
+- **get_violations_for_analysis(uuid):** Returns all violations for a specific analysis. SECURITY INVOKER, search_path public.
+- **get_violations_for_player(uuid):** Returns violations across all analyses for a player (JOIN scout_analyses). SECURITY INVOKER, search_path public.
+- **V64 GO.** VCE09 WARN (W1 NULL-guard acceptabelt, W4 resolve_violation utanför scope). V50+V53+VET09 alla körda.
+
 ## Sprint 155 — Scout DB Hardening Phase 2 + P0 Fix (2026-04-24)
 - **updated_at column:** New `updated_at` timestamptz on scout_analyses with auto-update trigger. Backfilled 141 rows.
 - **HALT expansion:** Check 7 (SIGN + >3 dims <5) and Check 8 (uniform dims ±1) added to `complete_scout_analysis` RPC as RAISE EXCEPTION gates. Mirrors quality-validation.ts.
