@@ -267,7 +267,7 @@ Return JSON with this structure:
         data_source_quality: dataSourceQuality,
       },
       recommendation,
-      quality_report: qualityReport,
+      quality_pipeline: qualityReport,
       clamp_events: ct.getEvents(),
       duration_ms: 0, // will be set below
     };

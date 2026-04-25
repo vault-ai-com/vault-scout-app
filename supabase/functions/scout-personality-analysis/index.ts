@@ -326,7 +326,7 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
       profile,
       duration_ms,
       cache_hit: false,
-      quality_report: qualityReport,
+      quality_pipeline: qualityReport,
       ...(clampEvents.length > 0 ? { clamp_events: clampEvents } : {}),
     };
 

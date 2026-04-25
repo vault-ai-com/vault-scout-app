@@ -437,7 +437,7 @@ Respond with a JSON object containing:
         p_weaknesses: result.weaknesses,
         p_risk_factors: result.risk_factors,
         p_recommendation: result.recommendation,
-        p_analysis_data: { ...result, _v: "v1-cdim16", analysis_type: analysisType, quality_report: qualityReport },
+        p_analysis_data: { ...result, _v: "v1-cdim16", analysis_type: analysisType, quality_pipeline: qualityReport },
         p_agents_used: ["COACH00", "claude-sonnet-4-6"],
         p_kb_files_used: COACH_KB_KEYS,
         p_scores: result.dimension_scores.map(d => ({
@@ -458,7 +458,7 @@ Respond with a JSON object containing:
       analysis_id: analysisId,
       duration_ms: durationMs,
       cache_hit: false,
-      quality_report: qualityReport,
+      quality_pipeline: qualityReport,
       ...(saveError ? { save_error: saveError } : {}),
       result,
     }, 200, reqOrigin, rlHeaders);

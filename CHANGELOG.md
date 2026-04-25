@@ -1,5 +1,11 @@
 # Changelog
 
+## Sprint 164 — quality_pipeline Rename + K2/K3 Fixar (2026-04-25)
+- **`quality_report` → `quality_pipeline`:** Rename i scout-personality-analysis, scout-coach-analyze, scout-coach-personality. Alla 6 edge fn nu konsistenta.
+- **K2 temporal threshold:** log_scout_pipeline_agent() threshold höjd 3.0x → 5.0x. Minskar false positives för sekventiella Opus-agenter. RAISE EXCEPTION behålls.
+- **K3 analysis_type NULL guard:** start_scout_pipeline_phase() kastar RAISE EXCEPTION vid NULL analysis_type istället för tyst COALESCE till full_scout.
+- **V64 GO 16/18.** VCE09 WARN (cache-asymmetri accepterad). C91 GO LOW.
+
 ## Sprint 163 — Scout Pipeline Enforcement (2026-04-25)
 - **`complete_scout_pipeline()` ENFORCEMENT BLOCK:** RAISE EXCEPTION om required agents saknas vs logged_agents. DISTINCT unnest hanterar dubbletter i required_agents.
 - **`start_scout_pipeline_phase()` (NY RPC):** Fas-gate enforcement. Blockerar bakåtrörelse + hopp >2 steg. Kollar required agents per analysis_type (JOIN scout_analyses).
