@@ -1,5 +1,12 @@
 # Changelog
 
+## Sprint 163 — Scout Pipeline Enforcement (2026-04-25)
+- **`complete_scout_pipeline()` ENFORCEMENT BLOCK:** RAISE EXCEPTION om required agents saknas vs logged_agents. DISTINCT unnest hanterar dubbletter i required_agents.
+- **`start_scout_pipeline_phase()` (NY RPC):** Fas-gate enforcement. Blockerar bakåtrörelse + hopp >2 steg. Kollar required agents per analysis_type (JOIN scout_analyses).
+- **`log_scout_pipeline_agent()` UTÖKAD:** 3 nya params (duration_ms, llm_model, tool_use_count). Temporal sanity check (>3x ratio = EXCEPTION). LLM model soft warning vid mismatch.
+- **V64 K1 fix:** Gamla overloaden (utan temporal/LLM enforcement) droppad. Alla anropare tvingas till nya signaturen.
+- **V64 WARN 14/18.** VCE09 WARN (4 findings fixade). V65 GO. C91 GO LOW.
+
 ## Sprint 162 — Quality Pipeline Key Rename + INSUFFICIENT_DATA Guard (2026-04-25)
 - **`quality_report` → `quality_pipeline`:** Key rename i DB save (line 1273) och HTTP response (line 1293) i scout-analyze-player. Matchar quality-validation.ts `validateAnalysis()` expectations.
 - **INSUFFICIENT_DATA guard:** Kastar Error i `mergeAgentResults()` om alla dimension scores = null istället för silent overall_score: 0. Förhindrar meningslösa analyser.
