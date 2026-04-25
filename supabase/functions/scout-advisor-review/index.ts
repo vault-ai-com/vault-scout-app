@@ -8,15 +8,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // Each advisor reviews the analysis with their domain expertise.
 // ============================================================================
 
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { callAnthropic, MODELS } from "../_shared/anthropic-client.ts";
 
-// ---------------------------------------------------------------------------
-// Rate limiter — in-memory per isolate (Deno Deploy)
-// Key: IP address | Window: 15 min | Max: 5 requests
-// ---------------------------------------------------------------------------
 const rateLimiter = createRateLimiter(5);
 
 // ---------------------------------------------------------------------------
@@ -394,8 +391,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
   const userId = authResult.userId;
 
-  // Rate limit check — keyed on userId
-  const rl = rateLimiter.check(userId);
+  // Rate limit check — persistent via DB
+  const { url: _rlUrl, serviceKey: _rlKey } = getSupabaseConfig();
+  const _rlSb = createClient(_rlUrl, _rlKey);
+  const rl = await rateLimiter.check(`scout-advisor-review:${userId}`, _rlSb);
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(

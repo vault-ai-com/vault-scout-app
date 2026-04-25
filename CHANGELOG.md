@@ -1,5 +1,11 @@
 # Changelog
 
+## Sprint 161 — Persistent Rate Limiting (2026-04-25)
+- **`scout_rate_limit_store` (NY tabell):** DB-backed sliding window. `check_scout_rate_limit()` RPC med FOR UPDATE-lock. `cleanup_scout_rate_limits()` för stale rows.
+- **`_shared/rate-limit.ts` omskriven:** `check()` nu async, tar SupabaseClient. Fail-open vid DB-fel. `RateLimitResult` + `getRateLimitHeaders` oförändrade.
+- **9 edge functions migrerade:** Alla scout-fn använder nu persistent rate limiting. Key-format: `{fn_name}:{userId}`. In-memory Map ersatt.
+- **V64 GO 16/18.** VCE09 PASS. C91 GO LOW.
+
 ## Sprint 160 — Anthropic Model-ID 404 Hardening (2026-04-25)
 - **`_shared/anthropic-client.ts` (NY):** Delad Anthropic API-klient. Exporterar `MODELS`, `resolveModel()`, `callAnthropic()`, `getAnthropicHeaders()`, `AnthropicError`.
 - **7 edge functions migrerade:** scout-analyze-player, scout-personality-analysis, scout-advisor-review, scout-bosse-chat, scout-report, scout-coach-analyze, scout-coach-personality. Netto -135 rader duplicerad kod.

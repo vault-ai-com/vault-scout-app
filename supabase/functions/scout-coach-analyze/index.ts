@@ -7,6 +7,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // Runs Claude analysis on a coach using 16 CDIM dimensions.
 // ============================================================================
 
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
@@ -297,8 +298,10 @@ Deno.serve(async (req: Request) => {
   const userId = authResult.userId;
   const isServiceRole = authResult.isServiceRole;
 
-  // Rate limit
-  const rl = rateLimiter.check(userId);
+  // Rate limit — persistent via DB
+  const { url: _rlUrl, serviceKey: _rlKey } = getSupabaseConfig();
+  const _rlSb = createClient(_rlUrl, _rlKey);
+  const rl = await rateLimiter.check(`scout-coach-analyze:${userId}`, _rlSb);
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(

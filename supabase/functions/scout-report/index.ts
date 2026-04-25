@@ -1271,7 +1271,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
   const userId = authResult.userId;
 
-  const rl = rateLimiter.check(userId);
+  const rl = await rateLimiter.check(`scout-report:${userId}`, getSupabaseClient());
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(

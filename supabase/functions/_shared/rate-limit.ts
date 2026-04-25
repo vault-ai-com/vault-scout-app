@@ -1,6 +1,9 @@
 // ---------------------------------------------------------------------------
-// Shared rate limiter — in-memory per isolate (Deno Deploy)
+// Shared rate limiter — DB-backed persistent (Supabase scout_rate_limit_store)
+// Falls back to allowed:true on DB error (rate limiting is not security-critical)
 // ---------------------------------------------------------------------------
+
+import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -12,32 +15,32 @@ export interface RateLimitResult {
 export function createRateLimiter(
   maxRequests: number,
   windowMs: number = 15 * 60 * 1000
-): { check: (key: string) => RateLimitResult } {
-  const store = new Map<string, number[]>();
-
+): { check: (key: string, sb: SupabaseClient) => Promise<RateLimitResult> } {
   return {
-    check(key: string): RateLimitResult {
-      const now = Date.now();
-      const windowStart = now - windowMs;
-      const timestamps = (store.get(key) ?? []).filter(ts => ts > windowStart);
+    async check(key: string, sb: SupabaseClient): Promise<RateLimitResult> {
+      try {
+        const { data, error } = await sb.rpc("check_scout_rate_limit", {
+          p_key: key,
+          p_max_requests: maxRequests,
+          p_window_ms: windowMs,
+        });
 
-      // Periodic cleanup every 100 entries
-      if (store.size > 100) {
-        for (const [k, v] of store) {
-          const valid = v.filter(ts => ts > windowStart);
-          if (valid.length === 0) store.delete(k);
-          else store.set(k, valid);
+        if (error || !data) {
+          console.warn("[rate-limit] DB error, failing open:", error?.message ?? "no data");
+          return { allowed: true, retryAfterMs: 0, remaining: maxRequests, limit: maxRequests };
         }
-      }
 
-      if (timestamps.length >= maxRequests) {
-        const retryAfterMs = timestamps[0] + windowMs - now;
-        store.set(key, timestamps);
-        return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs), remaining: 0, limit: maxRequests };
+        const row = data as { allowed: boolean; retry_after_ms: number; remaining: number; limit: number };
+        return {
+          allowed: row.allowed,
+          retryAfterMs: row.retry_after_ms ?? 0,
+          remaining: row.remaining ?? 0,
+          limit: row.limit ?? maxRequests,
+        };
+      } catch (err) {
+        console.warn("[rate-limit] Exception, failing open:", err instanceof Error ? err.message : String(err));
+        return { allowed: true, retryAfterMs: 0, remaining: maxRequests, limit: maxRequests };
       }
-      timestamps.push(now);
-      store.set(key, timestamps);
-      return { allowed: true, retryAfterMs: 0, remaining: maxRequests - timestamps.length, limit: maxRequests };
     },
   };
 }

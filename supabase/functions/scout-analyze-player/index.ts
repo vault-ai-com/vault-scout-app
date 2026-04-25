@@ -7,16 +7,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // Runs Claude Sonnet 4.6 analysis on a player, saves structured results.
 // ============================================================================
 
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { validateAnalysis, checkInputCompleteness, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
 import { callAnthropic, MODELS, AnthropicError } from "../_shared/anthropic-client.ts";
 
-// ---------------------------------------------------------------------------
-// Rate limiter — in-memory per isolate (Deno Deploy)
-// Key: userId | Window: 15 min | Max: 10 requests
-// ---------------------------------------------------------------------------
 const rateLimiter = createRateLimiter(10);
 
 const ALLOWED_ANALYSIS_TYPES = [
@@ -1078,8 +1075,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const userId = authResult.userId;
   const isServiceRole = authResult.isServiceRole;
 
-  // Rate limit check — after auth, before any expensive work
-  const rl = rateLimiter.check(userId);
+  // Rate limit check — persistent via DB
+  const _rlSb = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
+  const rl = await rateLimiter.check(`scout-analyze-player:${userId}`, _rlSb);
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(

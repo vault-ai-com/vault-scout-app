@@ -7,8 +7,7 @@ import { authenticateRequest } from "../_shared/auth.ts";
 import { getAnthropicHeaders, resolveModel, MODELS } from "../_shared/anthropic-client.ts";
 
 // ---------------------------------------------------------------------------
-// Rate limiter — in-memory per isolate (Deno Deploy)
-// Key: userId | Window: 15 min | Max: 20 requests
+// Rate limiter — persistent via DB (scout_rate_limit_store)
 // ---------------------------------------------------------------------------
 const rateLimiter = createRateLimiter(20);
 
@@ -42,8 +41,8 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Rate limit check — after auth, before any expensive work
-    rl = rateLimiter.check(user.id);
+    // Rate limit check — persistent via DB
+    rl = await rateLimiter.check(`scout-bosse-chat:${user.id}`, supabase);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
       return new Response(

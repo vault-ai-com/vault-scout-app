@@ -5,10 +5,6 @@ import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 
-// ---------------------------------------------------------------------------
-// Rate limiter — in-memory per isolate (Deno Deploy)
-// Key: userId | Window: 15 min | Max: 30 requests
-// ---------------------------------------------------------------------------
 const rateLimiter = createRateLimiter(30);
 
 function json(data: unknown, status = 200, origin: string | null = null, extra: Record<string, string> = {}) {
@@ -64,8 +60,12 @@ Deno.serve(async (req: Request) => {
   }
   const userId = authResult.userId;
 
-  // Rate limit check — after auth, before any work
-  const rl = rateLimiter.check(userId);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const sb = createClient(supabaseUrl, serviceKey);
+
+  // Rate limit check — persistent via DB
+  const rl = await rateLimiter.check(`scout-search:${userId}`, sb);
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return new Response(
@@ -77,10 +77,6 @@ Deno.serve(async (req: Request) => {
   const rlHeaders = getRateLimitHeaders(rl);
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const sb = createClient(supabaseUrl, serviceKey);
-
     const body = await req.json();
     const action = body.action ?? "search";
 

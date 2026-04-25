@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Rate limit check — keyed on player_id (no JWT in this function)
-    rl = rateLimiter.check(player_id);
+    rl = await rateLimiter.check(`scout-personality-analysis:${player_id}`, supabase);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
       return new Response(

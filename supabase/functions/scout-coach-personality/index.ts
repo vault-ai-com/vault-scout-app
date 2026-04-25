@@ -52,7 +52,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Rate limit
-    rl = rateLimiter.check(coach_id);
+    rl = await rateLimiter.check(`scout-coach-personality:${coach_id}`, supabase);
     if (!rl.allowed) {
       const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
       return new Response(
