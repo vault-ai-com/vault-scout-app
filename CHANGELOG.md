@@ -1,5 +1,11 @@
 # Changelog
 
+## Sprint 162 — Quality Pipeline Key Rename + INSUFFICIENT_DATA Guard (2026-04-25)
+- **`quality_report` → `quality_pipeline`:** Key rename i DB save (line 1273) och HTTP response (line 1293) i scout-analyze-player. Matchar quality-validation.ts `validateAnalysis()` expectations.
+- **INSUFFICIENT_DATA guard:** Kastar Error i `mergeAgentResults()` om alla dimension scores = null istället för silent overall_score: 0. Förhindrar meningslösa analyser.
+- **Re-throw past fallback:** INSUFFICIENT_DATA propageras förbi single-agent fallback (V64 P1-fix). Analys markeras som failed via `fail_scout_analysis` RPC.
+- **V64 GO 4.25/5.** VCE09 WARN (2 issues fixade). C91 GO LOW.
+
 ## Sprint 161 — Persistent Rate Limiting (2026-04-25)
 - **`scout_rate_limit_store` (NY tabell):** DB-backed sliding window. `check_scout_rate_limit()` RPC med FOR UPDATE-lock. `cleanup_scout_rate_limits()` för stale rows.
 - **`_shared/rate-limit.ts` omskriven:** `check()` nu async, tar SupabaseClient. Fail-open vid DB-fel. `RateLimitResult` + `getRateLimitHeaders` oförändrade.
