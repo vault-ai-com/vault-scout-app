@@ -412,6 +412,112 @@ function buildUserPrompt(
     ? `\n## Additional Metadata\n${JSON.stringify(pd.metadata, null, 2)}`
     : "";
 
+  // --- Career & club history ---
+  const careerParts: string[] = [];
+  if (pd.career_history) careerParts.push(JSON.stringify(pd.career_history, null, 2));
+  if (pd.career_clubs) careerParts.push(`Clubs: ${JSON.stringify(pd.career_clubs, null, 2)}`);
+  if (pd.career_timeline) careerParts.push(`Timeline: ${JSON.stringify(pd.career_timeline, null, 2)}`);
+  if (Array.isArray(pd.previous_clubs)) careerParts.push(`Previous Clubs: ${(pd.previous_clubs as string[]).join(", ")}`);
+  else if (typeof pd.previous_clubs === "string") careerParts.push(`Previous Clubs: ${pd.previous_clubs}`);
+  if (typeof pd.previous_club === "string") careerParts.push(`Previous Club: ${pd.previous_club}`);
+  const careerHistoryBlock = careerParts.length > 0 ? `\n## Career History\n${careerParts.join("\n")}` : "";
+
+  const careerStatsParts: string[] = [];
+  if (pd.career_goals != null) careerStatsParts.push(`- Goals: ${pd.career_goals}`);
+  if (pd.career_assists != null) careerStatsParts.push(`- Assists: ${pd.career_assists}`);
+  if (pd.career_matches != null) careerStatsParts.push(`- Matches: ${pd.career_matches}`);
+  else if (pd.career_total_matches != null) careerStatsParts.push(`- Matches: ${pd.career_total_matches}`);
+  else if (pd.career_total_appearances != null) careerStatsParts.push(`- Appearances: ${pd.career_total_appearances}`);
+  if (pd.career_yellow_cards != null) careerStatsParts.push(`- Yellow Cards: ${pd.career_yellow_cards}`);
+  if (pd.career_red_cards != null) careerStatsParts.push(`- Red Cards: ${pd.career_red_cards}`);
+  if (pd.caps_sweden != null) careerStatsParts.push(`- Sweden Caps: ${pd.caps_sweden}`);
+  if (pd.caps_international != null) careerStatsParts.push(`- International Caps: ${pd.caps_international}`);
+  if (pd.u21_caps != null) careerStatsParts.push(`- U21 Caps: ${pd.u21_caps}`);
+  const careerStatsBlock = careerStatsParts.length > 0 ? `\n## Career Totals\n${careerStatsParts.join("\n")}` : "";
+
+  const honorsBlock = pd.awards || pd.honours
+    ? `\n## Awards & Honours\n${pd.awards ? JSON.stringify(pd.awards, null, 2) : ""}${pd.honours ? `\n${JSON.stringify(pd.honours, null, 2)}` : ""}`
+    : "";
+
+  // --- Current season stats ---
+  const seasonParts: string[] = [];
+  if (pd.season_2025) seasonParts.push(JSON.stringify(pd.season_2025, null, 2));
+  if (pd.allsvenskan_2026) seasonParts.push(`Allsvenskan 2026: ${JSON.stringify(pd.allsvenskan_2026, null, 2)}`);
+  if (pd.allsvenskan_stats) seasonParts.push(`Allsvenskan: ${JSON.stringify(pd.allsvenskan_stats, null, 2)}`);
+  if (pd.eliteserien_2025) seasonParts.push(`Eliteserien 2025: ${JSON.stringify(pd.eliteserien_2025, null, 2)}`);
+  if (pd.stats_2025_26) seasonParts.push(`2025/26: ${JSON.stringify(pd.stats_2025_26, null, 2)}`);
+  if (pd.allsvenskan_2025_starts != null) seasonParts.push(`Allsvenskan 2025 Starts: ${pd.allsvenskan_2025_starts}`);
+  if (pd.allsvenskan_2025_minutes != null) seasonParts.push(`Allsvenskan 2025 Minutes: ${pd.allsvenskan_2025_minutes}`);
+  if (pd.allsvenskan_2025_avg_rating != null) seasonParts.push(`Allsvenskan 2025 Avg Rating: ${pd.allsvenskan_2025_avg_rating}`);
+  if (pd.allsvenskan_2025_goals_conceded != null) seasonParts.push(`Goals Conceded: ${pd.allsvenskan_2025_goals_conceded}`);
+  if (pd.allsvenskan_2025_clean_sheets != null) seasonParts.push(`Clean Sheets: ${pd.allsvenskan_2025_clean_sheets}`);
+  if (pd.allsvenskan_2025_save_pct != null) seasonParts.push(`Save %: ${pd.allsvenskan_2025_save_pct}`);
+  const currentSeasonBlock = seasonParts.length > 0 ? `\n## Current Season Stats\n${seasonParts.join("\n")}` : "";
+
+  const goalParts: string[] = [];
+  if (pd.goals_2025 != null) goalParts.push(`- Goals 2025: ${pd.goals_2025}${pd.goals_2025_league != null ? ` (league: ${pd.goals_2025_league})` : ""}`);
+  if (pd.goals_2024_25 != null) goalParts.push(`- Goals 2024/25: ${pd.goals_2024_25}`);
+  if (pd.goals_2025_26 != null) goalParts.push(`- Goals 2025/26: ${pd.goals_2025_26}`);
+  if (pd.assists_2024_25 != null) goalParts.push(`- Assists 2024/25: ${pd.assists_2024_25}`);
+  if (pd.minutes_2024_25 != null) goalParts.push(`- Minutes 2024/25: ${pd.minutes_2024_25}`);
+  if (pd.appearances_2024_25 != null) goalParts.push(`- Appearances 2024/25: ${pd.appearances_2024_25}`);
+  if (pd.appearances_2025_26 != null) goalParts.push(`- Appearances 2025/26: ${pd.appearances_2025_26}`);
+  if (pd.pass_accuracy_2024_25 != null) goalParts.push(`- Pass Accuracy 2024/25: ${pd.pass_accuracy_2024_25}%`);
+  if (pd.pass_completion_pct != null) goalParts.push(`- Pass Completion: ${pd.pass_completion_pct}%`);
+  if (pd.goals_per_match != null) goalParts.push(`- Goals/Match: ${pd.goals_per_match}`);
+  if (pd.xg_2025_spring != null) goalParts.push(`- xG 2025 Spring: ${pd.xg_2025_spring}`);
+  if (pd.shots_on_target_2025 != null) goalParts.push(`- Shots on Target 2025: ${pd.shots_on_target_2025}`);
+  const recentGoalsBlock = goalParts.length > 0 ? `\n## Recent Goal Contributions\n${goalParts.join("\n")}` : "";
+
+  // --- Strengths & weaknesses (prior scouting assessment) ---
+  const strengthsList = Array.isArray(pd.strengths) ? (pd.strengths as string[]).map((s) => `- ${s}`).join("\n") : typeof pd.strengths === "string" ? pd.strengths : null;
+  const storedStrengthsBlock = strengthsList ? `\n## Scouted Strengths (Prior Assessment)\n${strengthsList}` : "";
+
+  const weaknessParts: string[] = [];
+  if (Array.isArray(pd.weaknesses)) weaknessParts.push(...(pd.weaknesses as string[]).map((w) => `- ${w}`));
+  else if (typeof pd.weaknesses === "string") weaknessParts.push(pd.weaknesses);
+  if (typeof pd.key_weakness === "string") weaknessParts.push(`- Key weakness: ${pd.key_weakness}`);
+  if (typeof pd.disqualifying_weakness === "string") weaknessParts.push(`- Disqualifying: ${pd.disqualifying_weakness}`);
+  const storedWeaknessesBlock = weaknessParts.length > 0 ? `\n## Scouted Weaknesses (Prior Assessment)\n${weaknessParts.join("\n")}` : "";
+
+  const styleNotesBlock = typeof pd.style_notes === "string" ? `\n## Playing Style Notes\n${pd.style_notes}` : "";
+
+  // --- Injury & physical ---
+  const injuryParts: string[] = [];
+  if (pd.injury_history) injuryParts.push(`History: ${JSON.stringify(pd.injury_history, null, 2)}`);
+  if (pd.injury_risk_score != null) injuryParts.push(`Risk Score: ${pd.injury_risk_score}/10`);
+  if (pd.injury_days_total != null) injuryParts.push(`Total Injury Days: ${pd.injury_days_total}`);
+  if (pd.knee_injury_months != null) injuryParts.push(`Knee Injury Duration: ${pd.knee_injury_months} months`);
+  const injuryBlock = injuryParts.length > 0 ? `\n## Injury Profile\n${injuryParts.join("\n")}` : "";
+
+  const physicalParts: string[] = [];
+  if (pd.physical_sprint != null) physicalParts.push(`- Sprint: ${pd.physical_sprint}`);
+  if (pd.physical_strength != null) physicalParts.push(`- Strength: ${pd.physical_strength}`);
+  if (pd.physical_endurance != null) physicalParts.push(`- Endurance: ${pd.physical_endurance}`);
+  if (pd.top_speed_kmh != null) physicalParts.push(`- Top Speed: ${pd.top_speed_kmh} km/h`);
+  const physicalBlock = physicalParts.length > 0 ? `\n## Physical Attributes\n${physicalParts.join("\n")}` : "";
+
+  // --- Transfer & context ---
+  const transferParts: string[] = [];
+  if (pd.transfer_interest) transferParts.push(`Interest: ${pd.transfer_interest}`);
+  if (typeof pd.estimated_transfer_eur === "number") transferParts.push(`Estimated Value: \u20ac${pd.estimated_transfer_eur.toLocaleString()}`);
+  if (typeof pd.transfer_fee_eur === "number") transferParts.push(`Fee Paid: \u20ac${pd.transfer_fee_eur.toLocaleString()}`);
+  if (typeof pd.transfer_type === "string") transferParts.push(`Type: ${pd.transfer_type}`);
+  if (typeof pd.transfer_date === "string") transferParts.push(`Date: ${pd.transfer_date}`);
+  const transferBlock = transferParts.length > 0 ? `\n## Transfer Context\n${transferParts.join("\n")}` : "";
+
+  const agentBlock = typeof pd.agent === "string"
+    ? `\n## Agent\n${pd.agent}${typeof pd.agent_note === "string" ? ` — ${pd.agent_note}` : ""}`
+    : "";
+
+  const vaultFlagsBlock = pd.vault_flags ? `\n## Scout Flags\n${JSON.stringify(pd.vault_flags, null, 2)}` : "";
+
+  const keyQuotesList = Array.isArray(pd.key_quotes) ? (pd.key_quotes as string[]).map((q) => `"${q}"`).join("\n") : typeof pd.key_quotes === "string" ? pd.key_quotes : null;
+  const keyQuotesBlock = keyQuotesList ? `\n## Key Quotes\n${keyQuotesList}` : "";
+
+  const notesBlock = typeof pd.notes === "string" ? `\n## Notes\n${pd.notes}` : "";
+  const descriptionBlock = typeof pd.description === "string" ? `\n## Description\n${pd.description}` : "";
+
   const typeInstruction = ANALYSIS_TYPE_INSTRUCTIONS[analysisType];
 
   return `${typeInstruction}
@@ -420,6 +526,22 @@ ${playerBlock}
 ${statsBlock}
 ${matchBlock}
 ${metadataBlock}
+${careerHistoryBlock}
+${careerStatsBlock}
+${honorsBlock}
+${currentSeasonBlock}
+${recentGoalsBlock}
+${storedStrengthsBlock}
+${storedWeaknessesBlock}
+${styleNotesBlock}
+${injuryBlock}
+${physicalBlock}
+${transferBlock}
+${agentBlock}
+${vaultFlagsBlock}
+${keyQuotesBlock}
+${notesBlock}
+${descriptionBlock}
 
 ${kbContext}
 
