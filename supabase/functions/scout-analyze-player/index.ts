@@ -951,6 +951,14 @@ function mergeAgentResults(results: AgentResult[]): AnalysisResult {
       ? Math.min(10, Math.max(0, Math.round((weightedSum / totalWeight) * 10) / 10))
       : 0;
 
+  // INSUFFICIENT_DATA guard: if dims existed but ALL were null → flag it (Sprint 162 P0)
+  if (totalWeight === 0 && allDimScores.length > 0) {
+    console.warn(
+      `[scout-analyze-player] INSUFFICIENT_DATA: ${allDimScores.length} dimension scores returned but ALL were null/non-numeric. Flagging as INSUFFICIENT_DATA.`
+    );
+    throw new Error("INSUFFICIENT_DATA: All dimension scores were null — cannot produce meaningful overall score");
+  }
+
   // confidence = lowest among successful agents (conservative)
   const confidences = successful
     .map((r) => r.confidence)
@@ -1221,7 +1229,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
       console.log(`[scout-analyze-player] Multi-agent path succeeded`);
     } catch (multiErr) {
-      // Fallback — single-agent (existing runClaudeAnalysis)
+      // INSUFFICIENT_DATA = genuine data problem — do NOT fallback (Sprint 162 P0)
+      if (multiErr instanceof Error && multiErr.message.startsWith("INSUFFICIENT_DATA")) {
+        throw multiErr;
+      }
+      // Fallback — single-agent (existing runClaudeAnalysis) for other errors (network, parsing, etc.)
       console.warn(`[scout-analyze-player] Multi-agent failed, falling back to single-agent: ${(multiErr as Error).message}`);
       const fallbackPrompt = buildUserPrompt(player, analysis_type, kbContext);
       result = await runClaudeAnalysis(systemPrompt, fallbackPrompt);
@@ -1262,7 +1274,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_weaknesses: result.weaknesses,
       p_risk_factors: result.risk_factors,
       p_recommendation: result.recommendation,
-      p_analysis_data: { ...result, quality_report: qualityReport },
+      p_analysis_data: { ...result, quality_pipeline: qualityReport },
       p_agents_used: agentsUsed,
       p_kb_files_used: kbFilesUsed,
       p_scores: (result.dimension_scores ?? []).filter(d => typeof d.score === "number"),
@@ -1282,7 +1294,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         success: true,
         analysis_id: analysisId,
         duration_ms: durationMs,
-        quality_report: qualityReport,
+        quality_pipeline: qualityReport,
         result: {
           overall_score: result.overall_score,
           confidence: result.confidence,
