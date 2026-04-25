@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
+import { callAnthropic, MODELS, type ModelId } from "../_shared/anthropic-client.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -44,25 +45,20 @@ function getSupabaseClient() {
 }
 
 // ---------------------------------------------------------------------------
-// Claude API — supports model selection
+// Claude API — thin wrapper over shared callAnthropic() (VCE09 F4: timeoutMs preserved)
 // ---------------------------------------------------------------------------
 async function callClaude(
   system: string, user: string,
   opts: { model?: string; maxTokens?: number; timeoutMs?: number } = {}
 ): Promise<string> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const model = opts.model ?? "claude-sonnet-4-6";
-  const maxTokens = opts.maxTokens ?? 4096;
-  const timeoutMs = opts.timeoutMs ?? 45000;
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
-    signal: AbortSignal.timeout(timeoutMs),
+  const result = await callAnthropic({
+    model: (opts.model as ModelId | undefined) ?? MODELS.sonnet,
+    max_tokens: opts.maxTokens ?? 4096,
+    system,
+    messages: [{ role: "user", content: user }],
+    timeoutMs: opts.timeoutMs ?? 45000,
   });
-  if (!resp.ok) throw new Error(`Anthropic API ${resp.status}: ${await resp.text()}`);
-  return (await resp.json())?.content?.[0]?.text ?? "";
+  return result.text;
 }
 
 function parseAiJson(raw: string): Record<string, unknown> {

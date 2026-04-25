@@ -1,5 +1,12 @@
 # Changelog
 
+## Sprint 160 — Anthropic Model-ID 404 Hardening (2026-04-25)
+- **`_shared/anthropic-client.ts` (NY):** Delad Anthropic API-klient. Exporterar `MODELS`, `resolveModel()`, `callAnthropic()`, `getAnthropicHeaders()`, `AnthropicError`.
+- **7 edge functions migrerade:** scout-analyze-player, scout-personality-analysis, scout-advisor-review, scout-bosse-chat, scout-report, scout-coach-analyze, scout-coach-personality. Netto -135 rader duplicerad kod.
+- **`resolveModel()`:** Strippar datumsuffix (`-20250514`) och validerar mot `MODELS` constant. Förhindrar återupprepning av 404-buggen (root cause: `claude-sonnet-4-6-20250514`).
+- **VCE09 3 CRITICAL fixade:** never-throw contract i runSingleAgent, temperature:0 bevarad, anthropicKey i bosse-chat bevarad.
+- **V64 GO 4.75/5.** VCE09 WARN (alla 3 CRITICAL + 4 WARN adresserade). C66 GO LOW.
+
 ## Sprint 157 — Scout Pipeline Alignment (2026-04-25)
 - **phase_gates 3-nivå:** DEFAULT ändrat från 11 faser (inkl .5-sub-faser) till 6 faser (F0-F5). Matchar 3-nivå-arkitekturen.
 - **complete_scout_pipeline() SKIP-logik:** Detekterar 3-level pipelines (`? 'F0.5'`). Saknade .5-faser → max score. Legacy-pipelines oförändrade.

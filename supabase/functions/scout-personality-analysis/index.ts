@@ -9,6 +9,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { ARCHETYPES, clamp, createClampTracker, resolveArchetype, resolveRecommendation, computeConfidence } from '../_shared/personality-logic.ts';
 import { validateAnalysis, type QualityReport } from '../_shared/quality-validation.ts';
+import { callAnthropic, MODELS } from '../_shared/anthropic-client.ts';
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -177,32 +178,23 @@ ${player.profile_data ? 'Profildata: ' + (typeof player.profile_data === 'string
 Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. contradiction_score 0-1. CONFIDENCE_LABEL 0-1. coaching_approach max 7 items. integration_risks max 6 items. stress_archetype max 100 tecken.`;
 
     const startTime = Date.now();
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 
-    const llmResp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-opus-4-6',
+    // VCE09 F2: temperature:0 preserved for determinism. F7: try/catch preserves respond() with rlHeaders.
+    let rawText: string;
+    try {
+      const llmResult = await callAnthropic({
+        model: MODELS.opus,
         max_tokens: 2500,
         temperature: 0,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
-      }),
-      signal: AbortSignal.timeout(55000),
-    });
-
-    if (!llmResp.ok) {
-      const errText = await llmResp.text();
-      return respond({ success: false, error: 'LLM error: ' + errText.slice(0, 200) }, 500, rlHeaders);
+        timeoutMs: 55000,
+      });
+      rawText = llmResult.text || '{}';
+    } catch (llmErr) {
+      const errMsg = llmErr instanceof Error ? llmErr.message : String(llmErr);
+      return respond({ success: false, error: 'LLM error: ' + errMsg.slice(0, 200) }, 500, rlHeaders);
     }
-
-    const llmData = await llmResp.json();
-    const rawText: string = llmData.content?.[0]?.text ?? '{}';
 
     // FIX: strip markdown fences, use indexOf/lastIndexOf for robust parsing
     let parsed: Record<string, unknown> = {};

@@ -11,6 +11,7 @@ import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { validateAnalysis, checkInputCompleteness, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
+import { callAnthropic, MODELS, AnthropicError } from "../_shared/anthropic-client.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -574,53 +575,20 @@ async function runClaudeAnalysis(
   systemPrompt: string,
   userPrompt: string
 ): Promise<AnalysisResult> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) {
-    throw new Error("Missing ANTHROPIC_API_KEY environment variable");
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: userPrompt,
-        },
-      ],
-    }),
-    signal: AbortSignal.timeout(55000),
+  const { text: rawResponseText, usage: apiUsage, stop_reason } = await callAnthropic({
+    model: MODELS.sonnet,
+    max_tokens: 4096,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+    timeoutMs: 55000,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Anthropic API error (${response.status}): ${errorText}`
-    );
-  }
-
-  const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
-    stop_reason: string;
-    usage: { input_tokens: number; output_tokens: number };
-  };
-
-  // Extract text from response
-  const textBlock = data.content.find((c) => c.type === "text");
-  if (!textBlock?.text) {
+  if (!rawResponseText) {
     throw new Error("No text content in Anthropic response");
   }
 
   // Parse JSON from response — handle potential markdown wrapping
-  let jsonText = textBlock.text.trim();
+  let jsonText = rawResponseText.trim();
   if (jsonText.startsWith("```")) {
     jsonText = jsonText
       .replace(/^```(?:json)?\n?/, "")
@@ -664,7 +632,7 @@ async function runClaudeAnalysis(
 
   // Log token usage
   console.log(
-    `Claude usage: ${data.usage.input_tokens} in / ${data.usage.output_tokens} out, stop: ${data.stop_reason}`
+    `Claude usage: ${apiUsage.input_tokens} in / ${apiUsage.output_tokens} out, stop: ${stop_reason}`
   );
 
   return result;
@@ -681,41 +649,31 @@ async function runSingleAgent(
   timeoutMs = 40000
 ): Promise<AgentResult> {
   const startTime = Date.now();
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) {
-    return {
-      agentName,
-      status: "error",
-      dimension_scores: [],
-      raw_text: "",
-      error: "Missing ANTHROPIC_API_KEY environment variable",
-      duration_ms: 0,
-    };
-  }
 
-  let response: Response;
+  // VCE09 F1: callAnthropic() throws — wrap in try/catch to preserve never-throw contract
+  let rawText: string;
+  let agentUsage: { input_tokens: number; output_tokens: number };
+  let duration_ms: number;
+
   try {
-    response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2048,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
+    const result = await callAnthropic({
+      model: MODELS.sonnet,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+      timeoutMs,
     });
+    duration_ms = Date.now() - startTime;
+    rawText = result.text;
+    agentUsage = result.usage;
   } catch (err) {
-    const duration_ms = Date.now() - startTime;
-    const isTimeout =
-      err instanceof DOMException && err.name === "TimeoutError";
+    duration_ms = Date.now() - startTime;
+    const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
+    const isApiErr = err instanceof AnthropicError;
     console.warn(
-      `[multi-agent] Agent "${agentName}" ${isTimeout ? "timed out" : "fetch failed"}: ${(err as Error).message}`
+      `[multi-agent] Agent "${agentName}" ${
+        isTimeout ? "timed out" : isApiErr ? `API error (${err.status})` : "fetch failed"
+      }: ${(err as Error).message}`
     );
     return {
       agentName,
@@ -727,34 +685,8 @@ async function runSingleAgent(
     };
   }
 
-  const duration_ms = Date.now() - startTime;
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.warn(
-      `[multi-agent] Agent "${agentName}" API error (${response.status}): ${errorText}`
-    );
-    return {
-      agentName,
-      status: "error",
-      dimension_scores: [],
-      raw_text: "",
-      error: `Anthropic API error (${response.status}): ${errorText}`,
-      duration_ms,
-    };
-  }
-
-  const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
-    stop_reason: string;
-    usage: { input_tokens: number; output_tokens: number };
-  };
-
-  const textBlock = data.content.find((c) => c.type === "text");
-  const rawText = textBlock?.text ?? "";
-
   console.log(
-    `[multi-agent] Agent "${agentName}" usage: ${data.usage.input_tokens} in / ${data.usage.output_tokens} out — ${duration_ms}ms`
+    `[multi-agent] Agent "${agentName}" usage: ${agentUsage.input_tokens} in / ${agentUsage.output_tokens} out — ${duration_ms}ms`
   );
 
   // Parse JSON — handle potential markdown wrapping

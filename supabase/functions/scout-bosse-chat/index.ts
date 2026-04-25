@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
+import { getAnthropicHeaders, resolveModel, MODELS } from "../_shared/anthropic-client.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -115,11 +116,7 @@ Deno.serve(async (req: Request) => {
     let agentName = "Bosse Andersson";
     let modelToUse = "claude-opus-4-6"; // Bosse default = Opus
 
-    const MODEL_MAP: Record<string, string> = {
-      "claude-opus-4-6": "claude-opus-4-6",
-      "claude-sonnet-4-6": "claude-sonnet-4-6",
-      "claude-haiku-4-5": "claude-haiku-4-5",
-    };
+    // Model resolution via shared _shared/anthropic-client.ts (replaces inline MODEL_MAP)
 
     const isBosse = !agent_id || agent_id === "clone_bosse_andersson";
 
@@ -155,9 +152,8 @@ Deno.serve(async (req: Request) => {
       agentName = agentRow.name ?? agent_id;
       personaText = agentRow.system_prompt ?? `Du är ${agentName}. ${agentRow.purpose ?? ""}`;
 
-      // Map model — default to Sonnet if unknown
-      const rawModel = (agentRow.llm_model ?? "claude-sonnet-4-6").replace(/-\d{8}$/, "");
-      modelToUse = MODEL_MAP[rawModel] ?? "claude-sonnet-4-6";
+      // Map model — resolveModel() strips date suffixes + validates (VCE09 F6)
+      modelToUse = resolveModel(agentRow.llm_model, MODELS.sonnet);
     }
 
     // Load scout KB context
@@ -274,11 +270,7 @@ Deno.serve(async (req: Request) => {
 
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: getAnthropicHeaders(anthropicKey),
       body: JSON.stringify({
         model: modelToUse,
         max_tokens: 4096,

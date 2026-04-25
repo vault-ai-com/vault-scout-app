@@ -10,6 +10,7 @@ import { authenticateRequest } from "../_shared/auth.ts";
 import { clamp, createClampTracker } from '../_shared/personality-logic.ts';
 import { COACH_ARCHETYPES, resolveCoachArchetype, resolveCoachRecommendation, computeCoachConfidence } from '../_shared/coach-personality-logic.ts';
 import { validateAnalysis, type QualityReport } from '../_shared/quality-validation.ts';
+import { callAnthropic, MODELS } from '../_shared/anthropic-client.ts';
 
 const rateLimiter = createRateLimiter(5);
 
@@ -181,32 +182,20 @@ Return JSON with this structure:
   "data_source_quality": "PUBLIC_ONLY|MIXED|VERIFIED"
 }`;
 
-    // Call Claude
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!apiKey) return respond({ success: false, error: 'Missing ANTHROPIC_API_KEY' }, 500);
-
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+    // Call Claude — VCE09 F7: try/catch preserves respond() error handling
+    let rawText: string;
+    try {
+      const coachResult = await callAnthropic({
+        model: MODELS.sonnet,
         max_tokens: 3000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!claudeRes.ok) {
-      const errText = await claudeRes.text();
-      return respond({ success: false, error: `Claude API error: ${errText}` }, 502);
+      });
+      rawText = coachResult.text;
+    } catch (coachErr) {
+      const errMsg = coachErr instanceof Error ? coachErr.message : String(coachErr);
+      return respond({ success: false, error: `Claude API error: ${errMsg}` }, 502);
     }
-
-    const claudeData = await claudeRes.json() as { content: Array<{ type: string; text: string }> };
-    const rawText = claudeData.content.find((b: { type: string }) => b.type === 'text')?.text ?? '';
 
     // Parse JSON from response
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);

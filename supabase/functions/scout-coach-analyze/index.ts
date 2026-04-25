@@ -11,6 +11,7 @@ import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { validateAnalysis, type QualityReport } from "../_shared/quality-validation.ts";
+import { callAnthropic, MODELS } from "../_shared/anthropic-client.ts";
 
 const rateLimiter = createRateLimiter(10);
 
@@ -234,33 +235,15 @@ Keep summary under 200 words. Skip dimensions where data is clearly insufficient
 // Claude API call
 // ---------------------------------------------------------------------------
 
+// VCE09 F5: callAnthropic adds default 55s timeout (previously no timeout)
 async function callClaude(systemPrompt: string, userPrompt: string): Promise<string> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY");
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    }),
+  const result = await callAnthropic({
+    model: MODELS.sonnet,
+    max_tokens: 4096,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
   });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Claude API error (${response.status}): ${errText}`);
-  }
-
-  const data = await response.json() as { content: Array<{ type: string; text: string }> };
-  const textBlock = data.content.find((b: { type: string }) => b.type === "text");
-  return textBlock?.text ?? "";
+  return result.text;
 }
 
 // ---------------------------------------------------------------------------

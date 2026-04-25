@@ -11,6 +11,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
+import { callAnthropic, MODELS } from "../_shared/anthropic-client.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -257,9 +258,6 @@ async function getAdvisorOpinion(
   analysisJson: string,
   dimFramework: string
 ): Promise<AdvisorOpinion> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY");
-
   const userPrompt = `Du ska granska följande spelanalys som expert inom dina domäner: ${advisor.matched_domains.join(", ")}.
 
 ${dimFramework}
@@ -287,37 +285,20 @@ Svara på SVENSKA med JSON:
   "evidence_refs": ["<DIM-nummer eller källtaggar>"]
 }`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-opus-4-6",
-      max_tokens: 2048,
-      system: advisor.system_prompt,
-      messages: [{ role: "user", content: userPrompt }],
-    }),
-    signal: AbortSignal.timeout(55000),
+  const advisorResult = await callAnthropic({
+    model: MODELS.opus,
+    max_tokens: 2048,
+    system: advisor.system_prompt,
+    messages: [{ role: "user", content: userPrompt }],
+    timeoutMs: 55000,
   });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Anthropic API error (${response.status}): ${errText}`);
-  }
-
-  const result = await response.json();
-  const textBlock = result.content?.find(
-    (b: { type: string }) => b.type === "text"
-  );
-  if (!textBlock?.text) {
+  if (!advisorResult.text) {
     throw new Error("No text in Anthropic response");
   }
 
   // Extract JSON from response
-  const raw = textBlock.text.trim();
+  const raw = advisorResult.text.trim();
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error("No JSON found in advisor response");
