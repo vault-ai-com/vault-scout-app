@@ -145,17 +145,39 @@ const SYSTEM_PROMPT_RULES = `## Output Rules
 
 You MUST respond with valid JSON only. No markdown, no explanation outside the JSON.`;
 
+// RC1 — Sprint 170: Explicit array-format requirement injected in system prompt
+// Eliminates competing dict-style reference from dimension framework bullet-list
+const DIMENSION_SCORES_FORMAT_REQUIREMENT = `
+## CRITICAL: dimension_scores OUTPUT FORMAT
+dimension_scores MUST be a JSON array of objects. NEVER use object/dict format.
+
+Each object MUST have these exact fields:
+- dimension_id: string (e.g. "DIM-01")
+- dimension_name: string
+- score: number (0-10) or null if insufficient data
+- confidence: number (0-1)
+- evidence: string
+
+CORRECT format (array):
+[{"dimension_id": "DIM-01", "dimension_name": "Positional Awareness", "score": 7.5, "confidence": 0.8, "evidence": "Shows excellent positioning..."}]
+
+WRONG format (object/dict — NEVER use this):
+{"DIM-01": {"score": 7}}
+{"DIM-01": 7}
+
+ALWAYS use array format with dimension_id field. NEVER use object format.`;
+
 async function getSystemPrompt(): Promise<string> {
   try {
     const dimFramework = await supabaseRpc("get_dimension_framework_prompt", { p_type: "performance" });
     if (typeof dimFramework === "string" && dimFramework.length > 0) {
-      return `${SYSTEM_PROMPT_STATIC}\n\n${dimFramework}\n\nScore each applicable dimension 0-10 with specific evidence from the player data.\n\n${SYSTEM_PROMPT_RULES}`;
+      return `${SYSTEM_PROMPT_STATIC}\n\n${dimFramework}\n\nScore each applicable dimension 0-10 with specific evidence from the player data.\n\n${DIMENSION_SCORES_FORMAT_REQUIREMENT}\n\n${SYSTEM_PROMPT_RULES}`;
     }
     console.warn("[scout-analyze] RPC returned empty/null, using fallback");
-    return `${SYSTEM_PROMPT_STATIC}\n\n${SYSTEM_PROMPT_RULES}`;
+    return `${SYSTEM_PROMPT_STATIC}\n\n${DIMENSION_SCORES_FORMAT_REQUIREMENT}\n\n${SYSTEM_PROMPT_RULES}`;
   } catch (err) {
     console.warn("[scout-analyze] Failed to load dimension framework from DB, using fallback:", err);
-    return `${SYSTEM_PROMPT_STATIC}\n\n${SYSTEM_PROMPT_RULES}`;
+    return `${SYSTEM_PROMPT_STATIC}\n\n${DIMENSION_SCORES_FORMAT_REQUIREMENT}\n\n${SYSTEM_PROMPT_RULES}`;
   }
 }
 
@@ -625,6 +647,9 @@ async function runClaudeAnalysis(
         dim.score = Math.min(10, Math.max(0, dim.score));
       }
     }
+  } else if (!result.dimension_scores) {
+    // RC7 — Sprint 170: warn if single-agent path returns no dimension_scores
+    console.warn("[scout-analyze] dimension_scores missing from single-agent response — analysis may be incomplete");
   }
 
   // Log token usage
@@ -655,7 +680,7 @@ async function runSingleAgent(
   try {
     const result = await callAnthropic({
       model: MODELS.sonnet,
-      max_tokens: 2048,
+      max_tokens: 4096,  // RC2 — Sprint 170: was 2048, caused JSON truncation for 7-dim agent
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
       timeoutMs,
@@ -663,6 +688,11 @@ async function runSingleAgent(
     duration_ms = Date.now() - startTime;
     rawText = result.text;
     agentUsage = result.usage;
+
+    // RC2 supplement: warn if response was truncated despite increased limit
+    if (result.stop_reason === "max_tokens") {
+      console.warn(`[multi-agent] Agent "${agentName}" hit max_tokens — JSON likely truncated`);
+    }
   } catch (err) {
     duration_ms = Date.now() - startTime;
     const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
@@ -710,6 +740,35 @@ async function runSingleAgent(
       error: `JSON parse failed: ${(parseErr as Error).message}`,
       duration_ms,
     };
+  }
+
+  // RC3 — Sprint 170: Normalize object-format dimension_scores to array format
+  // LLM sometimes returns {"DIM-01": {score: 7, confidence: 0.8}} instead of array
+  if (parsed.dimension_scores && typeof parsed.dimension_scores === "object" && !Array.isArray(parsed.dimension_scores)) {
+    console.warn(`[multi-agent] Agent "${agentName}" returned object-format dimension_scores — normalizing to array`);
+    const objScores = parsed.dimension_scores as Record<string, unknown>;
+    parsed.dimension_scores = Object.entries(objScores).map(([dimId, val]) => {
+      if (typeof val === "number") {
+        return { dimension_id: dimId, score: val, confidence: null, evidence: "", dimension_name: "" };
+      }
+      const v = val as Record<string, unknown> | null;
+      return {
+        dimension_id: dimId,
+        score: v && typeof v.score === "number" ? v.score : null,
+        confidence: v && typeof v.confidence === "number" ? v.confidence : null,
+        evidence: v && typeof v.evidence === "string" ? v.evidence : "",
+        dimension_name: v && typeof v.dimension_name === "string" ? v.dimension_name : "",
+      };
+    }) as DimensionScore[];
+  }
+
+  // RC6 — Sprint 170: Normalize 'dim' field alias to 'dimension_id' in array format
+  if (Array.isArray(parsed.dimension_scores)) {
+    for (const dim of parsed.dimension_scores as Array<Record<string, unknown>>) {
+      if (dim.dim && !dim.dimension_id) {
+        dim.dimension_id = String(dim.dim);
+      }
+    }
   }
 
   // Filter dimension_scores to only include dimensions within agent's assigned scope (VCE09 F5 fix)

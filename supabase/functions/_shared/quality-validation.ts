@@ -278,6 +278,16 @@ export function checkClampEvents(
 export function validateAnalysis(result: AnalysisResult, inputCompleteness?: InputCompletenessResult): QualityReport {
   const checks: QualityCheck[] = [];
 
+  // RC5 — Sprint 170: HALT if dimension_scores is missing or empty
+  // Prevents silent bypass of uniformity + consistency checks downstream
+  if (!result.dimension_scores || Object.keys(result.dimension_scores).length === 0) {
+    checks.push({
+      name: 'missing_dimension_scores',
+      status: 'HALT',
+      detail: 'dimension_scores is missing or empty — no dimensions to validate',
+    });
+  }
+
   // Input completeness check (Sprint 151) — if provided, check data quality
   if (inputCompleteness) {
     if (inputCompleteness.level === 'EMPTY') {
