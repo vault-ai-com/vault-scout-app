@@ -1417,6 +1417,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    // HALT validation errors from RPC (Sprint 172 — BUG-3)
+    if (message.includes("HALT_CHECK_")) {
+      return errorResponse(
+        `Analysis validation failed: ${message}`,
+        422,
+        corsHeaders,
+        rlHeaders
+      );
+    }
+
     return errorResponse("Internal error", 500, corsHeaders, rlHeaders);
   }
 });
