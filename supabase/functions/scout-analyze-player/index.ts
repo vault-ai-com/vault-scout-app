@@ -28,14 +28,24 @@ type AnalysisType = (typeof ALLOWED_ANALYSIS_TYPES)[number];
 type KbGroup = "tactical" | "technical_physical" | "behavioral_contextual" | "all";
 
 const KB_KEYS_BY_GROUP: Record<KbGroup, string[]> = {
-  tactical: ["football_dimensions"],
-  technical_physical: ["football_dimensions"],
+  tactical: [
+    "football_dimensions",
+    "football_reconnaissance",
+    "scout_weakness_methodology",
+  ],
+  technical_physical: [
+    "football_dimensions",
+    "reference_player_profiles",
+    "scout_weakness_anti_hallucination",
+  ],
   behavioral_contextual: [
     "football_behavioral_signals",
     "football_dim_15_impulse_control",
     "football_dim_16_drive_motivation",
     "player_archetypes",
     "career_phases",
+    "match_stress_responses",
+    "football_contradiction_detector",
   ],
   all: [
     "football_dimensions",
@@ -44,6 +54,12 @@ const KB_KEYS_BY_GROUP: Record<KbGroup, string[]> = {
     "player_archetypes",
     "career_phases",
     "football_behavioral_signals",
+    "football_reconnaissance",
+    "match_stress_responses",
+    "football_contradiction_detector",
+    "reference_player_profiles",
+    "scout_weakness_methodology",
+    "scout_weakness_anti_hallucination",
   ],
 };
 
@@ -178,6 +194,96 @@ async function getSystemPrompt(): Promise<string> {
   } catch (err) {
     console.warn("[scout-analyze] Failed to load dimension framework from DB, using fallback:", err);
     return `${SYSTEM_PROMPT_STATIC}\n\n${DIMENSION_SCORES_FORMAT_REQUIREMENT}\n\n${SYSTEM_PROMPT_RULES}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DB Agent Prompt Loading — loads real agent system_prompts from Supabase
+// Sprint 174: Replace hardcoded static prompt with DB-loaded agent personas
+// ---------------------------------------------------------------------------
+
+// Maps edge fn agent groups to DB agent_ids in vault_ai_scout cluster
+const AGENT_DB_MAPPING: Record<string, string> = {
+  tactical: "scout_tactical_analyst",
+  technical_physical: "scout_physical_profiler",
+  behavioral_contextual: "scout_compatibility_engine",
+};
+
+interface AgentPrompts {
+  tactical: string;
+  technical_physical: string;
+  behavioral_contextual: string;
+  fallback: string; // static prompt for single-agent fallback
+}
+
+async function loadAgentPromptsFromDB(): Promise<AgentPrompts> {
+  const agentIds = Object.values(AGENT_DB_MAPPING);
+  // Lazy-load fallback: only call getSystemPrompt() if needed (V64 WARN-1 fix)
+  let _fallbackPrompt: string | null = null;
+  const getFallback = async (): Promise<string> => {
+    if (!_fallbackPrompt) _fallbackPrompt = await getSystemPrompt();
+    return _fallbackPrompt;
+  };
+
+  try {
+    const agents = await supabaseQuery(
+      "agents",
+      `agent_id=in.(${agentIds.join(",")})&is_active=eq.true&select=agent_id,system_prompt`
+    );
+
+    if (!Array.isArray(agents) || agents.length === 0) {
+      console.warn("[agent-load] No DB agents found, using static prompts");
+      const fb = await getFallback();
+      return { tactical: fb, technical_physical: fb, behavioral_contextual: fb, fallback: fb };
+    }
+
+    const promptMap: Record<string, string> = {};
+    for (const a of agents) {
+      const agent = a as { agent_id?: string; system_prompt?: string };
+      if (agent.agent_id && agent.system_prompt) {
+        promptMap[agent.agent_id] = agent.system_prompt;
+      }
+    }
+
+    console.log(`[agent-load] Loaded ${Object.keys(promptMap).length}/${agentIds.length} agent prompts from DB`);
+
+    // Build per-agent prompt: DB system_prompt + output format requirements
+    const formatSuffix = `\n\n${DIMENSION_SCORES_FORMAT_REQUIREMENT}\n\n${SYSTEM_PROMPT_RULES}`;
+    const MAX_PROMPT_LENGTH = 15000; // V64 WARN-2: cap DB prompts to prevent context overflow
+
+    let needsFallback = false;
+    const buildPrompt = (group: string): string | null => {
+      const dbAgentId = AGENT_DB_MAPPING[group];
+      const dbPrompt = promptMap[dbAgentId];
+      if (dbPrompt && dbPrompt.length > 100) {
+        if (dbPrompt.length > MAX_PROMPT_LENGTH) {
+          console.warn(`[agent-load] DB prompt for ${dbAgentId} exceeds ${MAX_PROMPT_LENGTH} chars (${dbPrompt.length}), truncating`);
+          return dbPrompt.substring(0, MAX_PROMPT_LENGTH) + formatSuffix;
+        }
+        return dbPrompt + formatSuffix;
+      }
+      console.warn(`[agent-load] DB prompt missing/short for ${dbAgentId}, using fallback`);
+      needsFallback = true;
+      return null;
+    };
+
+    const tacticalPrompt = buildPrompt("tactical");
+    const techPrompt = buildPrompt("technical_physical");
+    const behavPrompt = buildPrompt("behavioral_contextual");
+
+    // Only load fallback if at least one agent needs it
+    const fb = needsFallback ? await getFallback() : (await getFallback()); // always need fallback for single-agent path
+
+    return {
+      tactical: tacticalPrompt ?? fb,
+      technical_physical: techPrompt ?? fb,
+      behavioral_contextual: behavPrompt ?? fb,
+      fallback: fb,
+    };
+  } catch (err) {
+    console.warn("[agent-load] Failed to load DB agents, using static prompts:", err);
+    const fb = await getFallback();
+    return { tactical: fb, technical_physical: fb, behavioral_contextual: fb, fallback: fb };
   }
 }
 
@@ -372,8 +478,8 @@ async function loadKnowledgeContext(
         const raw = typeof e.content === "string"
           ? e.content
           : JSON.stringify(e.content);
-        const content = raw.length > 4000
-          ? raw.substring(0, 4000) + "... [truncated]"
+        const content = raw.length > 8000
+          ? raw.substring(0, 8000) + "... [truncated]"
           : raw;
         contextParts.push(`### ${e.title}\n${content}`);
         if (e.key) filesUsed.push(e.key);
@@ -865,7 +971,7 @@ function buildAgentUserPrompt(
 }
 
 async function runMultiAgentAnalysis(
-  systemPromptBase: string,
+  agentPrompts: AgentPrompts,
   player: PlayerData,
   analysisType: AnalysisType
 ): Promise<AgentResult[]> {
@@ -888,7 +994,7 @@ async function runMultiAgentAnalysis(
     behavioral_contextual: kbBehavioral,
   };
 
-  // Run all 3 agents in parallel — allSettled so one failure does not abort others
+  // Run all 3 agents in parallel — each with its OWN DB-loaded system prompt
   const settled = await Promise.allSettled(
     agentNames.map((name) => {
       const kb = agentKb[name];
@@ -896,7 +1002,8 @@ async function runMultiAgentAnalysis(
         buildUserPrompt(player, analysisType, kb.context),
         name
       );
-      return runSingleAgent(name, systemPromptBase, agentUserPrompt, 40000);
+      const systemPrompt = agentPrompts[name]; // Per-agent DB prompt (Sprint 174)
+      return runSingleAgent(name, systemPrompt, agentUserPrompt, 40000);
     })
   );
 
@@ -1018,12 +1125,21 @@ function mergeAgentResults(results: AgentResult[]): AnalysisResult {
     throw new Error("INSUFFICIENT_DATA: All dimension scores were null — cannot produce meaningful overall score");
   }
 
-  // confidence = lowest among successful agents (conservative)
-  const confidences = successful
-    .map((r) => r.confidence)
-    .filter((c): c is number => typeof c === "number");
-  const confidence =
-    confidences.length > 0 ? Math.min(...confidences) : 0.5;
+  // confidence = weighted average by dimension count per agent (Sprint 174)
+  // Each agent's confidence is weighted by how many scored dimensions it contributed
+  let confWeightedSum = 0;
+  let confTotalDims = 0;
+  for (const agent of successful) {
+    const agentConf = typeof agent.confidence === "number" ? agent.confidence : 0.5;
+    const scoredDims = agent.dimension_scores.filter(d => typeof d.score === "number").length;
+    if (scoredDims > 0) {
+      confWeightedSum += agentConf * scoredDims;
+      confTotalDims += scoredDims;
+    }
+  }
+  const confidence = confTotalDims > 0
+    ? Math.round((confWeightedSum / confTotalDims) * 100) / 100
+    : 0.5;
 
   // strengths / weaknesses / risk_factors — concat and deduplicate
   const strengths = deduplicateStrings(successful.map((r) => r.strengths));
@@ -1273,29 +1389,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // 4. Load knowledge bank context
     const { context: kbContext, filesUsed: kbFilesUsed } = await loadKnowledgeContext(player, analysis_type);
 
-    // 5. Run analysis (multi-agent with single-agent fallback)
+    // 5. Run analysis (multi-agent with DB-loaded agent prompts + single-agent fallback)
     const startTime = Date.now();
-    const systemPrompt = await getSystemPrompt();
+    const agentPrompts = await loadAgentPromptsFromDB(); // Sprint 174: real DB agent prompts
     let result: AnalysisResult;
     let agentsUsed: string[] = ["claude-sonnet-4-6"];
 
     try {
-      // Multi-agent path — 3 parallel specialized Claude agents
-      const agentResults = await runMultiAgentAnalysis(systemPrompt, player, analysis_type);
+      // Multi-agent path — 3 parallel specialized Claude agents with DB-loaded system prompts
+      const agentResults = await runMultiAgentAnalysis(agentPrompts, player, analysis_type);
       result = mergeAgentResults(agentResults);
       agentsUsed = agentResults.map(r =>
         r.status === "success" ? `scout-${r.agentName}` : `scout-${r.agentName}-${r.status.toUpperCase()}`
       );
-      console.log(`[scout-analyze-player] Multi-agent path succeeded`);
+      console.log(`[scout-analyze-player] Multi-agent path succeeded (DB-loaded prompts)`);
     } catch (multiErr) {
       // INSUFFICIENT_DATA = genuine data problem — do NOT fallback (Sprint 162 P0)
       if (multiErr instanceof Error && multiErr.message.startsWith("INSUFFICIENT_DATA")) {
         throw multiErr;
       }
-      // Fallback — single-agent (existing runClaudeAnalysis) for other errors (network, parsing, etc.)
+      // Fallback — single-agent with static prompt for other errors (network, parsing, etc.)
       console.warn(`[scout-analyze-player] Multi-agent failed, falling back to single-agent: ${(multiErr as Error).message}`);
       const fallbackPrompt = buildUserPrompt(player, analysis_type, kbContext);
-      result = await runClaudeAnalysis(systemPrompt, fallbackPrompt);
+      result = await runClaudeAnalysis(agentPrompts.fallback, fallbackPrompt);
       agentsUsed = ["claude-sonnet-4-6-fallback"];
     }
 
