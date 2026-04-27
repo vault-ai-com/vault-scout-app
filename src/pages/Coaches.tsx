@@ -60,7 +60,7 @@ const Coaches = () => {
           <Sparkles className="w-3.5 h-3.5" />
           AI
         </button>
-        <button type="button" onClick={() => setShowFilters(!showFilters)}
+        <button type="button" onClick={() => setShowFilters(!showFilters)} aria-label="Visa filter"
           className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-card/50 transition-all">
           <Filter className="w-4 h-4" />
         </button>
