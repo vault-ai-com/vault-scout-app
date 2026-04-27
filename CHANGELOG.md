@@ -1,5 +1,12 @@
 # Changelog
 
+## Sprint 181 — Input Completeness Warnings + Season Context (2026-04-27)
+- **`_shared/constants.ts` (NY):** Centraliserar `CURRENT_SEASON` (2026) + `ALLSVENSKAN_LEAGUE_ID` (113). `buildSeasonContext()` detekterar mixed-season data i top-level profile keys och varnar LLM.
+- **`buildInputCompletenessWarning()` (NY i quality-validation.ts):** Genererar LLM-prompt-varningar vid MINIMAL (score low, confidence 0.1-0.3) och PARTIAL (confidence 0.3-0.6) input data. EMPTY blockeras redan upstream.
+- **`scout-analyze-player/index.ts`:** Injicerar completeness- och season-varningar i alla LLM-prompts (multi-agent + fallback). Beräknas en gång i main handler.
+- **`football-data-sync/index.ts`:** Lokala consts ersatta med import från `_shared/constants.ts`.
+- **V64 GO 7.9/10.** VCE09 PASS (P0: regex begränsad till top-level keys). C66 GO LOW.
+
 ## Sprint 164 — quality_pipeline Rename + K2/K3 Fixar (2026-04-25)
 - **`quality_report` → `quality_pipeline`:** Rename i scout-personality-analysis, scout-coach-analyze, scout-coach-personality. Alla 6 edge fn nu konsistenta.
 - **K2 temporal threshold:** log_scout_pipeline_agent() threshold höjd 3.0x → 5.0x. Minskar false positives för sekventiella Opus-agenter. RAISE EXCEPTION behålls.
