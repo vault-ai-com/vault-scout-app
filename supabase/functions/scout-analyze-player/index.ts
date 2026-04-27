@@ -11,7 +11,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
-import { validateAnalysis, checkInputCompleteness, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
+import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
+import { buildSeasonContext } from "../_shared/constants.ts";
 import { callAnthropic, MODELS, AnthropicError } from "../_shared/anthropic-client.ts";
 import { sanitizePromptInput } from "../_shared/sanitize.ts";
 
@@ -506,7 +507,9 @@ async function loadKnowledgeContext(
 function buildUserPrompt(
   player: PlayerData,
   analysisType: AnalysisType,
-  kbContext: string
+  kbContext: string,
+  inputCompletenessWarning = '',
+  seasonContext = '',
 ): string {
   const pd = player.profile_data ?? {};
   const age = computeAge(player.date_of_birth);
@@ -648,7 +651,7 @@ function buildUserPrompt(
 
   const typeInstruction = ANALYSIS_TYPE_INSTRUCTIONS[analysisType];
 
-  return `${typeInstruction}
+  return `${typeInstruction}${inputCompletenessWarning}${seasonContext}
 
 ${playerBlock}
 ${statsBlock}
@@ -975,7 +978,9 @@ function buildAgentUserPrompt(
 async function runMultiAgentAnalysis(
   agentPrompts: AgentPrompts,
   player: PlayerData,
-  analysisType: AnalysisType
+  analysisType: AnalysisType,
+  inputCompletenessWarning = '',
+  seasonContext = '',
 ): Promise<AgentResult[]> {
   const agentNames = ["tactical", "technical_physical", "behavioral_contextual"] as const;
 
@@ -1001,7 +1006,7 @@ async function runMultiAgentAnalysis(
     agentNames.map((name) => {
       const kb = agentKb[name];
       const agentUserPrompt = buildAgentUserPrompt(
-        buildUserPrompt(player, analysisType, kb.context),
+        buildUserPrompt(player, analysisType, kb.context, inputCompletenessWarning, seasonContext),
         name
       );
       const systemPrompt = agentPrompts[name]; // Per-agent DB prompt (Sprint 174)
@@ -1388,6 +1393,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       `[scout-analyze-player] Input completeness: ${inputCompleteness.level}, tier: ${inputCompleteness.tier}, sources: ${inputCompleteness.source_count}`
     );
 
+    // Sprint 181: Build input completeness warning + season context for LLM prompt injection
+    const _inputCompletenessWarning = buildInputCompletenessWarning(inputCompleteness);
+    const _seasonContext = buildSeasonContext(player.profile_data as Record<string, unknown> | null);
+    if (_inputCompletenessWarning) {
+      console.log(`[scout-analyze-player] Input completeness warning injected (${inputCompleteness.level})`);
+    }
+
     // 4. Load knowledge bank context
     const { context: kbContext, filesUsed: kbFilesUsed } = await loadKnowledgeContext(player, analysis_type);
 
@@ -1399,7 +1411,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     try {
       // Multi-agent path — 3 parallel specialized Claude agents with DB-loaded system prompts
-      const agentResults = await runMultiAgentAnalysis(agentPrompts, player, analysis_type);
+      const agentResults = await runMultiAgentAnalysis(agentPrompts, player, analysis_type, _inputCompletenessWarning, _seasonContext);
       result = mergeAgentResults(agentResults);
       agentsUsed = agentResults.map(r =>
         r.status === "success" ? `scout-${r.agentName}` : `scout-${r.agentName}-${r.status.toUpperCase()}`
@@ -1412,7 +1424,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
       // Fallback — single-agent with static prompt for other errors (network, parsing, etc.)
       console.warn(`[scout-analyze-player] Multi-agent failed, falling back to single-agent: ${(multiErr as Error).message}`);
-      const fallbackPrompt = buildUserPrompt(player, analysis_type, kbContext);
+      const fallbackPrompt = buildUserPrompt(player, analysis_type, kbContext, _inputCompletenessWarning, _seasonContext);
       result = await runClaudeAnalysis(agentPrompts.fallback, fallbackPrompt);
       agentsUsed = ["claude-sonnet-4-6-fallback"];
     }

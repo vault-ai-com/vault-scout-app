@@ -102,6 +102,28 @@ export function checkInputCompleteness(input: InputCompletenessInput): InputComp
 }
 
 // ---------------------------------------------------------------------------
+// buildInputCompletenessWarning — Sprint 181: prompt warning for MINIMAL/PARTIAL
+// Returns empty string for FULL/EMPTY (EMPTY is already blocked upstream).
+// ---------------------------------------------------------------------------
+export function buildInputCompletenessWarning(result: InputCompletenessResult): string {
+  if (result.level === 'MINIMAL') {
+    return `\n## DATA COMPLETENESS WARNING: MINIMAL INPUT\n` +
+      `Only ${Object.keys(result.input_snapshot).length} profile fields available ` +
+      `(tier=${result.tier}, sources=${result.source_count}).\n` +
+      `Score LOWER overall, set confidence LOW (0.1-0.3). ` +
+      `Dimensions without data MUST be null with evidence="Insufficient data".`;
+  }
+  if (result.level === 'PARTIAL') {
+    return `\n## DATA COMPLETENESS NOTICE: PARTIAL INPUT\n` +
+      `Only ${Object.keys(result.input_snapshot).length} profile fields available ` +
+      `(tier=${result.tier}, sources=${result.source_count}).\n` +
+      `Keep confidence MODERATE (0.3-0.6). ` +
+      `Do NOT fabricate statistics or events not in the input.`;
+  }
+  return '';
+}
+
+// ---------------------------------------------------------------------------
 // Score uniformity check — all dims within ±1 of each other = suspicious
 // ---------------------------------------------------------------------------
 export function checkScoreUniformity(scores: Record<string, number>): QualityCheck {
