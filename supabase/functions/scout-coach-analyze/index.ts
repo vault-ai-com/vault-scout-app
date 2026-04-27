@@ -13,6 +13,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { validateAnalysis, type QualityReport } from "../_shared/quality-validation.ts";
 import { callAnthropic, MODELS } from "../_shared/anthropic-client.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
 
 const rateLimiter = createRateLimiter(10);
 
@@ -362,21 +363,22 @@ Deno.serve(async (req: Request) => {
     const titlesStr = Array.isArray(coach.titles) && coach.titles.length > 0 ? JSON.stringify(coach.titles) : "No titles recorded";
     const careerStr = Array.isArray(coach.career_history) && coach.career_history.length > 0 ? JSON.stringify(coach.career_history) : "No career history";
 
+    const spi = sanitizePromptInput;
     const userPrompt = `Analyze the following football coach:
 
 ## Coach Profile
-- Name: ${coach.name}
+- Name: ${spi(coach.name)}
 - Age: ${age ?? "Unknown"}
-- Nationality: ${coach.nationality ?? "Unknown"}
-- Current Club: ${coach.current_club ?? "Unknown"}
-- Current League: ${coach.current_league ?? "Unknown"}
-- Tier: ${coach.tier ?? "Unknown"}
-- Career Phase: ${coach.career_phase ?? "Unknown"}
-- Coaching Style: ${coach.coaching_style ?? "Unknown"}
-- Preferred Formation: ${coach.formation_preference ?? "Unknown"}
-- Titles: ${titlesStr}
-- Career History: ${careerStr}
-- Additional Data: ${profileStr}
+- Nationality: ${spi(coach.nationality) || "Unknown"}
+- Current Club: ${spi(coach.current_club) || "Unknown"}
+- Current League: ${spi(coach.current_league) || "Unknown"}
+- Tier: ${spi(coach.tier) || "Unknown"}
+- Career Phase: ${spi(coach.career_phase) || "Unknown"}
+- Coaching Style: ${spi(coach.coaching_style) || "Unknown"}
+- Preferred Formation: ${spi(coach.formation_preference) || "Unknown"}
+- Titles: ${spi(titlesStr)}
+- Career History: ${spi(careerStr)}
+- Additional Data: ${spi(profileStr)}
 
 ${kbContext ? `## Knowledge Bank Context\n${kbContext}\n` : ""}
 

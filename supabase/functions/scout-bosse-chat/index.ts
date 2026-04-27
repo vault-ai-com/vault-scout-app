@@ -5,6 +5,7 @@ import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "..
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { getAnthropicHeaders, resolveModel, MODELS } from "../_shared/anthropic-client.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — persistent via DB (scout_rate_limit_store)
@@ -189,7 +190,8 @@ Deno.serve(async (req: Request) => {
           .eq("id", player_id)
           .single();
         if (player) {
-          playerContext = `\n\n## Aktuell spelare\nNamn: ${player.name}\nPosition: ${player.position_primary}\nKlubb: ${player.current_club}\nLiga: ${player.current_league}\nNationalitet: ${player.nationality}\nTier: ${player.tier}\nKarrärfas: ${player.career_phase}`;
+          const spi = sanitizePromptInput;
+          playerContext = `\n\n## Aktuell spelare\nNamn: ${spi(player.name)}\nPosition: ${spi(player.position_primary)}\nKlubb: ${spi(player.current_club)}\nLiga: ${spi(player.current_league)}\nNationalitet: ${spi(player.nationality)}\nTier: ${spi(player.tier)}\nKarrärfas: ${spi(player.career_phase)}`;
 
           // Load latest completed analysis (any type)
           const { data: analyses } = await supabase
@@ -259,7 +261,7 @@ Deno.serve(async (req: Request) => {
       },
       ...(history ?? []).map((m: { role: string; content: string }) => ({
         role: m.role === "assistant" ? "assistant" : "user",
-        content: m.content,
+        content: m.role === "assistant" ? m.content : sanitizePromptInput(m.content),
       })),
     ];
 

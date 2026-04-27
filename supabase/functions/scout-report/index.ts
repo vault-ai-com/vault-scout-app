@@ -5,6 +5,7 @@ import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { callAnthropic, MODELS, type ModelId } from "../_shared/anthropic-client.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -398,27 +399,7 @@ function sanitizeText(text: string): string {
     .trim();
 }
 
-// ---------------------------------------------------------------------------
-// P0 Input sanitization — strip prompt injection patterns from DB-sourced data
-// BEFORE injecting into Claude prompts. Protects against poisoned player profiles.
-// ---------------------------------------------------------------------------
-function sanitizePromptInput(text: unknown): string {
-  if (text == null) return "";
-  let s = String(text);
-  // Strip common prompt injection patterns
-  s = s.replace(/ignore\s+(all\s+)?(previous|above|prior)\s+(instructions?|prompts?|rules?)/gi, "");
-  s = s.replace(/you\s+are\s+(now|actually|really)\s+/gi, "");
-  s = s.replace(/system\s*:\s*/gi, "");
-  s = s.replace(/\bassistant\s*:\s*/gi, "");
-  s = s.replace(/\bhuman\s*:\s*/gi, "");
-  s = s.replace(/\buser\s*:\s*/gi, "");
-  s = s.replace(/<\/?(?:system|instruction|prompt|role|context|command|override|secret|inject)[^>]*>/gi, "");
-  s = s.replace(/(?:do\s+not|don'?t|never)\s+follow\s+(your\s+)?(original|previous|system)\s+/gi, "");
-  s = s.replace(/\bDAN\b|\bjailbreak\b|\bprompt\s*inject/gi, "");
-  // Limit length per field to prevent context stuffing
-  if (s.length > 2000) s = s.slice(0, 2000) + "…";
-  return s.trim();
-}
+// sanitizePromptInput — moved to _shared/sanitize.ts (P0-2 fix)
 
 // ---------------------------------------------------------------------------
 // 15-Slide Report Builder

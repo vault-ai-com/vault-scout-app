@@ -27,6 +27,8 @@ export interface AnalysisResult {
   personality_scores?: Record<string, number>;
   evidence_count?: number;
   clamp_events?: Array<{ dim: string; original: number; clamped: number }>;
+  insufficient_dimension_count?: number;
+  total_dimension_count?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +345,32 @@ export function validateAnalysis(result: AnalysisResult, inputCompleteness?: Inp
   // Evidence count
   if (result.evidence_count !== undefined) {
     checks.push(checkEvidenceCount(result.evidence_count));
+  }
+
+  // Insufficient dimension data check (Advisory Board v24)
+  if (result.insufficient_dimension_count !== undefined && result.total_dimension_count !== undefined) {
+    const ratio = result.total_dimension_count > 0
+      ? result.insufficient_dimension_count / result.total_dimension_count
+      : 1;
+    if (ratio >= 0.7) {
+      checks.push({
+        name: 'insufficient_data_ratio',
+        status: 'HALT',
+        detail: `${result.insufficient_dimension_count}/${result.total_dimension_count} dimensioner saknar data (${Math.round(ratio * 100)}%) — profilen har minimalt informationsvärde`,
+      });
+    } else if (ratio >= 0.5) {
+      checks.push({
+        name: 'insufficient_data_ratio',
+        status: 'WARN',
+        detail: `${result.insufficient_dimension_count}/${result.total_dimension_count} dimensioner saknar data (${Math.round(ratio * 100)}%)`,
+      });
+    } else {
+      checks.push({
+        name: 'insufficient_data_ratio',
+        status: 'PASS',
+        detail: `${result.insufficient_dimension_count}/${result.total_dimension_count} dimensioner saknar data`,
+      });
+    }
   }
 
   // Clamp events

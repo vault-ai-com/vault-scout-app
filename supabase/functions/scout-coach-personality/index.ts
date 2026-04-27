@@ -11,6 +11,7 @@ import { clamp, createClampTracker } from '../_shared/personality-logic.ts';
 import { COACH_ARCHETYPES, resolveCoachArchetype, resolveCoachRecommendation, computeCoachConfidence } from '../_shared/coach-personality-logic.ts';
 import { validateAnalysis, type QualityReport } from '../_shared/quality-validation.ts';
 import { callAnthropic, MODELS } from '../_shared/anthropic-client.ts';
+import { sanitizePromptInput } from '../_shared/sanitize.ts';
 
 const rateLimiter = createRateLimiter(5);
 
@@ -149,17 +150,18 @@ ${kbContext}
 
 Return ONLY valid JSON.`;
 
+    const spi = sanitizePromptInput;
     const userPrompt = `Analyze the personality profile of this football coach:
 
-Name: ${coach.name}
-Nationality: ${coach.nationality ?? 'Unknown'}
-Current Club: ${coach.current_club ?? 'Unknown'}
-League: ${coach.current_league ?? 'Unknown'}
-Coaching Style: ${coach.coaching_style ?? 'Unknown'}
-Formation: ${coach.formation_preference ?? 'Unknown'}
-Titles: ${titlesStr}
-Career History: ${careerStr}
-Profile Data: ${profileStr}
+Name: ${spi(coach.name)}
+Nationality: ${spi(coach.nationality) || 'Unknown'}
+Current Club: ${spi(coach.current_club) || 'Unknown'}
+League: ${spi(coach.current_league) || 'Unknown'}
+Coaching Style: ${spi(coach.coaching_style) || 'Unknown'}
+Formation: ${spi(coach.formation_preference) || 'Unknown'}
+Titles: ${spi(titlesStr)}
+Career History: ${spi(careerStr)}
+Profile Data: ${spi(profileStr)}
 
 Return JSON with this structure:
 {

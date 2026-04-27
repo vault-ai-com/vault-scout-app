@@ -2,14 +2,15 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const VERSION = "v23-12dim-bpa";
+const VERSION = "v24-advisory-board-caps";
 
 import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
-import { ARCHETYPES, clamp, createClampTracker, resolveArchetype, resolveRecommendation, computeConfidence } from '../_shared/personality-logic.ts';
+import { ARCHETYPES, clamp, createClampTracker, resolveArchetype, resolveRecommendation, computeConfidence, capConfidenceByDataAvailability, evaluateStressArchetype, countInsufficientDimensions } from '../_shared/personality-logic.ts';
 import { validateAnalysis, type QualityReport } from '../_shared/quality-validation.ts';
 import { callAnthropic, MODELS } from '../_shared/anthropic-client.ts';
+import { sanitizePromptInput } from '../_shared/sanitize.ts';
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -170,10 +171,11 @@ VIKTIGT: Om färre än 6 dimensioner har tillräcklig data i inputen, sätt CONF
 
 ${kbContext ? 'Knowledge Bank Context:\n' + kbContext : ''}`;
 
-    const userPrompt = `Analysera: ${player.name} (${player.position_primary}, ${player.tier}, ${player.career_phase})
-Klubb: ${player.current_club} | Liga: ${player.current_league}
-Ålder: ${ageStr} | Nationalitet: ${player.nationality}
-${player.profile_data ? 'Profildata: ' + (typeof player.profile_data === 'string' ? player.profile_data : JSON.stringify(player.profile_data)).slice(0, 2000) : ''}
+    const spi = sanitizePromptInput;
+    const userPrompt = `Analysera: ${spi(player.name)} (${spi(player.position_primary)}, ${spi(player.tier)}, ${spi(player.career_phase)})
+Klubb: ${spi(player.current_club)} | Liga: ${spi(player.current_league)}
+Ålder: ${ageStr} | Nationalitet: ${spi(player.nationality)}
+${player.profile_data ? 'Profildata: ' + spi(typeof player.profile_data === 'string' ? player.profile_data : JSON.stringify(player.profile_data)) : ''}
 
 Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. contradiction_score 0-1. CONFIDENCE_LABEL 0-1. coaching_approach max 7 items. integration_risks max 6 items. stress_archetype max 100 tecken.`;
 
@@ -266,13 +268,46 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
       (d: unknown) => d && typeof (d as { evidence: string }).evidence === 'string' && (d as { evidence: string }).evidence.length > 10
     ).length;
     const maxEvidence = 11; // 7 generic + 4 KB-enhanced
-    const confidence_score = computeConfidence(evidenceCount, llmConf, dataSourceQuality);
-    const confidence_reasoning = String(parsed.confidence_reasoning || `Evidence ratio: ${evidenceCount}/${maxEvidence}, LLM: ${llmConf}, Source: ${dataSourceQuality}`);
+    const rawConfidence = computeConfidence(evidenceCount, llmConf, dataSourceQuality);
+
+    // --- Advisory Board confidence cap (Jordet+Knutson+Ankersen consensus) ---
+    // Count dimensions with "Otillräcklig data" evidence
+    const dimEntries: Record<string, { score: number; evidence: string }> = {
+      decision_tempo: dt, risk_appetite: ra, ambition_level: al,
+      team_orientation: to, tactical_understanding: tu, structure_need: sn,
+      career_motivation: cm, ego, resilience, coachability, x_factor: xFactor,
+    };
+    const insufficientCount = countInsufficientDimensions(dimEntries);
+
+    // Extract match count from profile_data if available
+    const profileData = player.profile_data as Record<string, unknown> | null;
+    const matchCount = profileData
+      ? (typeof (profileData as Record<string, unknown>).total_matches === 'number'
+        ? (profileData as Record<string, unknown>).total_matches as number
+        : typeof (profileData as Record<string, unknown>).matches === 'number'
+          ? (profileData as Record<string, unknown>).matches as number
+          : undefined)
+      : undefined;
+
+    const confidenceCap = capConfidenceByDataAvailability(
+      rawConfidence, insufficientCount, 11, dataSourceQuality, matchCount
+    );
+    const confidence_score = confidenceCap.confidence;
+    const confidence_reasoning = confidenceCap.cap_applied
+      ? `Capped: ${confidenceCap.cap_reason} (raw: ${rawConfidence}, insufficent: ${insufficientCount}/11)`
+      : String(parsed.confidence_reasoning || `Evidence ratio: ${evidenceCount}/${maxEvidence}, LLM: ${llmConf}, Source: ${dataSourceQuality}`);
 
     const duration_ms = Date.now() - startTime;
 
-    // Stress archetype from LLM or fallback to composite
-    const stressArchetype = String(parsed.stress_archetype || composite_archetype).slice(0, 200);
+    // Stress archetype — Jordet Advisory: EJ BEDÖMBAR utan beteendedata
+    const stressEval = evaluateStressArchetype(
+      String(parsed.stress_archetype || composite_archetype).slice(0, 200),
+      insufficientCount,
+      11,
+      resilience.evidence,
+      dt.evidence,
+    );
+    const stressArchetype = stressEval.stress_archetype;
 
     const profile = {
       decision_tempo: { name: 'Beslutstempo', ...dt },
@@ -308,13 +343,21 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
     const recommendation = resolveRecommendation(composite_archetype, dimScores, contradictionScore, confidence_score);
 
     // Quality validation — deterministic checks on analysis output
+    const generic7Scores: Record<string, number> = {
+      decision_tempo: dt.score, risk_appetite: ra.score, ambition_level: al.score,
+      team_orientation: to.score, tactical_understanding: tu.score,
+      structure_need: sn.score, career_motivation: cm.score,
+    };
     const qualityReport: QualityReport = validateAnalysis({
       overall_score,
       confidence: confidence_score,
       recommendation,
+      dimension_scores: generic7Scores,
       personality_scores: dimScores,
       evidence_count: evidenceCount,
       clamp_events: clampEvents,
+      insufficient_dimension_count: insufficientCount,
+      total_dimension_count: 11,
     });
     if (qualityReport.gate === 'HALT') {
       console.warn(`[scout-personality] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
@@ -328,6 +371,17 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
       cache_hit: false,
       quality_pipeline: qualityReport,
       ...(clampEvents.length > 0 ? { clamp_events: clampEvents } : {}),
+      // Advisory Board transparency (v24)
+      advisory_caps: {
+        confidence_cap_applied: confidenceCap.cap_applied,
+        confidence_raw: rawConfidence,
+        confidence_capped: confidence_score,
+        cap_reason: confidenceCap.cap_reason,
+        insufficient_dimensions: insufficientCount,
+        total_dimensions: 11,
+        stress_assessable: stressEval.assessable,
+        match_count: matchCount ?? null,
+      },
     };
 
     await supabase.from('scout_analyses').insert({

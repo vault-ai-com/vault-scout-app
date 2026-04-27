@@ -17,11 +17,14 @@ export interface AuthError {
 }
 
 /**
- * Authenticate a request via JWT.
- * - User JWT: validates via supabase auth.getUser()
- * - Service-role key: detected by JWT payload role === 'service_role'
- *   Used by terminal pipeline (Python → edge fn). Safe because service_role
- *   key is never exposed client-side.
+ * Authenticate a request via JWT or service-role key.
+ * - Service-role key: compared against SUPABASE_SERVICE_ROLE_KEY env var.
+ *   Used by terminal pipeline (Python → edge fn).
+ * - User JWT: validated via supabase auth.getUser()
+ *
+ * P0-1 fix: Previously decoded JWT payload and trusted role claim without
+ * cryptographic verification. Now compares the full token against the known
+ * service-role key. A forged JWT with role=service_role no longer bypasses auth.
  */
 export async function authenticateRequest(
   req: Request,
@@ -33,19 +36,10 @@ export async function authenticateRequest(
 
   const token = authHeader.replace("Bearer ", "");
 
-  // Decode JWT payload (no verification — gateway already verified if verify_jwt=true)
-  try {
-    const raw = token.split(".")[1];
-    if (raw) {
-      // Convert base64url → base64 (JWT uses url-safe alphabet without padding)
-      const b64 = raw.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (raw.length % 4)) % 4);
-      const payload = JSON.parse(atob(b64));
-      if (payload.role === "service_role") {
-        return { ok: true, userId: "terminal-pipeline", isServiceRole: true };
-      }
-    }
-  } catch {
-    // Not a valid JWT structure — fall through to user auth
+  // Service-role key detection: compare full token against known secret
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (serviceRoleKey && token === serviceRoleKey) {
+    return { ok: true, userId: "terminal-pipeline", isServiceRole: true };
   }
 
   // Standard user JWT authentication

@@ -13,6 +13,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { validateAnalysis, checkInputCompleteness, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
 import { callAnthropic, MODELS, AnthropicError } from "../_shared/anthropic-client.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
 
 const rateLimiter = createRateLimiter(10);
 
@@ -509,18 +510,19 @@ function buildUserPrompt(
 ): string {
   const pd = player.profile_data ?? {};
   const age = computeAge(player.date_of_birth);
+  const spi = sanitizePromptInput;
   const playerBlock = `## Player Profile
-- Name: ${player.name}
-- Position: ${player.position_primary}${player.position_secondary?.length ? ` (also: ${player.position_secondary.join(", ")})` : ""}
+- Name: ${spi(player.name)}
+- Position: ${spi(player.position_primary)}${player.position_secondary?.length ? ` (also: ${player.position_secondary.map(spi).join(", ")})` : ""}
 - Age: ${age ?? "Unknown"}
-- Nationality: ${player.nationality}
-- Current Club: ${player.current_club}
-- Current League: ${player.current_league ?? "Unknown"}
+- Nationality: ${spi(player.nationality)}
+- Current Club: ${spi(player.current_club)}
+- Current League: ${spi(player.current_league) || "Unknown"}
 - Contract Expires: ${player.contract_expires ?? "Unknown"}
 - Market Value: ${player.market_value_eur != null ? `\u20ac${player.market_value_eur.toLocaleString()}` : "Unknown"}
-- Tier: ${player.tier ?? "Unknown"}
-- Career Phase: ${player.career_phase ?? "Unknown"}
-- Preferred Foot: ${pd.preferred_foot ?? "Unknown"}
+- Tier: ${spi(player.tier) || "Unknown"}
+- Career Phase: ${spi(player.career_phase) || "Unknown"}
+- Preferred Foot: ${spi(pd.preferred_foot) || "Unknown"}
 - Height: ${pd.height_cm != null ? `${pd.height_cm} cm` : "Unknown"}
 - Weight: ${pd.weight_kg != null ? `${pd.weight_kg} kg` : "Unknown"}`;
 
@@ -543,9 +545,9 @@ function buildUserPrompt(
   if (pd.career_history) careerParts.push(JSON.stringify(pd.career_history, null, 2));
   if (pd.career_clubs) careerParts.push(`Clubs: ${JSON.stringify(pd.career_clubs, null, 2)}`);
   if (pd.career_timeline) careerParts.push(`Timeline: ${JSON.stringify(pd.career_timeline, null, 2)}`);
-  if (Array.isArray(pd.previous_clubs)) careerParts.push(`Previous Clubs: ${(pd.previous_clubs as string[]).join(", ")}`);
-  else if (typeof pd.previous_clubs === "string") careerParts.push(`Previous Clubs: ${pd.previous_clubs}`);
-  if (typeof pd.previous_club === "string") careerParts.push(`Previous Club: ${pd.previous_club}`);
+  if (Array.isArray(pd.previous_clubs)) careerParts.push(`Previous Clubs: ${(pd.previous_clubs as string[]).map(spi).join(", ")}`);
+  else if (typeof pd.previous_clubs === "string") careerParts.push(`Previous Clubs: ${spi(pd.previous_clubs)}`);
+  if (typeof pd.previous_club === "string") careerParts.push(`Previous Club: ${spi(pd.previous_club)}`);
   const careerHistoryBlock = careerParts.length > 0 ? `\n## Career History\n${careerParts.join("\n")}` : "";
 
   const careerStatsParts: string[] = [];
@@ -596,17 +598,17 @@ function buildUserPrompt(
   const recentGoalsBlock = goalParts.length > 0 ? `\n## Recent Goal Contributions\n${goalParts.join("\n")}` : "";
 
   // --- Strengths & weaknesses (prior scouting assessment) ---
-  const strengthsList = Array.isArray(pd.strengths) ? (pd.strengths as string[]).map((s) => `- ${s}`).join("\n") : typeof pd.strengths === "string" ? pd.strengths : null;
+  const strengthsList = Array.isArray(pd.strengths) ? (pd.strengths as string[]).map((s) => `- ${spi(s)}`).join("\n") : typeof pd.strengths === "string" ? spi(pd.strengths) : null;
   const storedStrengthsBlock = strengthsList ? `\n## Scouted Strengths (Prior Assessment)\n${strengthsList}` : "";
 
   const weaknessParts: string[] = [];
-  if (Array.isArray(pd.weaknesses)) weaknessParts.push(...(pd.weaknesses as string[]).map((w) => `- ${w}`));
-  else if (typeof pd.weaknesses === "string") weaknessParts.push(pd.weaknesses);
-  if (typeof pd.key_weakness === "string") weaknessParts.push(`- Key weakness: ${pd.key_weakness}`);
-  if (typeof pd.disqualifying_weakness === "string") weaknessParts.push(`- Disqualifying: ${pd.disqualifying_weakness}`);
+  if (Array.isArray(pd.weaknesses)) weaknessParts.push(...(pd.weaknesses as string[]).map((w) => `- ${spi(w)}`));
+  else if (typeof pd.weaknesses === "string") weaknessParts.push(spi(pd.weaknesses));
+  if (typeof pd.key_weakness === "string") weaknessParts.push(`- Key weakness: ${spi(pd.key_weakness)}`);
+  if (typeof pd.disqualifying_weakness === "string") weaknessParts.push(`- Disqualifying: ${spi(pd.disqualifying_weakness)}`);
   const storedWeaknessesBlock = weaknessParts.length > 0 ? `\n## Scouted Weaknesses (Prior Assessment)\n${weaknessParts.join("\n")}` : "";
 
-  const styleNotesBlock = typeof pd.style_notes === "string" ? `\n## Playing Style Notes\n${pd.style_notes}` : "";
+  const styleNotesBlock = typeof pd.style_notes === "string" ? `\n## Playing Style Notes\n${spi(pd.style_notes)}` : "";
 
   // --- Injury & physical ---
   const injuryParts: string[] = [];
@@ -633,16 +635,16 @@ function buildUserPrompt(
   const transferBlock = transferParts.length > 0 ? `\n## Transfer Context\n${transferParts.join("\n")}` : "";
 
   const agentBlock = typeof pd.agent === "string"
-    ? `\n## Agent\n${pd.agent}${typeof pd.agent_note === "string" ? ` — ${pd.agent_note}` : ""}`
+    ? `\n## Agent\n${spi(pd.agent)}${typeof pd.agent_note === "string" ? ` — ${spi(pd.agent_note)}` : ""}`
     : "";
 
   const vaultFlagsBlock = pd.vault_flags ? `\n## Scout Flags\n${JSON.stringify(pd.vault_flags, null, 2)}` : "";
 
-  const keyQuotesList = Array.isArray(pd.key_quotes) ? (pd.key_quotes as string[]).map((q) => `"${q}"`).join("\n") : typeof pd.key_quotes === "string" ? pd.key_quotes : null;
+  const keyQuotesList = Array.isArray(pd.key_quotes) ? (pd.key_quotes as string[]).map((q) => `"${spi(q)}"`).join("\n") : typeof pd.key_quotes === "string" ? spi(pd.key_quotes) : null;
   const keyQuotesBlock = keyQuotesList ? `\n## Key Quotes\n${keyQuotesList}` : "";
 
-  const notesBlock = typeof pd.notes === "string" ? `\n## Notes\n${pd.notes}` : "";
-  const descriptionBlock = typeof pd.description === "string" ? `\n## Description\n${pd.description}` : "";
+  const notesBlock = typeof pd.notes === "string" ? `\n## Notes\n${spi(pd.notes)}` : "";
+  const descriptionBlock = typeof pd.description === "string" ? `\n## Description\n${spi(pd.description)}` : "";
 
   const typeInstruction = ANALYSIS_TYPE_INSTRUCTIONS[analysisType];
 

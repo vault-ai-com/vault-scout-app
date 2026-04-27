@@ -145,3 +145,121 @@ export function computeConfidence(
   const deterministic = (0.60 * evidenceRatio) + (0.30 * llmConfidence) + (0.10 * baseline);
   return Math.round(clamp(deterministic, 0.10, 0.95) * 100) / 100;
 }
+
+// ---------------------------------------------------------------------------
+// capConfidenceByDataAvailability — Advisory Board hard caps (Sprint SA-audit)
+//
+// Jordet: max 0.55 utan observation, max 0.40 utan matchstatistik, max 0.35 ≤5 matcher
+// Knutson: 3-axlad (datamängd + datakvalitet + temporal coverage)
+// Ankersen: min 900 minuter för profil
+//
+// DETERMINISTISK — inte LLM-bedömd. Körs EFTER computeConfidence.
+// ---------------------------------------------------------------------------
+export function capConfidenceByDataAvailability(
+  rawConfidence: number,
+  insufficientDataCount: number,
+  totalDims: number,
+  dataSourceQuality: string,
+  matchCount?: number,
+): { confidence: number; cap_applied: boolean; cap_reason: string | null } {
+  let cap = 0.95;
+  let reason: string | null = null;
+
+  // Cap by data source quality — PUBLIC_ONLY = no direct observations
+  if (dataSourceQuality === 'PUBLIC_ONLY') {
+    cap = Math.min(cap, 0.55);
+    reason = 'PUBLIC_ONLY: max 0.55 utan direkta observationer';
+  }
+
+  // Cap by insufficient data ratio
+  const insufficientRatio = totalDims > 0 ? insufficientDataCount / totalDims : 1;
+  if (insufficientRatio >= 0.7) {
+    cap = Math.min(cap, 0.30);
+    reason = `${insufficientDataCount}/${totalDims} dimensioner saknar data: max 0.30`;
+  } else if (insufficientRatio >= 0.5) {
+    cap = Math.min(cap, 0.40);
+    reason = reason ?? `${insufficientDataCount}/${totalDims} dimensioner saknar data: max 0.40`;
+  } else if (insufficientRatio >= 0.3) {
+    cap = Math.min(cap, 0.50);
+    reason = reason ?? `${insufficientDataCount}/${totalDims} dimensioner saknar data: max 0.50`;
+  }
+
+  // Cap by match count if available
+  if (matchCount !== undefined && matchCount >= 0) {
+    if (matchCount <= 5) {
+      cap = Math.min(cap, 0.35);
+      reason = `${matchCount} matcher: max 0.35 (minimum 15 för stabil profil)`;
+    } else if (matchCount <= 15) {
+      cap = Math.min(cap, 0.45);
+      reason = reason ?? `${matchCount} matcher: max 0.45`;
+    }
+  }
+
+  const capped = Math.round(Math.min(rawConfidence, cap) * 100) / 100;
+  return {
+    confidence: capped,
+    cap_applied: capped < rawConfidence,
+    cap_reason: capped < rawConfidence ? reason : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// evaluateStressArchetype — Jordet P1: EJ BEDÖMBAR utan beteendedata
+//
+// Stress-arketyp kräver observation av beteende under press.
+// Utan evidens för resilience + decision_tempo = projektion, inte observation.
+// ---------------------------------------------------------------------------
+export function evaluateStressArchetype(
+  llmStressArchetype: string,
+  insufficientDataCount: number,
+  totalDims: number,
+  resilienceEvidence: string,
+  decisionTempoEvidence: string,
+): { stress_archetype: string; assessable: boolean } {
+  const INSUFFICIENT_MARKERS = [
+    'Otillräcklig data',
+    'Otillräcklig verifierad data',
+    'ingen evidens tillgänglig',
+  ];
+
+  const isInsufficient = (evidence: string) =>
+    INSUFFICIENT_MARKERS.some(m => evidence.includes(m));
+
+  // If majority of dims lack data, stress archetype is not assessable
+  if (insufficientDataCount >= Math.ceil(totalDims * 0.5)) {
+    return {
+      stress_archetype: 'EJ BEDÖMBAR — kräver beteendeobservationer under press',
+      assessable: false,
+    };
+  }
+
+  // If both resilience and decision_tempo lack evidence, can't assess stress
+  if (isInsufficient(resilienceEvidence) && isInsufficient(decisionTempoEvidence)) {
+    return {
+      stress_archetype: 'EJ BEDÖMBAR — resiliens och beslutstempo saknar evidens',
+      assessable: false,
+    };
+  }
+
+  return { stress_archetype: llmStressArchetype, assessable: true };
+}
+
+// ---------------------------------------------------------------------------
+// countInsufficientDimensions — count dims with "Otillräcklig data" evidence
+// ---------------------------------------------------------------------------
+export function countInsufficientDimensions(
+  dims: Record<string, { score: number; evidence: string }>,
+): number {
+  const INSUFFICIENT_MARKERS = [
+    'Otillräcklig data',
+    'Otillräcklig verifierad data',
+    'ingen evidens tillgänglig',
+  ];
+  let count = 0;
+  for (const d of Object.values(dims)) {
+    if (INSUFFICIENT_MARKERS.some(m => d.evidence.includes(m))) {
+      count++;
+    }
+  }
+  return count;
+}

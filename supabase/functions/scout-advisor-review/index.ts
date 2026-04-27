@@ -13,6 +13,7 @@ import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { callAnthropic, MODELS } from "../_shared/anthropic-client.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
 
 const rateLimiter = createRateLimiter(5);
 
@@ -260,7 +261,7 @@ async function getAdvisorOpinion(
 ${dimFramework}
 
 ## Spelanalys att granska
-Spelare: ${playerName}
+Spelare: ${sanitizePromptInput(playerName)}
 
 ${analysisJson}
 
