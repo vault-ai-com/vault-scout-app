@@ -1,5 +1,14 @@
 # Changelog
 
+## Sprint 183 — Scout Report Quality Gate System (2026-04-27)
+- **`scout_report_routing_rules` (NY tabell):** 7 report_type → cluster routing-regler. Enforcar att terminalen använder rätt rapport-kluster (vault_player_report, vault_team_report, etc.) istället för inline HTML. `get_report_cluster_routing()` RPC med fallback till adhoc_report.
+- **`vault_report_quality_gate` (NYTT kluster, 3 agenter):** qg01_data_renderer (Sonnet), qg02_tripwire (Haiku, deterministisk), qg03_blind_critic (Opus). För ad-hoc rapporter utan eget kluster. Pipeline requirements i `scout_pipeline_agent_requirements`.
+- **`scout_report_quality_audit` (NY tabell):** Audit trail för quality chain (tripwire + blind critic). `quality_chain_complete` GENERATED column. `check_report_quality_chain()` RPC med A/B/C/F compliance grading. `log_quality_chain_step()` UPSERT RPC.
+- **`ha04_rule_compliance_auditor`:** System_prompt utökat med SCOUT RAPPORT COMPLIANCE sektion. Anropar `check_report_quality_chain()` vid audit. Grade F = AUTO-HALT.
+- **RLS:** Enabled på båda nya tabeller med authenticated SELECT + service_role CRUD policies.
+- **11 migrationer totalt** (9 sprint + 2 fixes: RLS + tripwire WARN constraint).
+- **V64 GO 8.6/10.** VCE09 ACQUITTED (5 attacker). VET09 12/12 VERIFIED. V65 WARN→fixad. C91 GO LOW.
+
 ## Sprint 182 — Utöka buildSeasonContext till alla scout edge functions (2026-04-27)
 - **`scout-personality-analysis/index.ts`:** Injicerar `checkInputCompleteness()` + `buildInputCompletenessWarning()` + `buildSeasonContext()` i LLM-prompt. Samma mönster som scout-analyze-player.
 - **`scout-coach-analyze/index.ts`:** Samma injection. Coach CDIM-analys får nu input completeness warnings + season context.
