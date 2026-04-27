@@ -8,9 +8,10 @@ import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "..
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { ARCHETYPES, clamp, createClampTracker, resolveArchetype, resolveRecommendation, computeConfidence, capConfidenceByDataAvailability, evaluateStressArchetype, countInsufficientDimensions } from '../_shared/personality-logic.ts';
-import { validateAnalysis, type QualityReport } from '../_shared/quality-validation.ts';
+import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, type QualityReport, type InputCompletenessResult } from '../_shared/quality-validation.ts';
 import { callAnthropic, MODELS } from '../_shared/anthropic-client.ts';
 import { sanitizePromptInput } from '../_shared/sanitize.ts';
+import { buildSeasonContext } from '../_shared/constants.ts';
 
 // ---------------------------------------------------------------------------
 // Rate limiter — in-memory per isolate (Deno Deploy)
@@ -127,6 +128,14 @@ Deno.serve(async (req: Request) => {
       ? String(new Date().getFullYear() - new Date(player.date_of_birth).getFullYear())
       : 'okänd';
 
+    // Sprint 182: Input completeness + season context for LLM prompt injection
+    const inputCompleteness: InputCompletenessResult = checkInputCompleteness({
+      profile_data: player.profile_data as Record<string, unknown> | null,
+      source_ids: [],
+    });
+    const _inputCompletenessWarning = buildInputCompletenessWarning(inputCompleteness);
+    const _seasonContext = buildSeasonContext(player.profile_data as Record<string, unknown> | null);
+
     const systemPrompt = `Du är en världsledande fotbollspsykolog och beteendeanalytiker.
 Din uppgift är att analysera en fotbollsspelares psykologiska profil baserat på tillgänglig information.
 Använd EXAKT dessa 12 dimensioner och returnera JSON.
@@ -176,6 +185,7 @@ ${kbContext ? 'Knowledge Bank Context:\n' + kbContext : ''}`;
 Klubb: ${spi(player.current_club)} | Liga: ${spi(player.current_league)}
 Ålder: ${ageStr} | Nationalitet: ${spi(player.nationality)}
 ${player.profile_data ? 'Profildata: ' + spi(typeof player.profile_data === 'string' ? player.profile_data : JSON.stringify(player.profile_data)) : ''}
+${_inputCompletenessWarning}${_seasonContext}
 
 Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. contradiction_score 0-1. CONFIDENCE_LABEL 0-1. coaching_approach max 7 items. integration_risks max 6 items. stress_archetype max 100 tecken.`;
 

@@ -9,9 +9,10 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { clamp, createClampTracker } from '../_shared/personality-logic.ts';
 import { COACH_ARCHETYPES, resolveCoachArchetype, resolveCoachRecommendation, computeCoachConfidence } from '../_shared/coach-personality-logic.ts';
-import { validateAnalysis, type QualityReport } from '../_shared/quality-validation.ts';
+import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, type QualityReport, type InputCompletenessResult } from '../_shared/quality-validation.ts';
 import { callAnthropic, MODELS } from '../_shared/anthropic-client.ts';
 import { sanitizePromptInput } from '../_shared/sanitize.ts';
+import { buildSeasonContext } from '../_shared/constants.ts';
 
 const rateLimiter = createRateLimiter(5);
 
@@ -110,6 +111,14 @@ Deno.serve(async (req: Request) => {
     const careerStr = Array.isArray(coach.career_history) && coach.career_history.length > 0 ? JSON.stringify(coach.career_history) : 'None';
     const profileStr = coach.profile_data ? JSON.stringify(coach.profile_data) : 'None';
 
+    // Sprint 182: Input completeness + season context for LLM prompt injection
+    const inputCompleteness: InputCompletenessResult = checkInputCompleteness({
+      profile_data: coach.profile_data as Record<string, unknown> | null,
+      source_ids: [],
+    });
+    const _inputCompletenessWarning = buildInputCompletenessWarning(inputCompleteness);
+    const _seasonContext = buildSeasonContext(coach.profile_data as Record<string, unknown> | null);
+
     const systemPrompt = `You are Vault AI Scout — Coach Personality Analyst. You produce rigorous behavioral profiles of football coaches.
 
 ## 12 Coach-BPA Dimensions
@@ -162,6 +171,7 @@ Formation: ${spi(coach.formation_preference) || 'Unknown'}
 Titles: ${spi(titlesStr)}
 Career History: ${spi(careerStr)}
 Profile Data: ${spi(profileStr)}
+${_inputCompletenessWarning}${_seasonContext}
 
 Return JSON with this structure:
 {

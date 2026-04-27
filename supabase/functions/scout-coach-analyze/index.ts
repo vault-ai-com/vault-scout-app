@@ -11,9 +11,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
-import { validateAnalysis, type QualityReport } from "../_shared/quality-validation.ts";
+import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
 import { callAnthropic, MODELS } from "../_shared/anthropic-client.ts";
 import { sanitizePromptInput } from "../_shared/sanitize.ts";
+import { buildSeasonContext } from "../_shared/constants.ts";
 
 const rateLimiter = createRateLimiter(10);
 
@@ -357,6 +358,14 @@ Deno.serve(async (req: Request) => {
     // Load Knowledge Bank
     const kbContext = await loadKnowledgeBank();
 
+    // Sprint 182: Input completeness + season context for LLM prompt injection
+    const inputCompleteness: InputCompletenessResult = checkInputCompleteness({
+      profile_data: coach.profile_data ?? null,
+      source_ids: [],
+    });
+    const _inputCompletenessWarning = buildInputCompletenessWarning(inputCompleteness);
+    const _seasonContext = buildSeasonContext(coach.profile_data ?? null);
+
     // Build user prompt
     const age = computeAge(coach.date_of_birth);
     const profileStr = coach.profile_data ? JSON.stringify(coach.profile_data) : "No additional profile data";
@@ -381,6 +390,7 @@ Deno.serve(async (req: Request) => {
 - Additional Data: ${spi(profileStr)}
 
 ${kbContext ? `## Knowledge Bank Context\n${kbContext}\n` : ""}
+${_inputCompletenessWarning}${_seasonContext}
 
 ## Analysis Instructions
 ${ANALYSIS_TYPE_INSTRUCTIONS[analysisType as AnalysisType]}

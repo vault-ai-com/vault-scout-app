@@ -1,5 +1,12 @@
 # Changelog
 
+## Sprint 182 — Utöka buildSeasonContext till alla scout edge functions (2026-04-27)
+- **`scout-personality-analysis/index.ts`:** Injicerar `checkInputCompleteness()` + `buildInputCompletenessWarning()` + `buildSeasonContext()` i LLM-prompt. Samma mönster som scout-analyze-player.
+- **`scout-coach-analyze/index.ts`:** Samma injection. Coach CDIM-analys får nu input completeness warnings + season context.
+- **`scout-coach-personality/index.ts`:** Samma injection. Coach BPA får nu input completeness warnings + season context.
+- **Netto:** 3 filer, +33 rader, -3 rader. Alla 6 scout edge fn med LLM-prompts nu konsistenta.
+- **V64 GO 4.8/5.** VCE09 PASS (8 attacker ACQUITTED). C66 GO LOW.
+
 ## Sprint 181 — Input Completeness Warnings + Season Context (2026-04-27)
 - **`_shared/constants.ts` (NY):** Centraliserar `CURRENT_SEASON` (2026) + `ALLSVENSKAN_LEAGUE_ID` (113). `buildSeasonContext()` detekterar mixed-season data i top-level profile keys och varnar LLM.
 - **`buildInputCompletenessWarning()` (NY i quality-validation.ts):** Genererar LLM-prompt-varningar vid MINIMAL (score low, confidence 0.1-0.3) och PARTIAL (confidence 0.3-0.6) input data. EMPTY blockeras redan upstream.
