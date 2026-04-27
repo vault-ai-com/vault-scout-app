@@ -501,6 +501,68 @@ async function loadKnowledgeContext(
 }
 
 // ---------------------------------------------------------------------------
+// Fetch football API match stats for a player (non-blocking)
+// ---------------------------------------------------------------------------
+
+async function fetchFootballStats(playerName: string): Promise<Record<string, unknown> | null> {
+  try {
+    const data = await supabaseRpc("get_player_football_stats", { p_player_name: playerName });
+    const result = data as Record<string, unknown> | null;
+    const matchesFound = result?.matches_found ?? 0;
+    console.log(
+      `[scout-analyze-player] Football stats: ${matchesFound} matches found for ${playerName}`
+    );
+    if (!result || matchesFound === 0) return null;
+    return result;
+  } catch (err) {
+    console.warn("[scout-analyze-player] fetchFootballStats failed (non-blocking):", err);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Build formatted markdown block from football stats
+// ---------------------------------------------------------------------------
+
+function buildFootballStatsBlock(stats: Record<string, unknown> | null): string {
+  if (!stats || !stats.aggregated_stats) return "";
+
+  const agg = stats.aggregated_stats as Record<string, unknown>;
+  const recent = (stats.recent_matches as Record<string, unknown>[]) ?? [];
+
+  const lines: string[] = [
+    "\n## Football API Match Data",
+    `- Matches analyzed: ${agg.matches_analyzed ?? 0}`,
+    `- Avg rating: ${agg.avg_rating ?? "N/A"}`,
+    `- Goals: ${agg.total_goals ?? 0} | Assists: ${agg.total_assists ?? 0}`,
+    `- Avg minutes/match: ${agg.avg_minutes_per_match ?? "N/A"} | Total minutes: ${agg.total_minutes ?? 0}`,
+    `- Pass accuracy (avg): ${agg.avg_pass_accuracy ?? "N/A"}%`,
+    `- Tackles: ${agg.total_tackles ?? 0} | Interceptions: ${agg.total_interceptions ?? 0}`,
+    `- Duels won: ${agg.total_duels_won ?? 0} | Dribbles succeeded: ${agg.total_dribbles_succeeded ?? 0}`,
+    `- Yellow cards: ${agg.total_yellow_cards ?? 0} | Red cards: ${agg.total_red_cards ?? 0}`,
+  ];
+
+  if (recent.length > 0) {
+    lines.push("");
+    lines.push("### Recent Matches (last 10)");
+    lines.push("| Date | Match | Rating | G | A | Min | Pos |");
+    lines.push("|------|-------|--------|---|---|-----|-----|");
+    for (const m of recent) {
+      const date = m.match_date ? String(m.match_date).slice(0, 10) : "?";
+      const matchStr = `${m.home_team ?? "?"} vs ${m.away_team ?? "?"}${m.score_home != null ? ` (${m.score_home}-${m.score_away})` : ""}`;
+      const rating = m.rating != null ? String(m.rating) : "-";
+      const goals = m.goals != null ? String(m.goals) : "-";
+      const assists = m.assists != null ? String(m.assists) : "-";
+      const mins = m.minutes_played != null ? String(m.minutes_played) : "-";
+      const pos = m.position != null ? String(m.position) : "-";
+      lines.push(`| ${date} | ${matchStr} | ${rating} | ${goals} | ${assists} | ${mins} | ${pos} |`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // Build user prompt from player data
 // ---------------------------------------------------------------------------
 
@@ -510,6 +572,7 @@ function buildUserPrompt(
   kbContext: string,
   inputCompletenessWarning = '',
   seasonContext = '',
+  footballStatsBlock = '',
 ): string {
   const pd = player.profile_data ?? {};
   const age = computeAge(player.date_of_birth);
@@ -661,6 +724,7 @@ ${careerHistoryBlock}
 ${careerStatsBlock}
 ${honorsBlock}
 ${currentSeasonBlock}
+${footballStatsBlock}
 ${recentGoalsBlock}
 ${storedStrengthsBlock}
 ${storedWeaknessesBlock}
@@ -981,6 +1045,7 @@ async function runMultiAgentAnalysis(
   analysisType: AnalysisType,
   inputCompletenessWarning = '',
   seasonContext = '',
+  footballStatsBlock = '',
 ): Promise<AgentResult[]> {
   const agentNames = ["tactical", "technical_physical", "behavioral_contextual"] as const;
 
@@ -1006,7 +1071,7 @@ async function runMultiAgentAnalysis(
     agentNames.map((name) => {
       const kb = agentKb[name];
       const agentUserPrompt = buildAgentUserPrompt(
-        buildUserPrompt(player, analysisType, kb.context, inputCompletenessWarning, seasonContext),
+        buildUserPrompt(player, analysisType, kb.context, inputCompletenessWarning, seasonContext, footballStatsBlock),
         name
       );
       const systemPrompt = agentPrompts[name]; // Per-agent DB prompt (Sprint 174)
@@ -1347,6 +1412,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       `[scout-analyze-player] Player loaded: ${player.name} (${player.position_primary}, ${player.current_club})`
     );
 
+    // 3c. Fetch football API stats (non-blocking — null if unavailable)
+    const footballStats = await fetchFootballStats(player.name);
+    const footballStatsBlock = buildFootballStatsBlock(footballStats);
+
     // 3b. Data Completeness Gate (Sprint 151) — block analysis if input is EMPTY
     const inputCompleteness: InputCompletenessResult = checkInputCompleteness({
       profile_data: player.profile_data as Record<string, unknown> | null,
@@ -1411,7 +1480,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     try {
       // Multi-agent path — 3 parallel specialized Claude agents with DB-loaded system prompts
-      const agentResults = await runMultiAgentAnalysis(agentPrompts, player, analysis_type, _inputCompletenessWarning, _seasonContext);
+      const agentResults = await runMultiAgentAnalysis(agentPrompts, player, analysis_type, _inputCompletenessWarning, _seasonContext, footballStatsBlock);
       result = mergeAgentResults(agentResults);
       agentsUsed = agentResults.map(r =>
         r.status === "success" ? `scout-${r.agentName}` : `scout-${r.agentName}-${r.status.toUpperCase()}`
@@ -1424,7 +1493,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
       // Fallback — single-agent with static prompt for other errors (network, parsing, etc.)
       console.warn(`[scout-analyze-player] Multi-agent failed, falling back to single-agent: ${(multiErr as Error).message}`);
-      const fallbackPrompt = buildUserPrompt(player, analysis_type, kbContext, _inputCompletenessWarning, _seasonContext);
+      const fallbackPrompt = buildUserPrompt(player, analysis_type, kbContext, _inputCompletenessWarning, _seasonContext, footballStatsBlock);
       result = await runClaudeAnalysis(agentPrompts.fallback, fallbackPrompt);
       agentsUsed = ["claude-sonnet-4-6-fallback"];
     }
