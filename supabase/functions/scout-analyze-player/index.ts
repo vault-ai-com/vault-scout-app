@@ -530,8 +530,24 @@ function buildFootballStatsBlock(stats: Record<string, unknown> | null): string 
   const agg = stats.aggregated_stats as Record<string, unknown>;
   const recent = (stats.recent_matches as Record<string, unknown>[]) ?? [];
 
+  // Data freshness check — warn if most recent match is >14 days old
+  let freshnessWarning = '';
+  if (recent.length > 0) {
+    const dates = recent
+      .map((m) => m.match_date ? new Date(String(m.match_date)) : null)
+      .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
+    if (dates.length > 0) {
+      const mostRecent = new Date(Math.max(...dates.map(d => d.getTime())));
+      const daysSince = Math.floor((Date.now() - mostRecent.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSince > 14) {
+        freshnessWarning = `\n> **DATA FRESHNESS WARNING:** Most recent match is ${daysSince} days old (${mostRecent.toISOString().slice(0, 10)}). Stats may not reflect current form.`;
+      }
+    }
+  }
+
   const lines: string[] = [
     "\n## Football API Match Data",
+    ...(freshnessWarning ? [freshnessWarning] : []),
     `- Matches analyzed: ${agg.matches_analyzed ?? 0}`,
     `- Avg rating: ${agg.avg_rating ?? "N/A"}`,
     `- Goals: ${agg.total_goals ?? "N/A"} | Assists: ${agg.total_assists ?? "N/A"}`,

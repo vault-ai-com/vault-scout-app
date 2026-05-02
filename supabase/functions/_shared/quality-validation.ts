@@ -29,6 +29,8 @@ export interface AnalysisResult {
   clamp_events?: Array<{ dim: string; original: number; clamped: number }>;
   insufficient_dimension_count?: number;
   total_dimension_count?: number;
+  agent_output?: string;
+  has_football_stats?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +269,82 @@ export function checkBounds(result: AnalysisResult): QualityCheck {
 }
 
 // ---------------------------------------------------------------------------
+// Provenance Tag Scan — checks agent output for [DB]/[API]/[LLM] tags
+// Ported from match-prediction-validation.ts (Sprint 194)
+// ---------------------------------------------------------------------------
+export function checkProvenanceTags(agentOutput: string | undefined): QualityCheck {
+  if (!agentOutput || agentOutput.length < 100) {
+    return { name: 'provenance_tags', status: 'PASS', detail: 'No agent output to scan' };
+  }
+
+  const dbCount = (agentOutput.match(/\[DB\]/g) || []).length;
+  const apiCount = (agentOutput.match(/\[API\]/g) || []).length;
+  const llmCount = (agentOutput.match(/\[LLM\]/g) || []).length;
+  const totalTags = dbCount + apiCount + llmCount;
+
+  if (totalTags === 0 && agentOutput.length > 500) {
+    return {
+      name: 'provenance_tags',
+      status: 'WARN',
+      detail: `0 provenance tags found in ${agentOutput.length} chars output. All data claims are untagged.`,
+    };
+  }
+
+  return {
+    name: 'provenance_tags',
+    status: 'PASS',
+    detail: `[DB]=${dbCount}, [API]=${apiCount}, [LLM]=${llmCount}`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Fabrication Detection — scans output for known fabrication patterns
+// Ported from match-prediction-validation.ts (Sprint 194)
+// ---------------------------------------------------------------------------
+export function checkFabricationPatterns(
+  agentOutput: string | undefined,
+  hasFootballStats: boolean,
+): QualityCheck {
+  if (!agentOutput) {
+    return { name: 'fabrication_detection', status: 'PASS', detail: 'No output to scan' };
+  }
+
+  const fabrications: string[] = [];
+
+  // Pattern 1: Match statistics cited when no football API data available
+  if (!hasFootballStats) {
+    const statsKeywords = agentOutput.match(
+      /\b(\d+\s*(mål|goals|assists|matcher|matches|tackles|interceptions)|\bmatch\w*statistik)/gi,
+    );
+    if (statsKeywords && statsKeywords.length > 0) {
+      fabrications.push(
+        `${statsKeywords.length} match stat citation(s) but no football API data: "${statsKeywords[0]}"`,
+      );
+    }
+  }
+
+  // Pattern 2: Hedging language that masks fabrication
+  const hedgingPatterns = agentOutput.match(
+    /troligen|uppskattningsvis|approximately|roughly|around.*\d+%|estimated.*\d+/gi,
+  );
+  if (hedgingPatterns && hedgingPatterns.length >= 3) {
+    fabrications.push(
+      `${hedgingPatterns.length} hedging phrases — may indicate fabricated estimates`,
+    );
+  }
+
+  if (fabrications.length > 0) {
+    return {
+      name: 'fabrication_detection',
+      status: fabrications.some(f => f.includes('no football API')) ? 'HALT' : 'WARN',
+      detail: fabrications.join('; '),
+    };
+  }
+
+  return { name: 'fabrication_detection', status: 'PASS', detail: 'No fabrication patterns detected' };
+}
+
+// ---------------------------------------------------------------------------
 // Clamp events check — many clamps = LLM output was unreliable
 // ---------------------------------------------------------------------------
 export function checkClampEvents(
@@ -398,6 +476,16 @@ export function validateAnalysis(result: AnalysisResult, inputCompleteness?: Inp
   // Clamp events
   if (result.clamp_events) {
     checks.push(checkClampEvents(result.clamp_events));
+  }
+
+  // Provenance tags (Sprint 194)
+  if (result.agent_output) {
+    checks.push(checkProvenanceTags(result.agent_output));
+  }
+
+  // Fabrication detection (Sprint 194)
+  if (result.agent_output) {
+    checks.push(checkFabricationPatterns(result.agent_output, result.has_football_stats ?? false));
   }
 
   // Calculate score: start at 100, deduct for issues
