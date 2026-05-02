@@ -2,7 +2,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const VERSION = "v24-advisory-board-caps";
+const VERSION = "v25-data-provenance";
 
 import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -128,6 +128,27 @@ Deno.serve(async (req: Request) => {
       ? String(new Date().getFullYear() - new Date(player.date_of_birth).getFullYear())
       : 'okänd';
 
+    // --- P0: Football API stats via RPC (provenance: [API]) ---
+    let footballStatsBlock = '';
+    try {
+      const { data: fsData } = await supabase.rpc('get_player_football_stats', { p_player_name: player.name });
+      const fs = fsData as Record<string, unknown> | null;
+      if (fs && (fs.matches_found ?? 0) > 0) {
+        const agg = fs.aggregated_stats as Record<string, unknown> | undefined;
+        if (agg) {
+          footballStatsBlock = `\n## Football API Match Data [API]
+- Matches analyzed: ${agg.matches_analyzed ?? 0}
+- Avg rating: ${agg.avg_rating ?? "N/A"}
+- Goals: ${agg.total_goals ?? "N/A"} | Assists: ${agg.total_assists ?? "N/A"}
+- Avg minutes/match: ${agg.avg_minutes_per_match ?? "N/A"}
+- Tackles: ${agg.total_tackles ?? "N/A"} | Interceptions: ${agg.total_interceptions ?? "N/A"}
+- Duels won: ${agg.total_duels_won ?? "N/A"} | Dribbles succeeded: ${agg.total_dribbles_succeeded ?? "N/A"}`;
+        }
+      }
+    } catch (fsErr) {
+      console.warn('[scout-personality] Football stats fetch failed (non-blocking):', fsErr);
+    }
+
     // Sprint 182: Input completeness + season context for LLM prompt injection
     const inputCompleteness: InputCompletenessResult = checkInputCompleteness({
       profile_data: player.profile_data as Record<string, unknown> | null,
@@ -181,10 +202,27 @@ VIKTIGT: Om färre än 6 dimensioner har tillräcklig data i inputen, sätt CONF
 ${kbContext ? 'Knowledge Bank Context:\n' + kbContext : ''}`;
 
     const spi = sanitizePromptInput;
-    const userPrompt = `Analysera: ${spi(player.name)} (${spi(player.position_primary)}, ${spi(player.tier)}, ${spi(player.career_phase)})
+
+    // --- P0: Data Provenance Protocol ---
+    // Each data source tagged: [DB] = scout_players, [API] = football API, [LLM] = model inference
+    const provenanceSections: string[] = [];
+    provenanceSections.push(`## Player Data [DB]
+Namn: ${spi(player.name)} | Position: ${spi(player.position_primary)} | Tier: ${spi(player.tier)} | Fas: ${spi(player.career_phase)}
 Klubb: ${spi(player.current_club)} | Liga: ${spi(player.current_league)}
 Ålder: ${ageStr} | Nationalitet: ${spi(player.nationality)}
-${player.profile_data ? 'Profildata: ' + spi(typeof player.profile_data === 'string' ? player.profile_data : JSON.stringify(player.profile_data)) : ''}
+${player.profile_data ? 'Profildata: ' + spi(typeof player.profile_data === 'string' ? player.profile_data : JSON.stringify(player.profile_data)) : 'Profildata: INGEN TILLGÄNGLIG'}`);
+
+    if (footballStatsBlock) {
+      provenanceSections.push(footballStatsBlock);
+    } else {
+      provenanceSections.push('\n## Football API Match Data [API]\nINGEN DATA TILLGÄNGLIG — citera ALDRIG matchstatistik.');
+    }
+
+    const userPrompt = `Analysera denna spelare. Varje datakälla är taggad med [DB], [API] eller [LLM].
+Du får BARA citera fakta från [DB] och [API]-sektionerna. Allt du resonerar fram själv = [LLM].
+Om [API] visar "INGEN DATA TILLGÄNGLIG", citera ALDRIG matchstatistik, mål eller assists.
+
+${provenanceSections.join('\n')}
 ${_inputCompletenessWarning}${_seasonContext}
 
 Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. contradiction_score 0-1. CONFIDENCE_LABEL 0-1. coaching_approach max 7 items. integration_risks max 6 items. stress_archetype max 100 tecken.`;
@@ -344,6 +382,23 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
 
     const clampEvents = ct.getEvents();
 
+    // --- P0: Code-enforced fabrication detection ---
+    // If no football API data was available, flag any evidence citing match stats
+    let fabrication_warnings: string[] = [];
+    if (!footballStatsBlock || footballStatsBlock.includes('INGEN DATA TILLGÄNGLIG')) {
+      const statsKeywords = /\b(\d+\s*(mål|goals|assists|matcher|matches|tackles|interceptions)|\bmatch\w*statistik)/i;
+      const allEvidence = [dt, ra, al, to, tu, sn, cm, ego, resilience, coachability, xFactor]
+        .map(d => d.evidence);
+      for (const ev of allEvidence) {
+        if (statsKeywords.test(ev)) {
+          fabrication_warnings.push(`Fabrication detected: evidence cites match stats but [API] data unavailable — "${ev.slice(0, 80)}"`);
+        }
+      }
+      if (fabrication_warnings.length > 0) {
+        console.warn(`[scout-personality] FABRICATION WARNING: ${fabrication_warnings.length} evidence fields cite stats without API data`);
+      }
+    }
+
     // Overall score: weighted average of all 11 scored dims (7 generic 70% + 4 KB 30%)
     const avg7 = (dt.score + ra.score + al.score + to.score + tu.score + sn.score + cm.score) / 7;
     const kbScores = [ego.score, resilience.score, coachability.score, xFactor.score];
@@ -381,6 +436,12 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
       cache_hit: false,
       quality_pipeline: qualityReport,
       ...(clampEvents.length > 0 ? { clamp_events: clampEvents } : {}),
+      ...(fabrication_warnings.length > 0 ? { fabrication_warnings } : {}),
+      provenance: {
+        db: true,
+        api: !!footballStatsBlock && !footballStatsBlock.includes('INGEN DATA TILLGÄNGLIG'),
+        llm: true,
+      },
       // Advisory Board transparency (v24)
       advisory_caps: {
         confidence_cap_applied: confidenceCap.cap_applied,

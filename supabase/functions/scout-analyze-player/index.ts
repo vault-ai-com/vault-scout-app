@@ -534,12 +534,12 @@ function buildFootballStatsBlock(stats: Record<string, unknown> | null): string 
     "\n## Football API Match Data",
     `- Matches analyzed: ${agg.matches_analyzed ?? 0}`,
     `- Avg rating: ${agg.avg_rating ?? "N/A"}`,
-    `- Goals: ${agg.total_goals ?? 0} | Assists: ${agg.total_assists ?? 0}`,
-    `- Avg minutes/match: ${agg.avg_minutes_per_match ?? "N/A"} | Total minutes: ${agg.total_minutes ?? 0}`,
+    `- Goals: ${agg.total_goals ?? "N/A"} | Assists: ${agg.total_assists ?? "N/A"}`,
+    `- Avg minutes/match: ${agg.avg_minutes_per_match ?? "N/A"} | Total minutes: ${agg.total_minutes ?? "N/A"}`,
     `- Pass accuracy (avg): ${agg.avg_pass_accuracy ?? "N/A"}%`,
-    `- Tackles: ${agg.total_tackles ?? 0} | Interceptions: ${agg.total_interceptions ?? 0}`,
-    `- Duels won: ${agg.total_duels_won ?? 0} | Dribbles succeeded: ${agg.total_dribbles_succeeded ?? 0}`,
-    `- Yellow cards: ${agg.total_yellow_cards ?? 0} | Red cards: ${agg.total_red_cards ?? 0}`,
+    `- Tackles: ${agg.total_tackles ?? "N/A"} | Interceptions: ${agg.total_interceptions ?? "N/A"}`,
+    `- Duels won: ${agg.total_duels_won ?? "N/A"} | Dribbles succeeded: ${agg.total_dribbles_succeeded ?? "N/A"}`,
+    `- Yellow cards: ${agg.total_yellow_cards ?? "N/A"} | Red cards: ${agg.total_red_cards ?? "N/A"}`,
   ];
 
   if (recent.length > 0) {
