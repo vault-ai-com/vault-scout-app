@@ -9,6 +9,12 @@ export const CURRENT_SEASON = 2026;
 /** Allsvenskan league ID in API-Football. */
 export const ALLSVENSKAN_LEAGUE_ID = 113;
 
+/** Superettan league ID in API-Football. Sprint 194: Advisory Board recommendation. */
+export const SUPERETTAN_LEAGUE_ID = 570;
+
+/** All supported Swedish league IDs. */
+export const SWEDISH_LEAGUE_IDS = [ALLSVENSKAN_LEAGUE_ID, SUPERETTAN_LEAGUE_ID] as const;
+
 /**
  * buildSeasonContext — constructs a season-awareness block for LLM prompts.
  * Detects which seasons appear in profile_data top-level keys and returns

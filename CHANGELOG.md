@@ -1,5 +1,20 @@
 # Changelog
 
+## Sprint 194 — Scout Data Infrastructure: Team Mapping + Match RPC (2026-05-04)
+- **`football_team_mapping` (NY tabell):** 16 Allsvenskan-lag med verifierade API-Football IDs. Deterministisk name resolution ersätter fuzzy matching. RLS aktiverad.
+- **`get_match_football_data()` (NY RPC):** 9-lager JSON (fixture, lineups, events, statistics, xg, player_stats, injuries, derived, context, player_progression). Mapping-table lookup + Swedish char normalization fallback. Coverage warnings med anti-hallucination ("FABRICERA ALDRIG").
+- **constants.ts:** SUPERETTAN_LEAGUE_ID=570, SWEDISH_LEAGUE_IDS array. Advisory Board rekommendation.
+- **Backfill:** 6 scout_players mappade till football_players (DIF: Hegland/Manojlovic/Zugelj, IFK: Mucolli/Thordarson/Fenger).
+- **Säkerhet:** SECURITY DEFINER + SET search_path, anon EXECUTE revokad, RLS + policies.
+- **V64 GO 7.8/10.** VCE09 GO (ACQUITTED). V65 GO (efter RLS-fix).
+
+## Sprint 188 — Integrera football_player_stats i scout-pipeline (2026-04-27)
+- **`get_player_football_stats()` (RPC uppgraderad):** 3-stegs namnmatchning: exact match först, unaccent fallback med COUNT(DISTINCT player_name)=1 ambiguity guard (VCE09 CRITICAL fix), NULL/tom input guard. Förhindrar cross-player datakontaminering vid svenska tecken (å/ä/ö).
+- **Batch-match scout_players→football_players:** 3 nya matchningar via unaccent(lower(trim(name))) med HAVING COUNT(*)=1. 56→59 scout_players med api_player_id.
+- **Auth:** LEGACY_SERVICE_ROLE_KEY satt — terminal→edge fn 401 fixat. auth.ts stödjer redan dubbelnyckel (sb_secret_ + legacy JWT).
+- **xG:** 40/55 Allsvenskan-matcher har xG. Externa källor saknar data för resterande 15.
+- **V64 GO 8.0/10.** VCE09 WARN (ambiguity CRITICAL → fixat). C66 GO LOW.
+
 ## Sprint 183 — Scout Report Quality Gate System (2026-04-27)
 - **`scout_report_routing_rules` (NY tabell):** 7 report_type → cluster routing-regler. Enforcar att terminalen använder rätt rapport-kluster (vault_player_report, vault_team_report, etc.) istället för inline HTML. `get_report_cluster_routing()` RPC med fallback till adhoc_report.
 - **`vault_report_quality_gate` (NYTT kluster, 3 agenter):** qg01_data_renderer (Sonnet), qg02_tripwire (Haiku, deterministisk), qg03_blind_critic (Opus). För ad-hoc rapporter utan eget kluster. Pipeline requirements i `scout_pipeline_agent_requirements`.
