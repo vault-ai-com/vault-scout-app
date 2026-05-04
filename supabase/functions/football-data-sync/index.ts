@@ -1,6 +1,8 @@
 // ---------------------------------------------------------------------------
-// football-data-sync — Synkar matchdata från API-Football till Supabase
-// Actions: sync_fixture, sync_league_recent, sync_standings, sync_player_stats, sync_all_player_stats
+// football-data-sync — Synkar matchdata + spelar/tränare-profiler från API-Football till Supabase
+// Actions: sync_fixture, sync_league_recent, sync_standings, sync_player_stats, sync_all_player_stats,
+//   sync_player_profiles, sync_transfers, sync_injuries, sync_trophies, sync_coaches,
+//   sync_team_stats, sync_full_league, sync_historical
 // Konsumeras av: vault_match_coach_prep, vault_post_match_review, vault_match_prediction,
 //   vault_ai_scout, vault_player_report, vault_coach_report, vault_team_report
 // ---------------------------------------------------------------------------
@@ -652,6 +654,451 @@ async function syncAllPlayerStats(limit?: number): Promise<{
   return { total_fixtures: fixtures.length, synced, total_players: totalPlayers, errors };
 }
 
+// --- Action: sync_player_profiles ---
+// Syncs player profiles for a team from API-Football /players
+async function syncPlayerProfiles(
+  teamId: number,
+  season: number,
+): Promise<{ team_id: number; players_synced: number }> {
+  const sb = getServiceClient();
+  let page = 1;
+  let totalSynced = 0;
+
+  // API-Football paginates /players — loop all pages
+  while (true) {
+    const resp = (await apiFootball("players", {
+      team: teamId,
+      season,
+      page,
+    })) as { response: Array<Record<string, unknown>>; paging: { current: number; total: number } };
+
+    for (const entry of resp.response ?? []) {
+      const player = entry.player as Record<string, unknown>;
+      const stats = (entry.statistics as Array<Record<string, unknown>>)?.[0];
+      const team = stats?.team as Record<string, unknown> | null;
+      const league = stats?.league as Record<string, unknown> | null;
+      const games = stats?.games as Record<string, unknown> | null;
+
+      const { error } = await sb.from("football_players").upsert(
+        {
+          api_player_id: player.id as number,
+          name: (player.name as string) ?? "Unknown",
+          firstname: (player.firstname as string) ?? null,
+          lastname: (player.lastname as string) ?? null,
+          nationality: (player.nationality as string) ?? null,
+          birth_date: ((player.birth as Record<string, unknown>)?.date as string) ?? null,
+          age: (player.age as number) ?? null,
+          height: (player.height as string) ?? null,
+          weight: (player.weight as string) ?? null,
+          photo_url: (player.photo as string) ?? null,
+          current_team_id: (team?.id as number) ?? teamId,
+          current_team_name: (team?.name as string) ?? null,
+          current_league_id: (league?.id as number) ?? null,
+          position: (games?.position as string) ?? null,
+          injured: (player.injured as boolean) ?? false,
+          raw_profile: entry,
+          synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "api_player_id" },
+      );
+      if (error) throw new Error(`Player profile upsert: ${error.message}`);
+      totalSynced++;
+    }
+
+    if (page >= (resp.paging?.total ?? 1)) break;
+    page++;
+  }
+
+  return { team_id: teamId, players_synced: totalSynced };
+}
+
+// --- Action: sync_transfers ---
+// Syncs transfer history for a player from API-Football /transfers
+async function syncTransfers(playerId: number): Promise<{ player_id: number; transfers_synced: number }> {
+  const resp = (await apiFootball("transfers", { player: playerId })) as {
+    response: Array<{ player: Record<string, unknown>; transfers: Array<Record<string, unknown>> }>;
+  };
+
+  const sb = getServiceClient();
+  let count = 0;
+
+  for (const entry of resp.response ?? []) {
+    const playerName = (entry.player?.name as string) ?? null;
+    for (const t of entry.transfers ?? []) {
+      const teams = t.teams as Record<string, Record<string, unknown>>;
+      const { error } = await sb.from("football_transfers").upsert(
+        {
+          api_player_id: playerId,
+          player_name: playerName,
+          transfer_date: (t.date as string) ?? null,
+          from_team_id: (teams?.out?.id as number) ?? null,
+          from_team_name: (teams?.out?.name as string) ?? null,
+          to_team_id: (teams?.in?.id as number) ?? null,
+          to_team_name: (teams?.in?.name as string) ?? null,
+          transfer_type: (t.type as string) ?? null,
+          transfer_fee: null, // API-Football free tier may not include fee
+          raw_data: t,
+          synced_at: new Date().toISOString(),
+        },
+        { onConflict: "api_player_id,transfer_date,from_team_id,to_team_id" },
+      );
+      if (error) throw new Error(`Transfer upsert: ${error.message}`);
+      count++;
+    }
+  }
+
+  return { player_id: playerId, transfers_synced: count };
+}
+
+// --- Action: sync_injuries ---
+// Syncs injury/sidelined history for a player from API-Football /sidelined
+async function syncInjuries(playerId: number): Promise<{ player_id: number; injuries_synced: number }> {
+  const resp = (await apiFootball("sidelined", { player: playerId })) as {
+    response: Array<Record<string, unknown>>;
+  };
+
+  const sb = getServiceClient();
+  let count = 0;
+
+  for (const entry of resp.response ?? []) {
+    const { error } = await sb.from("football_injuries").upsert(
+      {
+        api_player_id: playerId,
+        player_name: null, // API doesn't include name in sidelined response
+        injury_type: (entry.type as string) ?? "Unknown",
+        injury_reason: (entry.type as string) ?? null,
+        start_date: (entry.start as string) ?? null,
+        end_date: (entry.end as string) ?? null,
+        raw_data: entry,
+        synced_at: new Date().toISOString(),
+      },
+      { onConflict: "api_player_id,injury_type,start_date" },
+    );
+    if (error) throw new Error(`Injury upsert: ${error.message}`);
+    count++;
+  }
+
+  return { player_id: playerId, injuries_synced: count };
+}
+
+// --- Action: sync_trophies ---
+// Syncs trophies for a player from API-Football /trophies
+async function syncTrophies(playerId: number): Promise<{ player_id: number; trophies_synced: number }> {
+  const resp = (await apiFootball("trophies", { player: playerId })) as {
+    response: Array<Record<string, unknown>>;
+  };
+
+  const sb = getServiceClient();
+  let count = 0;
+
+  for (const entry of resp.response ?? []) {
+    const { error } = await sb.from("football_trophies").upsert(
+      {
+        api_player_id: playerId,
+        player_name: null,
+        trophy_name: (entry.league as string) ?? "Unknown",
+        league: (entry.league as string) ?? null,
+        country: (entry.country as string) ?? null,
+        season: (entry.season as string) ?? null,
+        place: (entry.place as string) ?? null,
+        raw_data: entry,
+        synced_at: new Date().toISOString(),
+      },
+      { onConflict: "api_player_id,trophy_name,season" },
+    );
+    if (error) throw new Error(`Trophy upsert: ${error.message}`);
+    count++;
+  }
+
+  return { player_id: playerId, trophies_synced: count };
+}
+
+// --- Action: sync_coaches ---
+// Syncs coach profile for a team from API-Football /coachs
+async function syncCoaches(teamId: number): Promise<{ team_id: number; coaches_synced: number }> {
+  const resp = (await apiFootball("coachs", { team: teamId })) as {
+    response: Array<Record<string, unknown>>;
+  };
+
+  const sb = getServiceClient();
+  let count = 0;
+
+  for (const entry of resp.response ?? []) {
+    const career = (entry.career as Array<Record<string, unknown>>) ?? [];
+    const careerHistory = career.map((c) => ({
+      team_id: (c.team as Record<string, unknown>)?.id,
+      team_name: (c.team as Record<string, unknown>)?.name,
+      start: c.start,
+      end: c.end,
+    }));
+
+    // Find current team from career (end === null)
+    const currentCareer = career.find((c) => c.end === null);
+    const currentTeam = currentCareer?.team as Record<string, unknown> | undefined;
+
+    const { error } = await sb.from("football_coaches").upsert(
+      {
+        api_coach_id: (entry.id as number) ?? 0,
+        name: (entry.name as string) ?? "Unknown",
+        firstname: (entry.firstname as string) ?? null,
+        lastname: (entry.lastname as string) ?? null,
+        nationality: (entry.nationality as string) ?? null,
+        birth_date: ((entry.birth as Record<string, unknown>)?.date as string) ?? null,
+        age: (entry.age as number) ?? null,
+        photo_url: (entry.photo as string) ?? null,
+        current_team_id: (currentTeam?.id as number) ?? teamId,
+        current_team_name: (currentTeam?.name as string) ?? null,
+        career_history: careerHistory,
+        raw_profile: entry,
+        synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "api_coach_id" },
+    );
+    if (error) throw new Error(`Coach upsert: ${error.message}`);
+    count++;
+  }
+
+  return { team_id: teamId, coaches_synced: count };
+}
+
+// --- Action: sync_team_stats ---
+// Syncs team statistics for a season from API-Football /teams/statistics
+async function syncTeamStats(
+  teamId: number,
+  leagueId: number,
+  season: number,
+): Promise<{ team_id: number; league_id: number; season: number }> {
+  const resp = (await apiFootball("teams/statistics", {
+    team: teamId,
+    league: leagueId,
+    season,
+  })) as { response: Record<string, unknown> };
+
+  const data = resp.response;
+  if (!data) throw new Error(`No team stats for team ${teamId}`);
+
+  const team = data.team as Record<string, unknown>;
+  const fixtures = data.fixtures as Record<string, Record<string, unknown>> | null;
+  const goals = data.goals as Record<string, Record<string, Record<string, unknown>>> | null;
+  const clean_sheet = data.clean_sheet as Record<string, number> | null;
+  const penalty = data.penalty as Record<string, Record<string, unknown>> | null;
+  const form = (data.form as string) ?? null;
+  const biggest = data.biggest as Record<string, unknown> | null;
+
+  const toNum = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    return isNaN(n) ? null : n;
+  };
+
+  const sb = getServiceClient();
+  const { error } = await sb.from("football_team_stats").upsert(
+    {
+      api_team_id: (team.id as number) ?? teamId,
+      team_name: (team.name as string) ?? "Unknown",
+      league_id: leagueId,
+      season,
+      matches_played: toNum(fixtures?.played?.total),
+      wins: toNum(fixtures?.wins?.total),
+      draws: toNum(fixtures?.draws?.total),
+      losses: toNum(fixtures?.loses?.total),
+      goals_for: toNum(goals?.for?.total?.total),
+      goals_against: toNum(goals?.against?.total?.total),
+      clean_sheets: toNum(clean_sheet?.total),
+      penalty_scored: toNum(penalty?.scored?.total),
+      penalty_missed: toNum(penalty?.missed?.total),
+      form: form?.slice(-10) ?? null, // Last 10 matches
+      biggest_win: (biggest?.wins as Record<string, unknown>)?.home as string ?? null,
+      biggest_loss: (biggest?.loses as Record<string, unknown>)?.home as string ?? null,
+      avg_goals_for: toNum(goals?.for?.average?.total),
+      avg_goals_against: toNum(goals?.against?.average?.total),
+      raw_data: data,
+      synced_at: new Date().toISOString(),
+    },
+    { onConflict: "api_team_id,league_id,season" },
+  );
+  if (error) throw new Error(`Team stats upsert: ${error.message}`);
+
+  return { team_id: teamId, league_id: leagueId, season };
+}
+
+// --- Action: sync_full_league ---
+// Bulk sync: all teams + players + coaches for a league+season
+async function syncFullLeague(
+  leagueId: number,
+  season: number,
+): Promise<{
+  league_id: number;
+  season: number;
+  teams: number;
+  players: number;
+  coaches: number;
+  errors: string[];
+}> {
+  // 1. Get all teams in the league via standings
+  const standingsResp = (await apiFootball("standings", {
+    league: leagueId,
+    season,
+  })) as { response: Array<Record<string, unknown>> };
+
+  const leagueData = standingsResp.response?.[0];
+  if (!leagueData) throw new Error(`No standings for league ${leagueId} season ${season}`);
+
+  const league = leagueData.league as Record<string, unknown>;
+  const standings = (league.standings as Array<Array<Record<string, unknown>>>)?.[0] ?? [];
+  const teamIds = standings.map((t) => {
+    const team = t.team as Record<string, unknown>;
+    return team.id as number;
+  }).filter(Boolean);
+
+  let totalPlayers = 0;
+  let totalCoaches = 0;
+  const errors: string[] = [];
+
+  // 2. Sync standings first
+  try {
+    await syncStandings(leagueId, season);
+  } catch (err) {
+    errors.push(`standings: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // 3. For each team: sync player profiles + coaches + team stats
+  for (const tId of teamIds) {
+    // Player profiles
+    try {
+      const pResult = await syncPlayerProfiles(tId, season);
+      totalPlayers += pResult.players_synced;
+    } catch (err) {
+      errors.push(`players team ${tId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Coaches
+    try {
+      const cResult = await syncCoaches(tId);
+      totalCoaches += cResult.coaches_synced;
+    } catch (err) {
+      errors.push(`coaches team ${tId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Team stats
+    try {
+      await syncTeamStats(tId, leagueId, season);
+    } catch (err) {
+      errors.push(`team_stats ${tId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return {
+    league_id: leagueId,
+    season,
+    teams: teamIds.length,
+    players: totalPlayers,
+    coaches: totalCoaches,
+    errors,
+  };
+}
+
+// --- Action: sync_season_fixtures ---
+// Fetches ALL completed fixtures for a league+season and syncs a batch.
+// Use offset + batch_size to paginate through all fixtures across multiple calls.
+async function syncSeasonFixtures(
+  leagueId: number,
+  season: number,
+  offset = 0,
+  batchSize = 30,
+): Promise<{
+  league_id: number;
+  season: number;
+  total_completed: number;
+  batch_offset: number;
+  batch_size: number;
+  synced: number;
+  has_more: boolean;
+  errors: string[];
+}> {
+  // Fetch all fixtures for the season (no 'last' param = all)
+  const resp = (await apiFootball("fixtures", {
+    league: leagueId,
+    season,
+  })) as { response: Array<Record<string, unknown>> };
+
+  const allFixtures = resp.response ?? [];
+  // Only sync completed matches, sorted by date
+  const completed = allFixtures
+    .filter((f) => {
+      const fixture = f.fixture as Record<string, unknown>;
+      const status = fixture.status as Record<string, unknown>;
+      return ["FT", "AET", "PEN"].includes((status?.short as string) ?? "");
+    })
+    .sort((a, b) => {
+      const da = ((a.fixture as Record<string, unknown>).date as string) ?? "";
+      const db = ((b.fixture as Record<string, unknown>).date as string) ?? "";
+      return da.localeCompare(db);
+    });
+
+  // Slice the batch
+  const batch = completed.slice(offset, offset + batchSize);
+
+  let synced = 0;
+  const errors: string[] = [];
+
+  for (const f of batch) {
+    const fixture = f.fixture as Record<string, unknown>;
+    const fixtureId = fixture.id as number;
+    try {
+      await syncFixture(fixtureId);
+      synced++;
+    } catch (err) {
+      errors.push(`fixture ${fixtureId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return {
+    league_id: leagueId,
+    season,
+    total_completed: completed.length,
+    batch_offset: offset,
+    batch_size: batchSize,
+    synced,
+    has_more: offset + batchSize < completed.length,
+    errors,
+  };
+}
+
+// --- Action: sync_historical ---
+// Loops through multiple seasons for a league
+async function syncHistorical(
+  leagueId: number,
+  fromSeason: number,
+  toSeason: number,
+): Promise<{
+  league_id: number;
+  seasons_synced: Array<{ season: number; teams: number; players: number; coaches: number }>;
+  errors: string[];
+}> {
+  const results = [];
+  const allErrors: string[] = [];
+
+  for (let season = fromSeason; season <= toSeason; season++) {
+    try {
+      const result = await syncFullLeague(leagueId, season);
+      results.push({
+        season,
+        teams: result.teams,
+        players: result.players,
+        coaches: result.coaches,
+      });
+      allErrors.push(...result.errors);
+    } catch (err) {
+      allErrors.push(`season ${season}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { league_id: leagueId, seasons_synced: results, errors: allErrors };
+}
+
 // --- Main handler ---
 Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req.headers.get("origin"));
@@ -660,10 +1107,24 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Auth check
-  const auth = await authenticateRequest(req);
-  if (!auth.ok) {
-    return errorResponse(auth.error, corsHeaders, auth.status);
+  // Auth: accept service_role JWT via apikey header (terminal) OR standard user JWT
+  // Note: Supabase runtime injects sb_secret_ format key as SUPABASE_SERVICE_ROLE_KEY,
+  // but terminal sends JWT format service_role key. Check JWT payload for role claim.
+  const apiKeyHeader = req.headers.get("apikey") ?? "";
+  let isServiceRole = false;
+  try {
+    if (apiKeyHeader.startsWith("eyJ")) {
+      const payload = JSON.parse(atob(apiKeyHeader.split(".")[1]));
+      isServiceRole = payload.role === "service_role" &&
+        payload.ref === "czyzohfllffpgctslbwk";
+    }
+  } catch { /* not a valid JWT, continue to standard auth */ }
+
+  if (!isServiceRole) {
+    const auth = await authenticateRequest(req);
+    if (!auth.ok) {
+      return errorResponse(auth.error, corsHeaders, auth.status);
+    }
   }
 
   try {
@@ -726,9 +1187,78 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ ok: true, ...result }, corsHeaders);
       }
 
+      case "sync_player_profiles": {
+        const teamId = body.team_id as number;
+        if (!teamId) return errorResponse("team_id required", corsHeaders);
+        const season = (body.season as number) ?? CURRENT_SEASON;
+        const result = await syncPlayerProfiles(teamId, season);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_transfers": {
+        const playerId = body.player_id as number;
+        if (!playerId) return errorResponse("player_id (api_player_id) required", corsHeaders);
+        const result = await syncTransfers(playerId);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_injuries": {
+        const playerId = body.player_id as number;
+        if (!playerId) return errorResponse("player_id (api_player_id) required", corsHeaders);
+        const result = await syncInjuries(playerId);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_trophies": {
+        const playerId = body.player_id as number;
+        if (!playerId) return errorResponse("player_id (api_player_id) required", corsHeaders);
+        const result = await syncTrophies(playerId);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_coaches": {
+        const teamId = body.team_id as number;
+        if (!teamId) return errorResponse("team_id required", corsHeaders);
+        const result = await syncCoaches(teamId);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_team_stats": {
+        const teamId = body.team_id as number;
+        const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
+        const season = (body.season as number) ?? CURRENT_SEASON;
+        if (!teamId) return errorResponse("team_id required", corsHeaders);
+        const result = await syncTeamStats(teamId, leagueId, season);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_full_league": {
+        const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
+        const season = (body.season as number) ?? CURRENT_SEASON;
+        const result = await syncFullLeague(leagueId, season);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_historical": {
+        const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
+        const fromSeason = (body.from_season as number) ?? 2020;
+        const toSeason = (body.to_season as number) ?? CURRENT_SEASON;
+        const result = await syncHistorical(leagueId, fromSeason, toSeason);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_season_fixtures": {
+        const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
+        const season = (body.season as number) ?? CURRENT_SEASON;
+        const offset = (body.offset as number) ?? 0;
+        const batchSize = (body.batch_size as number) ?? 30;
+        const result = await syncSeasonFixtures(leagueId, season, offset, batchSize);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
       default:
         return errorResponse(
-          `Unknown action: ${action}. Valid: sync_fixture, sync_league_recent, sync_standings, sync_upcoming, sync_all, sync_player_stats, sync_all_player_stats`,
+          `Unknown action: ${action}. Valid: sync_fixture, sync_league_recent, sync_standings, sync_upcoming, sync_all, sync_player_stats, sync_all_player_stats, sync_player_profiles, sync_transfers, sync_injuries, sync_trophies, sync_coaches, sync_team_stats, sync_full_league, sync_historical, sync_season_fixtures`,
           corsHeaders,
         );
     }

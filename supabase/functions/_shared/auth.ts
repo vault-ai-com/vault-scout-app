@@ -36,9 +36,15 @@ export async function authenticateRequest(
 
   const token = authHeader.replace("Bearer ", "");
 
-  // Service-role key detection: compare full token against known secret
+  // Service-role key detection: compare full token against known secret(s)
+  // Supabase runtime has new sb_secret_ key; terminal may send legacy JWT key.
+  // Both are checked via exact string match (no JWT payload trust).
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const legacyServiceKey = Deno.env.get("LEGACY_SERVICE_ROLE_KEY") ?? "";
   if (serviceRoleKey && token === serviceRoleKey) {
+    return { ok: true, userId: "terminal-pipeline", isServiceRole: true };
+  }
+  if (legacyServiceKey && token === legacyServiceKey) {
     return { ok: true, userId: "terminal-pipeline", isServiceRole: true };
   }
 
