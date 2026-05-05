@@ -388,7 +388,26 @@ async function syncLeagueRecent(
     }
   }
 
-  return { synced: results.filter((r) => r.score !== "error").length, fixtures: results };
+  // Batch-sync injuries for players in synced fixtures (best-effort)
+  const sb = getServiceClient();
+  const syncedFixtureIds = results.filter((r) => r.score !== "error").map((r) => r.id);
+  let injuriesSynced = 0;
+  if (syncedFixtureIds.length > 0) {
+    const { data: players } = await sb
+      .from("football_player_stats")
+      .select("api_player_id")
+      .in("api_fixture_id", syncedFixtureIds)
+      .not("api_player_id", "is", null);
+    const uniquePlayerIds = [...new Set((players ?? []).map((p: { api_player_id: number }) => p.api_player_id))];
+    for (const pid of uniquePlayerIds.slice(0, 50)) { // Cap at 50 to avoid rate limits
+      try {
+        await syncInjuries(pid);
+        injuriesSynced++;
+      } catch (_) { /* best-effort — continue on per-player errors */ }
+    }
+  }
+
+  return { synced: results.filter((r) => r.score !== "error").length, fixtures: results, injuries_synced: injuriesSynced };
 }
 
 // --- Action: sync_standings ---

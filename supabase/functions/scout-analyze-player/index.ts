@@ -1432,6 +1432,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const footballStats = await fetchFootballStats(player.name);
     const footballStatsBlock = buildFootballStatsBlock(footballStats);
 
+    // 3d. Compute derived metrics (non-blocking — enriches football_player_derived)
+    if (player.current_club) {
+      try {
+        await supabaseRpc("compute_player_derived_metrics", { p_team_name: player.current_club });
+      } catch (err) {
+        console.warn("[scout-analyze-player] compute_player_derived_metrics failed (non-blocking):", err);
+      }
+    }
+
     // 3b. Data Completeness Gate (Sprint 151) — block analysis if input is EMPTY
     const inputCompleteness: InputCompletenessResult = checkInputCompleteness({
       profile_data: player.profile_data as Record<string, unknown> | null,
