@@ -443,6 +443,8 @@ export const CoachDashboardStatsSchema = z.object({
       recommendation: z.string(),
       completed_at: z.string(),
     })).nullable(),
+    football_coaches_available: z.number().optional(),
+    api_synced: z.boolean().optional(),
   }),
 });
 export type CoachDashboardStats = z.infer<typeof CoachDashboardStatsSchema>;

@@ -48,29 +48,31 @@ AS $$
 DECLARE
   v_tier TEXT := 'unknown';
   v_team_lower TEXT;
-  v_league_name TEXT;
+  v_league_id INTEGER;
 BEGIN
   IF p_team_name IS NULL OR trim(p_team_name) = '' THEN
-    RETURN 'unknown';
+    RETURN 'development';
   END IF;
 
   v_team_lower := lower(trim(p_team_name));
 
-  -- Strategi 1: Sök i football_standings för att hitta faktisk liga
-  SELECT fs.league_name INTO v_league_name
+  -- Strategi 1: Sök i football_standings via league_id (kolumnen league_name finns ej)
+  SELECT fs.league_id INTO v_league_id
   FROM football_standings fs
   WHERE lower(fs.team_name) = v_team_lower
      OR lower(fs.team_name) LIKE '%' || v_team_lower || '%'
   ORDER BY fs.season DESC
   LIMIT 1;
 
-  -- Mappa till ScoutTierSchema Zod-enum: world_class, elite, top_league, allsvenskan, development
-  IF v_league_name IS NOT NULL THEN
-    IF lower(v_league_name) = 'allsvenskan' THEN
+  -- Mappa league_id till ScoutTierSchema Zod-enum
+  -- 113=Allsvenskan, 114=Superettan, 39=PL, 140=La Liga, 78=Bundesliga, 135=Serie A, 61=Ligue 1, 88=Eredivisie
+  -- 40=Championship, 79=2.Bundesliga, 136=Serie B, 62=Ligue 2
+  IF v_league_id IS NOT NULL THEN
+    IF v_league_id = 113 THEN
       v_tier := 'allsvenskan';
-    ELSIF lower(v_league_name) IN ('premier league', 'la liga', 'bundesliga', 'serie a', 'ligue 1', 'eredivisie') THEN
+    ELSIF v_league_id IN (39, 140, 78, 135, 61, 88) THEN
       v_tier := 'elite';
-    ELSIF lower(v_league_name) IN ('superettan', 'championship', '2. bundesliga', 'serie b', 'ligue 2') THEN
+    ELSIF v_league_id IN (114, 40, 79, 136, 62) THEN
       v_tier := 'top_league';
     ELSE
       v_tier := 'development';
@@ -346,14 +348,21 @@ BEGIN
     c.latest_recommendation,
     c.latest_analysis_date,
     c.api_coach_id,
-    similarity(c.name, p_query)::FLOAT AS similarity
+    -- Kombinerad score: max av namn-similarity och klubb-boost (0.8)
+    GREATEST(
+      similarity(c.name, p_query),
+      CASE WHEN c.current_club ILIKE '%' || p_query || '%' THEN 0.8 ELSE 0 END
+    )::FLOAT AS similarity
   FROM scout_coaches c
   WHERE
     similarity(c.name, p_query) > 0.1
     OR c.name ILIKE '%' || p_query || '%'
     OR c.current_club ILIKE '%' || p_query || '%'
   ORDER BY
-    similarity(c.name, p_query) DESC,
+    GREATEST(
+      similarity(c.name, p_query),
+      CASE WHEN c.current_club ILIKE '%' || p_query || '%' THEN 0.8 ELSE 0 END
+    ) DESC,
     c.latest_score DESC NULLS LAST
   LIMIT p_limit
   OFFSET p_offset;
