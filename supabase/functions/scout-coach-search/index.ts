@@ -45,6 +45,7 @@ function mapCoach(row: Record<string, unknown>) {
     latest_score: row.latest_score != null ? Number(row.latest_score) : null,
     latest_recommendation: row.latest_recommendation ?? null,
     latest_analysis_date: row.latest_analysis_date ?? null,
+    api_coach_id: row.api_coach_id ?? null,
   };
 }
 
@@ -83,13 +84,14 @@ Deno.serve(async (req: Request) => {
 
     // --- DASHBOARD ---
     if (action === "dashboard") {
-      const [coachesRes, analysesRes, tierRes, recentRes] = await Promise.all([
+      const [coachesRes, analysesRes, tierRes, recentRes, footballCoachesRes] = await Promise.all([
         sb.from("scout_coaches").select("id", { count: "exact", head: true }),
         sb.from("scout_analyses").select("id", { count: "exact", head: true }).eq("entity_type", "coach").eq("status", "completed"),
         sb.from("scout_coaches").select("tier"),
         sb.from("scout_analyses").select("id, coach_id, analysis_type, overall_score, recommendation, completed_at")
           .eq("entity_type", "coach").eq("status", "completed")
           .order("completed_at", { ascending: false }).limit(5),
+        sb.from("football_coaches").select("id", { count: "exact", head: true }),
       ]);
 
       const tierCounts: Record<string, number> = {};
@@ -119,6 +121,8 @@ Deno.serve(async (req: Request) => {
           total_analyses: analysesRes.count ?? 0,
           coaches_by_tier: tierCounts,
           recent_analyses: recentAnalyses,
+          football_coaches_available: footballCoachesRes.count ?? 0,
+          api_synced: (coachesRes.count ?? 0) > 21, // true after sync_football_coaches_to_scout()
         },
       }, 200, reqOrigin, rlHeaders);
     }
@@ -126,16 +130,12 @@ Deno.serve(async (req: Request) => {
     // --- SEARCH (pg_trgm fuzzy via RPC) ---
     if (action === "search") {
       const rawQuery = typeof body.query === "string" ? body.query.trim() : "";
-      const tier = typeof body.tier === "string" ? body.tier : null;
-      const careerPhase = typeof body.career_phase === "string" ? body.career_phase : null;
       const limit = Math.min(typeof body.limit === "number" ? body.limit : 50, 100);
 
       if (!rawQuery) return json({ action: "search", count: 0, coaches: [] }, 200, reqOrigin, rlHeaders);
 
-      const { data, error } = await sb.rpc("search_scout_coaches", {
+      const { data, error } = await sb.rpc("search_all_coaches", {
         p_query: rawQuery,
-        p_tier: tier,
-        p_career_phase: careerPhase,
         p_limit: limit,
       });
       if (error) return json({ error: error.message }, 500, reqOrigin, rlHeaders);

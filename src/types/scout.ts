@@ -417,6 +417,7 @@ export const ScoutCoachSchema = z.object({
   latest_score: z.number().nullable().optional(),
   latest_recommendation: z.string().nullable().optional(),
   latest_analysis_date: z.string().nullable().optional(),
+  api_coach_id: z.number().nullable().optional(),
 });
 export type ScoutCoach = z.infer<typeof ScoutCoachSchema>;
 
