@@ -11,7 +11,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
-import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
+import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, checkFabricationPatterns, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
 import { callAnthropic, MODELS } from "../_shared/anthropic-client.ts";
 import { sanitizePromptInput } from "../_shared/sanitize.ts";
 import { buildSeasonContext } from "../_shared/constants.ts";
@@ -373,9 +373,15 @@ Deno.serve(async (req: Request) => {
     const careerStr = Array.isArray(coach.career_history) && coach.career_history.length > 0 ? JSON.stringify(coach.career_history) : "No career history";
 
     const spi = sanitizePromptInput;
-    const userPrompt = `Analyze the following football coach:
+    const hasTitles = Array.isArray(coach.titles) && coach.titles.length > 0;
+    const hasCareer = Array.isArray(coach.career_history) && coach.career_history.length > 0;
+    const hasProfile = !!coach.profile_data && Object.keys(coach.profile_data).length > 0;
 
-## Coach Profile
+    const userPrompt = `Analyze the following football coach. Each data source is tagged with [DB] or [LLM].
+You may ONLY cite facts from [DB]-tagged sections. Everything you infer yourself = [LLM].
+If a section says "INGEN DATA TILLGÄNGLIG", you MUST NOT fabricate information for that area.
+
+## Coach Profile [DB]
 - Name: ${spi(coach.name)}
 - Age: ${age ?? "Unknown"}
 - Nationality: ${spi(coach.nationality) || "Unknown"}
@@ -385,9 +391,15 @@ Deno.serve(async (req: Request) => {
 - Career Phase: ${spi(coach.career_phase) || "Unknown"}
 - Coaching Style: ${spi(coach.coaching_style) || "Unknown"}
 - Preferred Formation: ${spi(coach.formation_preference) || "Unknown"}
-- Titles: ${spi(titlesStr)}
-- Career History: ${spi(careerStr)}
-- Additional Data: ${spi(profileStr)}
+
+## Titles [DB]
+${hasTitles ? spi(titlesStr) : "INGEN DATA TILLGÄNGLIG — citera ALDRIG titlar eller meriter."}
+
+## Career History [DB]
+${hasCareer ? spi(careerStr) : "INGEN DATA TILLGÄNGLIG — citera ALDRIG karriärhistorik, klubbar eller resultat."}
+
+## Additional Profile Data [DB]
+${hasProfile ? spi(profileStr) : "INGEN DATA TILLGÄNGLIG."}
 
 ${kbContext ? `## Knowledge Bank Context\n${kbContext}\n` : ""}
 ${_inputCompletenessWarning}${_seasonContext}
@@ -435,6 +447,22 @@ Respond with a JSON object containing:
     });
     if (qualityReport.gate === 'HALT') {
       console.warn(`[scout-coach-analyze] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
+    }
+
+    // --- P0: Fabrication detection (shared patterns) ---
+    const fabricationCheck = checkFabricationPatterns(rawResponse, hasTitles || hasCareer);
+    if (fabricationCheck.status === 'HALT' || fabricationCheck.status === 'WARN') {
+      console.warn(`[scout-coach-analyze] FABRICATION ${fabricationCheck.status}: ${fabricationCheck.detail}`);
+      qualityReport.checks.push(fabricationCheck);
+      if (fabricationCheck.status === 'HALT') qualityReport.gate = 'HALT';
+    }
+
+    // --- P0: Confidence cap for sparse coach data ---
+    const dataFieldCount = [hasTitles, hasCareer, hasProfile, !!coach.coaching_style, !!coach.formation_preference].filter(Boolean).length;
+    if (dataFieldCount <= 1 && result.confidence > 0.45) {
+      result.confidence = 0.45;
+    } else if (dataFieldCount <= 2 && result.confidence > 0.60) {
+      result.confidence = 0.60;
     }
 
     // Save via RPC

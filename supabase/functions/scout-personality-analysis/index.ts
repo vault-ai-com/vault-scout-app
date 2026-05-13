@@ -8,7 +8,7 @@ import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "..
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { ARCHETYPES, clamp, createClampTracker, resolveArchetype, resolveRecommendation, computeConfidence, capConfidenceByDataAvailability, evaluateStressArchetype, countInsufficientDimensions } from '../_shared/personality-logic.ts';
-import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, type QualityReport, type InputCompletenessResult } from '../_shared/quality-validation.ts';
+import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, checkFabricationPatterns, type QualityReport, type InputCompletenessResult } from '../_shared/quality-validation.ts';
 import { callAnthropic, MODELS } from '../_shared/anthropic-client.ts';
 import { sanitizePromptInput } from '../_shared/sanitize.ts';
 import { buildSeasonContext } from '../_shared/constants.ts';
@@ -382,10 +382,20 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
 
     const clampEvents = ct.getEvents();
 
-    // --- P0: Code-enforced fabrication detection ---
-    // If no football API data was available, flag any evidence citing match stats
+    // --- P0: Code-enforced fabrication detection (shared + inline) ---
+    const hasFootballStats = !!footballStatsBlock && !footballStatsBlock.includes('INGEN DATA TILLGÄNGLIG');
     let fabrication_warnings: string[] = [];
-    if (!footballStatsBlock || footballStatsBlock.includes('INGEN DATA TILLGÄNGLIG')) {
+
+    // Shared 5-pattern check on full LLM output
+    const fabricationCheck = checkFabricationPatterns(rawText, hasFootballStats);
+    if (fabricationCheck.status === 'HALT' || fabricationCheck.status === 'WARN') {
+      fabrication_warnings.push(fabricationCheck.detail);
+      qualityReport.checks.push(fabricationCheck);
+      if (fabricationCheck.status === 'HALT') qualityReport.gate = 'HALT';
+    }
+
+    // Evidence-level check: flag individual dimensions citing stats without API
+    if (!hasFootballStats) {
       const statsKeywords = /\b(\d+\s*(mål|goals|assists|matcher|matches|tackles|interceptions)|\bmatch\w*statistik)/i;
       const allEvidence = [dt, ra, al, to, tu, sn, cm, ego, resilience, coachability, xFactor]
         .map(d => d.evidence);
@@ -394,9 +404,9 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
           fabrication_warnings.push(`Fabrication detected: evidence cites match stats but [API] data unavailable — "${ev.slice(0, 80)}"`);
         }
       }
-      if (fabrication_warnings.length > 0) {
-        console.warn(`[scout-personality] FABRICATION WARNING: ${fabrication_warnings.length} evidence fields cite stats without API data`);
-      }
+    }
+    if (fabrication_warnings.length > 0) {
+      console.warn(`[scout-personality] FABRICATION WARNING: ${fabrication_warnings.length} issues detected`);
     }
 
     // Overall score: weighted average of all 11 scored dims (7 generic 70% + 4 KB 30%)

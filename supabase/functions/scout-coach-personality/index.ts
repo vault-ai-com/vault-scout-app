@@ -9,7 +9,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { clamp, createClampTracker } from '../_shared/personality-logic.ts';
 import { COACH_ARCHETYPES, resolveCoachArchetype, resolveCoachRecommendation, computeCoachConfidence } from '../_shared/coach-personality-logic.ts';
-import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, type QualityReport, type InputCompletenessResult } from '../_shared/quality-validation.ts';
+import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, checkFabricationPatterns, type QualityReport, type InputCompletenessResult } from '../_shared/quality-validation.ts';
 import { callAnthropic, MODELS } from '../_shared/anthropic-client.ts';
 import { sanitizePromptInput } from '../_shared/sanitize.ts';
 import { buildSeasonContext } from '../_shared/constants.ts';
@@ -160,17 +160,30 @@ ${kbContext}
 Return ONLY valid JSON.`;
 
     const spi = sanitizePromptInput;
-    const userPrompt = `Analyze the personality profile of this football coach:
+    const hasTitles = Array.isArray(coach.titles) && coach.titles.length > 0;
+    const hasCareer = Array.isArray(coach.career_history) && coach.career_history.length > 0;
+    const hasProfile = !!coach.profile_data && Object.keys(coach.profile_data as Record<string, unknown>).length > 0;
 
+    const userPrompt = `Analyze the personality profile of this football coach. Each section is tagged [DB] or [LLM].
+You may ONLY cite facts from [DB]-tagged sections. Everything you infer = [LLM].
+If a section says "INGEN DATA TILLGÄNGLIG", you MUST NOT fabricate information for that area.
+
+## Coach Data [DB]
 Name: ${spi(coach.name)}
 Nationality: ${spi(coach.nationality) || 'Unknown'}
 Current Club: ${spi(coach.current_club) || 'Unknown'}
 League: ${spi(coach.current_league) || 'Unknown'}
 Coaching Style: ${spi(coach.coaching_style) || 'Unknown'}
 Formation: ${spi(coach.formation_preference) || 'Unknown'}
-Titles: ${spi(titlesStr)}
-Career History: ${spi(careerStr)}
-Profile Data: ${spi(profileStr)}
+
+## Titles [DB]
+${hasTitles ? spi(titlesStr) : 'INGEN DATA TILLGÄNGLIG — citera ALDRIG titlar.'}
+
+## Career History [DB]
+${hasCareer ? spi(careerStr) : 'INGEN DATA TILLGÄNGLIG — citera ALDRIG karriärhistorik.'}
+
+## Profile Data [DB]
+${hasProfile ? spi(profileStr) : 'INGEN DATA TILLGÄNGLIG.'}
 ${_inputCompletenessWarning}${_seasonContext}
 
 Return JSON with this structure:
@@ -264,6 +277,23 @@ Return JSON with this structure:
       console.warn(`[scout-coach-personality] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
     }
 
+    // --- P0: Fabrication detection (shared patterns) ---
+    const fabricationCheck = checkFabricationPatterns(rawText, hasTitles || hasCareer);
+    if (fabricationCheck.status === 'HALT' || fabricationCheck.status === 'WARN') {
+      console.warn(`[scout-coach-personality] FABRICATION ${fabricationCheck.status}: ${fabricationCheck.detail}`);
+      qualityReport.checks.push(fabricationCheck);
+      if (fabricationCheck.status === 'HALT') qualityReport.gate = 'HALT';
+    }
+
+    // --- P0: Confidence cap for sparse coach data ---
+    const dataFieldCount = [hasTitles, hasCareer, hasProfile, !!coach.coaching_style, !!coach.formation_preference].filter(Boolean).length;
+    let cappedConfidence = confidence;
+    if (dataFieldCount <= 1 && cappedConfidence > 0.45) {
+      cappedConfidence = 0.45;
+    } else if (dataFieldCount <= 2 && cappedConfidence > 0.60) {
+      cappedConfidence = 0.60;
+    }
+
     // Build result
     const result = {
       success: true,
@@ -273,9 +303,11 @@ Return JSON with this structure:
         stress_archetype: String(parsed.stress_archetype ?? 'Unknown'),
         coaching_approach: Array.isArray(parsed.coaching_approach) ? parsed.coaching_approach.slice(0, 7).map(String) : [],
         integration_risks: Array.isArray(parsed.integration_risks) ? parsed.integration_risks.slice(0, 6).map(String) : [],
-        confidence_score: confidence,
+        confidence_score: cappedConfidence,
         composite_archetype: archetype,
-        confidence_reasoning: `Evidence: ${evidenceCount}/12 dims, LLM: ${llmConfidence}, Source: ${dataSourceQuality}`,
+        confidence_reasoning: cappedConfidence < confidence
+          ? `Capped from ${confidence.toFixed(2)} to ${cappedConfidence.toFixed(2)} (sparse data: ${dataFieldCount}/5 fields)`
+          : `Evidence: ${evidenceCount}/12 dims, LLM: ${llmConfidence}, Source: ${dataSourceQuality}`,
         data_source_quality: dataSourceQuality,
       },
       recommendation,
@@ -292,9 +324,9 @@ Return JSON with this structure:
       analysis_type: 'personality',
       status: 'completed',
       overall_score: overallScore,
-      confidence,
+      confidence: cappedConfidence,
       recommendation,
-      summary: `${coach.name}: ${archetype}. Confidence ${(confidence * 100).toFixed(0)}%. Q:${qualityReport.score}/${qualityReport.gate}`,
+      summary: `${coach.name}: ${archetype}. Confidence ${(cappedConfidence * 100).toFixed(0)}%. Q:${qualityReport.score}/${qualityReport.gate}`,
       strengths: dims.filter(d => dimScores[d] >= 7).slice(0, 3),
       weaknesses: dims.filter(d => dimScores[d] <= 4).slice(0, 3),
       analysis_data: result,
