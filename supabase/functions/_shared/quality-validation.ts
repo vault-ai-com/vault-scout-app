@@ -333,10 +333,52 @@ export function checkFabricationPatterns(
     );
   }
 
+  // Pattern 3: Suspiciously precise stats without API data (e.g. "73.2% pass accuracy")
+  if (!hasFootballStats) {
+    const preciseStats = agentOutput.match(
+      /\b\d{1,3}\.\d{1,2}\s*%\s*(pass|passnings|tackle|duell|dribbl|skott|shot)/gi,
+    );
+    if (preciseStats && preciseStats.length > 0) {
+      fabrications.push(
+        `${preciseStats.length} precise stat(s) without API data: "${preciseStats[0]}"`,
+      );
+    }
+  }
+
+  // Pattern 4: Specific season stat claims without source (e.g. "scored 14 goals in 2024/25")
+  if (!hasFootballStats) {
+    const seasonClaims = agentOutput.match(
+      /\b\d{1,3}\s+(mål|goals|assists|assists?)\s+(i|in|under|during)\s+\d{4}/gi,
+    );
+    if (seasonClaims && seasonClaims.length > 0) {
+      fabrications.push(
+        `${seasonClaims.length} season stat claim(s) without API: "${seasonClaims[0]}"`,
+      );
+    }
+  }
+
+  // Pattern 5: Position-stat mismatch (goalkeeper with dribbling/goals claims)
+  const posLower = agentOutput.toLowerCase();
+  const isGK = /\b(goalkeeper|målvakt|keeper)\b/.test(posLower);
+  if (isGK) {
+    const gkFabric = agentOutput.match(
+      /\b(\d{2,}\s*(mål|goals|dribbl|dribbles|assists))\b/gi,
+    );
+    if (gkFabric && gkFabric.length > 0) {
+      fabrications.push(
+        `Position-stat mismatch: GK with outfield claims: "${gkFabric[0]}"`,
+      );
+    }
+  }
+
+  const hasHalt = fabrications.some(f =>
+    f.includes('no football API') || f.includes('without API') || f.includes('Position-stat'),
+  );
+
   if (fabrications.length > 0) {
     return {
       name: 'fabrication_detection',
-      status: fabrications.some(f => f.includes('no football API')) ? 'HALT' : 'WARN',
+      status: hasHalt ? 'HALT' : 'WARN',
       detail: fabrications.join('; '),
     };
   }

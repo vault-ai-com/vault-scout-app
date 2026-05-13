@@ -462,6 +462,13 @@ function buildReportHtml(
       ⚠ Analysen baseras på profildata och AI-bedömning. Ingen matchstatistik från Football API tillgänglig.
     </div>`
     : "";
+  // Per-slide provenance tags — closes SQRF01 V2/V4 PARTIALLY_CLOSED
+  const ptag = (src: string) => `<span style="float:right;font-size:9px;letter-spacing:.05em;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.35)">${src}</span>`;
+  const ptagLight = (src: string) => `<span style="float:right;font-size:9px;letter-spacing:.05em;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,.04);color:rgba(0,0,0,.35)">${src}</span>`;
+  const dbTag = ptagLight("PROFILDATA");
+  const llmTag = (dark: boolean) => dark ? ptag("AI-BEDÖMNING") : ptagLight("AI-BEDÖMNING");
+  const apiLlmTag = (dark: boolean) => dark ? ptag("API + AI") : ptagLight("API + AI");
+  const dimSourceTag = hasApiData ? apiLlmTag : llmTag;
   const firstImpression = narrative?.first_impression ?? summary;
   const slide2 = `<section class="slide slide-light" id="s2">
 <div class="slide-tag">Första Intrycket</div>
@@ -476,7 +483,7 @@ ${provenanceBanner}
   const marketValue = player.market_value_eur ? `€${(Number(player.market_value_eur) / 1e6).toFixed(1)}M` : "Okänt";
   const contractEnd = player.contract_expires ? String(player.contract_expires).substring(0, 10) : "Okänt";
   const slide3 = `<section class="slide slide-dark" id="s3">
-<div class="slide-tag">Spelarprofil</div>
+<div class="slide-tag">Spelarprofil${ptag("PROFILDATA")}</div>
 <div style="display:flex;align-items:center;gap:20px;margin-bottom:20px">
   <div style="width:64px;height:64px;border-radius:50%;background:rgba(0,184,148,.15);border:2px solid #00B894;
     display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#00B894;flex-shrink:0">${e(initials)}</div>
@@ -499,7 +506,7 @@ ${provenanceBanner}
     ? String((analysis.analysis_data as Record<string, unknown>).recommendation_reasoning ?? summary)
     : summary;
   const slide4 = `<section class="slide slide-accent" id="s4">
-<div class="slide-tag">Overall Score</div>
+<div class="slide-tag">Overall Score${ptag(hasApiData ? "API + AI" : "AI-BEDÖMNING")}</div>
 <div style="text-align:center;margin-bottom:24px">
   ${generateScoreCircleSvg(overall)}
   <div style="margin-top:12px">
@@ -532,7 +539,7 @@ ${provenanceBanner}
   }).join("");
 
   const slide5 = `<section class="slide slide-light" id="s5">
-<div class="slide-tag">16 Dimensioner</div>
+<div class="slide-tag">16 Dimensioner${ptagLight(hasApiData ? "API + AI" : "AI-BEDÖMNING")}</div>
 <h2 style="margin-bottom:20px">Dimensionsanalys</h2>
 ${dimGroupsHtml}
 </section>`;
@@ -561,7 +568,7 @@ ${dimGroupsHtml}
     }).join("");
 
     slide6 = `<section class="slide slide-dark" id="s6">
-<div class="slide-tag">Beteendeprofil (BPA)</div>
+<div class="slide-tag">Beteendeprofil (BPA)${ptag("AI-BEDÖMNING")}</div>
 <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
   <span class="badge b-info" style="font-size:13px;padding:6px 16px">${e(archLabel || "Okänd arketyp")}</span>
   ${stressArch ? `<span class="badge b-gold">Stress: ${e(stressArch)}</span>` : ""}
@@ -584,7 +591,7 @@ ${bpaBarsHtml}
     if (cards.length > 0) {
       const CARD_ACCENTS = ["#00B894", "#FDCB6E", "#A29BFE", "#F39C12"];
       slide7 = `<section class="slide slide-dark" id="s7">
-<div class="slide-tag">Karaktär &amp; Psykologi</div>
+<div class="slide-tag">Karaktär &amp; Psykologi${ptag("AI-BEDÖMNING")}</div>
 <div class="card-grid">
 ${cards.map((c, i) => {
   const scores = c.scores as Record<string, string> | undefined;
@@ -608,7 +615,7 @@ ${cards.map((c, i) => {
     const stressItems = Array.isArray(bpaFormatted.stress_response) ? bpaFormatted.stress_response as Record<string, unknown>[] : [];
     if (stressItems.length > 0) {
       slide8 = `<section class="slide slide-light" id="s8">
-<div class="slide-tag">Stressrespons</div>
+<div class="slide-tag">Stressrespons${ptagLight("AI-BEDÖMNING")}</div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
 ${stressItems.map(s => `<div class="card">
   <h3>${e(s.title)}</h3>
@@ -629,7 +636,7 @@ ${stressItems.map(s => `<div class="card">
     const bigQuestion = rf ? String(rf.big_question ?? "") : "";
     if (steps.length > 0) {
       slide9 = `<section class="slide slide-light" id="s9">
-<div class="slide-tag">Riskanalys — Kill Chain</div>
+<div class="slide-tag">Riskanalys — Kill Chain${ptagLight("AI-BEDÖMNING")}</div>
 <h2 style="margin-bottom:16px">Vad bryter spelaren?</h2>
 ${warningChain ? `<div style="background:#fef3c7;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e;font-weight:500;letter-spacing:.02em">${e(warningChain)}</div>` : ""}
 ${steps.map(s => `<div class="risk-step">
@@ -646,7 +653,7 @@ ${caseStudy ? `<div class="card" style="margin-top:12px;border-left:3px solid #e
     const riskFactors = Array.isArray(analysis.risk_factors) ? analysis.risk_factors as string[] : [];
     if (riskFactors.length > 0) {
       slide9 = `<section class="slide slide-light" id="s9">
-<div class="slide-tag">Riskanalys</div>
+<div class="slide-tag">Riskanalys${ptagLight("AI-BEDÖMNING")}</div>
 ${riskFactors.map((f, i) => `<div class="risk-step"><div class="risk-num">${i + 1}</div><div class="card-text">${e(f)}</div></div>`).join("")}
 </section>`;
     }
@@ -660,7 +667,7 @@ ${riskFactors.map((f, i) => `<div class="risk-step"><div class="risk-num">${i + 
     const worst = triggers && Array.isArray(triggers.activates_worst ?? triggers.worst) ? (triggers.activates_worst ?? triggers.worst) as string[] : [];
     if (best.length > 0 || worst.length > 0) {
       slide10 = `<section class="slide slide-dark" id="s10">
-<div class="slide-tag">Beteendetriggers</div>
+<div class="slide-tag">Beteendetriggers${ptag("AI-BEDÖMNING")}</div>
 <div class="trigger-grid">
   <div class="trigger-col"><h3 style="color:#00B894">Aktiverar bästa</h3>
     ${best.map(b => `<div class="trigger-item">✓ ${e(b)}</div>`).join("")}
@@ -679,7 +686,7 @@ ${riskFactors.map((f, i) => `<div class="risk-step"><div class="risk-num">${i + 
     const chapters = Array.isArray(narrative.career_chapters) ? narrative.career_chapters as Record<string, unknown>[] : [];
     if (chapters.length > 0) {
       slide11 = `<section class="slide slide-light" id="s11">
-<div class="slide-tag">Karriäranalys</div>
+<div class="slide-tag">Karriäranalys${ptagLight("AI-NARRATIV")}</div>
 <div class="timeline">
 ${chapters.map(ch => `<div class="tl-item"><div class="tl-title">${e(ch.title)}</div><div class="tl-text">${e(ch.content)}</div></div>`).join("")}
 </div>
@@ -695,7 +702,7 @@ ${narrative.player_summary ? `<div class="text" style="margin-top:20px;padding-t
     if (compat && typeof compat === "object") {
       const c = compat as Record<string, unknown>;
       slide12 = `<section class="slide slide-accent" id="s12">
-<div class="slide-tag">Kompatibilitetsprofil</div>
+<div class="slide-tag">Kompatibilitetsprofil${ptag("AI-BEDÖMNING")}</div>
 <h2 style="margin-bottom:16px">Generell spelarprofil</h2>
 <div class="compat-grid">
   <div class="compat-item"><div class="compat-label">Spelstil-krav</div><div class="compat-text">${e(c.play_style ?? c.play_style_requirement ?? "Ej tillgänglig")}</div></div>
@@ -713,7 +720,7 @@ ${narrative.player_summary ? `<div class="text" style="margin-top:20px;padding-t
     const steps = Array.isArray(bpaFormatted.coaching_blueprint) ? bpaFormatted.coaching_blueprint as Record<string, unknown>[] : [];
     if (steps.length > 0) {
       slide13 = `<section class="slide slide-dark" id="s13">
-<div class="slide-tag">Coaching Blueprint</div>
+<div class="slide-tag">Coaching Blueprint${ptag("AI-BEDÖMNING")}</div>
 ${steps.map((s, idx) => {
   const isFirst = idx === 0;
   const accent = isFirst ? "border:1px solid var(--accent);background:rgba(0,212,170,.08)" : "";
@@ -731,7 +738,7 @@ ${steps.map((s, idx) => {
     const coaching = Array.isArray(bpa.coaching_approach) ? bpa.coaching_approach as string[] : [];
     if (coaching.length > 0) {
       slide13 = `<section class="slide slide-dark" id="s13">
-<div class="slide-tag">Coaching Blueprint</div>
+<div class="slide-tag">Coaching Blueprint${ptag("AI-BEDÖMNING")}</div>
 ${coaching.map((c, i) => `<div class="coach-step"><div class="coach-num">${i + 1}</div><div class="card-text">${e(c)}</div></div>`).join("")}
 </section>`;
     }
@@ -762,7 +769,7 @@ ${coaching.map((c, i) => `<div class="coach-step"><div class="coach-num">${i + 1
       const VERDICT_LABELS: Record<string, string> = { AGREE: "Godkänd", CHALLENGE: "Invändning", FLAG: "Varning" };
       if (opinions.length > 0) {
         slide14 = `<section class="slide slide-light" id="s14">
-<div class="slide-tag">Sport Advisory Board</div>
+<div class="slide-tag">Sport Advisory Board${ptagLight("EXPERTGRANSKNING")}</div>
 ${consensus ? `<div style="margin-bottom:20px;padding:14px 18px;border-radius:12px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.15);font-size:14px;color:rgba(255,255,255,.85)">${e(consensus)}</div>` : ""}
 ${bosseReview ? `<div class="advisor-card" style="border-left-color:#f4c430">
   <div class="advisor-hdr">
@@ -793,7 +800,7 @@ ${opinions.map((o, idx) => {
       }
     } else if (bosseReview) {
       slide14 = `<section class="slide slide-light" id="s14">
-<div class="slide-tag">Sport Advisory Board</div>
+<div class="slide-tag">Sport Advisory Board${ptagLight("EXPERTGRANSKNING")}</div>
 <div class="advisor-card" style="border-left-color:#f4c430">
   <div class="advisor-hdr">
     <div><span class="advisor-name">Senior Scout Expert</span><span class="advisor-domain" style="margin-left:8px">Scoutinganalys</span></div>
@@ -819,7 +826,7 @@ ${EXPERT_DOMAINS.map(a => `<div style="padding:12px 14px;border-radius:10px;back
 </section>`;
     } else {
       slide14 = `<section class="slide slide-light" id="s14">
-<div class="slide-tag">Sport Advisory Board</div>
+<div class="slide-tag">Sport Advisory Board${ptagLight("EXPERTGRANSKNING")}</div>
 <h2 style="margin-bottom:8px">Oberoende expertgranskning</h2>
 <div class="text" style="margin-bottom:20px">Vault AI:s Sport Advisory Board består av 6 domänexperter som granskar varje rapport oberoende av AI-analysen.</div>
 ${EXPERT_DOMAINS.map(a => `<div class="advisor-card" style="border-left-color:rgba(0,212,170,.4)">
