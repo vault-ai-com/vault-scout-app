@@ -15,6 +15,7 @@ import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning
 import { buildSeasonContext } from "../_shared/constants.ts";
 import { callAnthropic, MODELS, AnthropicError } from "../_shared/anthropic-client.ts";
 import { sanitizePromptInput } from "../_shared/sanitize.ts";
+import { capConfidenceByDataAvailability } from "../_shared/personality-logic.ts";
 
 const rateLimiter = createRateLimiter(10);
 
@@ -525,7 +526,9 @@ async function fetchFootballStats(playerName: string): Promise<Record<string, un
 // ---------------------------------------------------------------------------
 
 function buildFootballStatsBlock(stats: Record<string, unknown> | null): string {
-  if (!stats || !stats.aggregated_stats) return "";
+  if (!stats || !stats.aggregated_stats) {
+    return "\n## Football API Match Data [API]\nINGEN DATA TILLGÄNGLIG — citera ALDRIG matchstatistik, mål eller assists.";
+  }
 
   const agg = stats.aggregated_stats as Record<string, unknown>;
   const recent = (stats.recent_matches as Record<string, unknown>[]) ?? [];
@@ -546,7 +549,7 @@ function buildFootballStatsBlock(stats: Record<string, unknown> | null): string 
   }
 
   const lines: string[] = [
-    "\n## Football API Match Data",
+    "\n## Football API Match Data [API]",
     ...(freshnessWarning ? [freshnessWarning] : []),
     `- Matches analyzed: ${agg.matches_analyzed ?? 0}`,
     `- Avg rating: ${agg.avg_rating ?? "N/A"}`,
@@ -1536,15 +1539,35 @@ Deno.serve(async (req: Request): Promise<Response> => {
         dimScoresMap[d.dimension_id] = d.score;
       }
     }
+    // P0-2: Pass has_football_stats + agent_output so fabrication detection + provenance checks run
+    const hasFootballStats = footballStats !== null && (footballStats?.matches_found ?? 0) > 0;
+    const agentOutputConcat = agentsUsed.length > 0 ? result.summary + " " + (result.strengths ?? []).join(" ") + " " + (result.weaknesses ?? []).join(" ") : undefined;
     const qualityReport: QualityReport = validateAnalysis({
       overall_score: result.overall_score,
       confidence: result.confidence,
       recommendation: result.recommendation,
       dimension_scores: dimScoresMap,
       evidence_count: (result.dimension_scores ?? []).filter(d => d.evidence && d.evidence.length > 15 && !d.evidence.includes('Insufficient data')).length,
+      has_football_stats: hasFootballStats,
+      agent_output: agentOutputConcat,
     }, inputCompleteness);
     if (qualityReport.gate === 'HALT') {
       console.warn(`[scout-analyze-player] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
+    }
+
+    // 6c. P1-1: Confidence cap — port from scout-personality-analysis (Advisory Board consensus)
+    // Cap confidence when football stats are missing or data is sparse
+    const insufficientDimCount = (result.dimension_scores ?? []).filter(
+      d => d.evidence && (d.evidence.includes('Insufficient data') || d.evidence.includes('Otillräcklig data'))
+    ).length;
+    const totalDimCount = (result.dimension_scores ?? []).length || 16;
+    const dataSourceQuality = hasFootballStats ? 'MIXED' : 'PUBLIC_ONLY';
+    const confidenceCap = capConfidenceByDataAvailability(
+      result.confidence, insufficientDimCount, totalDimCount, dataSourceQuality
+    );
+    if (confidenceCap.cap_applied) {
+      console.log(`[scout-analyze-player] Confidence capped: ${result.confidence} → ${confidenceCap.confidence} (${confidenceCap.cap_reason})`);
+      result.confidence = confidenceCap.confidence;
     }
 
     // 7. Save results via RPC
@@ -1557,7 +1580,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_weaknesses: result.weaknesses,
       p_risk_factors: result.risk_factors,
       p_recommendation: result.recommendation,
-      p_analysis_data: { ...result, quality_pipeline: qualityReport },
+      p_analysis_data: { ...result, quality_pipeline: qualityReport, has_football_stats: hasFootballStats },
       p_agents_used: agentsUsed,
       p_kb_files_used: kbFilesUsed,
       p_scores: (result.dimension_scores ?? []).filter(d => typeof d.score === "number"),

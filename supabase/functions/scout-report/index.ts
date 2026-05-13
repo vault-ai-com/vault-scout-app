@@ -452,9 +452,20 @@ function buildReportHtml(
 </section>`;
 
   // === SLIDE 2: FIRST IMPRESSION (light) ===
+  // P1-2: Provenance validation — warn if narrative is LLM-only (no API data backing)
+  const analysisData = typeof analysis.analysis_data === "object" && analysis.analysis_data !== null
+    ? analysis.analysis_data as Record<string, unknown>
+    : {};
+  const hasApiData = Boolean(analysisData.has_football_stats);
+  const provenanceBanner = !hasApiData
+    ? `<div style="margin-bottom:12px;padding:8px 14px;border-radius:8px;background:rgba(253,203,110,.08);border:1px solid rgba(253,203,110,.2);font-size:11px;color:#FDCB6E">
+      ⚠ Analysen baseras på profildata och AI-bedömning. Ingen matchstatistik från Football API tillgänglig.
+    </div>`
+    : "";
   const firstImpression = narrative?.first_impression ?? summary;
   const slide2 = `<section class="slide slide-light" id="s2">
 <div class="slide-tag">Första Intrycket</div>
+${provenanceBanner}
 <div class="text" style="font-size:15px;line-height:1.9">${e(firstImpression)}</div>
 </section>`;
 
@@ -839,7 +850,7 @@ ${EXPERT_DOMAINS.map(a => `<div class="advisor-card" style="border-left-color:rg
 <div class="meta-row"><span class="meta-label">Beteendeprofil (BPA)</span><span class="meta-value">${bpa ? "Ja — 12 dimensioner" : "Ej tillgänglig"}</span></div>
 <div class="meta-row"><span class="meta-label">Sport Advisory Board</span><span class="meta-value">${advisorReview ? `${(advisorReview.opinions as unknown[])?.length ?? 0} granskare` : "6 experter tillgängliga"}</span></div>
 <div class="meta-row"><span class="meta-label">AI-analyslager</span><span class="meta-value">${agentCount > 0 ? `${agentCount} specialiserade modeller` : "Standard"}</span></div>
-<div class="meta-row"><span class="meta-label">Datakällor</span><span class="meta-value">${kbCount > 0 ? `${kbCount} kunskapsbaser` : "Grunddata"}</span></div>
+<div class="meta-row"><span class="meta-label">Datakällor</span><span class="meta-value">${kbCount > 0 ? `${kbCount} kunskapsbaser` : "Grunddata"}${hasApiData ? " + Football API" : " (ingen matchstatistik)"}</span></div>
 <div class="meta-row"><span class="meta-label">Oberoende verifiering</span><span class="meta-value">${verificationData?.vet06_gate ? `${e(String(verificationData.vet06_gate))}` : bpa ? "Genomförd" : "Ej tillämplig"}</span></div>
 <div class="meta-row" style="border:none"><span class="meta-label">Antal sektioner</span><span class="meta-value">${slideCount}</span></div>
 <div style="margin-top:20px;padding:14px 18px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:11px;color:rgba(255,255,255,.45);line-height:1.7">
