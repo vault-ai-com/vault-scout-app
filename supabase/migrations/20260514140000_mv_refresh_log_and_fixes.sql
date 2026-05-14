@@ -35,7 +35,7 @@ COMMENT ON TABLE mv_refresh_log IS
 -- ============================================================================
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_player_season_stats_pk
-  ON mv_player_season_stats (player_id, team_name, league_id, season);
+  ON mv_player_season_stats (player_id, player_name, team_name, league_id, season);
 
 -- Assertion: index must exist
 DO $$

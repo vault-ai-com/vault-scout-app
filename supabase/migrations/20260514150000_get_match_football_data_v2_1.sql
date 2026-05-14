@@ -118,12 +118,12 @@ BEGIN
     v_injuries_data := jsonb_build_object('status', 'NO_DATA', 'instruction', 'FABRICERA ALDRIG skadeinformation.');
   END IF;
 
-  -- v2.1: data_freshness — MAX(updated_at) per source table
+  -- v2.1: data_freshness — correct timestamp column per source table
   SELECT MAX(COALESCE(updated_at, created_at)) INTO v_freshness_fixtures FROM football_fixtures;
-  SELECT MAX(COALESCE(updated_at, created_at)) INTO v_freshness_xg FROM football_xg;
-  SELECT MAX(COALESCE(updated_at, created_at)) INTO v_freshness_injuries FROM football_injuries;
-  SELECT MAX(COALESCE(updated_at, created_at)) INTO v_freshness_player_stats FROM football_player_stats;
-  SELECT MAX(COALESCE(updated_at, created_at)) INTO v_freshness_standings FROM football_standings;
+  SELECT MAX(created_at) INTO v_freshness_xg FROM football_xg;
+  SELECT MAX(created_at) INTO v_freshness_injuries FROM football_injuries;
+  SELECT MAX(synced_at) INTO v_freshness_player_stats FROM football_player_stats;
+  SELECT MAX(synced_at) INTO v_freshness_standings FROM football_standings;
 
   v_data_freshness := jsonb_build_object(
     'fixtures',     to_jsonb(v_freshness_fixtures),
