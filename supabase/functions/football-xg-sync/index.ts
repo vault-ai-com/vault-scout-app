@@ -163,7 +163,7 @@ async function syncLeagueXg(): Promise<{
   const sb = getServiceClient();
 
   const { data: fixtures } = await sb.from("football_fixtures")
-    .select("api_fixture_id, home_team_name, away_team_name")
+    .select("id, api_fixture_id, home_team_name, away_team_name")
     .eq("status_short", "FT")
     .order("match_date", { ascending: false })
     .limit(50);
@@ -194,7 +194,7 @@ async function syncLeagueXg(): Promise<{
       if (footyMatch && footyMatch.home_xg !== null) {
         const { error } = await sb.from("football_xg").upsert(
           {
-            fixture_id: null, // Will be set by looking up fixture
+            fixture_id: f.id,
             api_fixture_id: f.api_fixture_id,
             home_xg: footyMatch.home_xg,
             away_xg: footyMatch.away_xg,
@@ -283,7 +283,7 @@ Deno.serve(async (req: Request) => {
       case "resync_all_xg": {
         const sbResync = getServiceClient();
         const { data: allFixtures } = await sbResync.from("football_fixtures")
-          .select("api_fixture_id, home_team_name, away_team_name")
+          .select("id, api_fixture_id, home_team_name, away_team_name")
           .eq("status_short", "FT")
           .order("match_date", { ascending: false })
           .limit(50);
@@ -304,6 +304,7 @@ Deno.serve(async (req: Request) => {
 
             if (footyMatch && footyMatch.home_xg !== null) {
               await sbResync.from("football_xg").upsert({
+                fixture_id: f.id,
                 api_fixture_id: f.api_fixture_id,
                 home_xg: footyMatch.home_xg,
                 away_xg: footyMatch.away_xg,
