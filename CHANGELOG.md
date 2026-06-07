@@ -1,5 +1,15 @@
 # Changelog
 
+## Sprint 209 — Scout DB Enforcement Hardening (2026-06-07)
+- **`enforce_match_prediction_gates()` GATE 4:** array_position ordering — MP10 måste köra FÖRE MP09. INSERT bypass fixat med ny INSERT-trigger.
+- **`complete_scout_analysis()` RPC:** Auto-extraherar quality_gate/quality_flag från analysis_data->quality_pipeline->gate.
+- **`trg_auto_extract_quality` (NY trigger):** BEFORE INSERT OR UPDATE på scout_analyses — edge functions som gör direkt INSERT (scout-personality-analysis) får nu quality_flag automatiskt.
+- **`trg_validate_coaching_learnings` (NY trigger):** Validerar source_type enum (API/TACTICAL/PREDICTION/PSYCHOLOGICAL) + confidence 0-0.85 ceiling på match_coaching_learnings.
+- **`scout_analyses.quality_flag`:** DEFAULT satt till 'unverified' (backfill 60 rader).
+- **MP09 NO-GO LOCK:** gate_mp09 BLOCK + pipeline status='completed' → EXCEPTION.
+- **Dead code:** match-prediction-validation.ts borttagen (0 imports, 561 rader).
+- **V64 GO 8.0/10.** VCE09 WARN (3/4 addressed). C66 GO LOW.
+
 ## Sprint 194 — Scout Data Infrastructure: Team Mapping + Match RPC (2026-05-04)
 - **`football_team_mapping` (NY tabell):** 16 Allsvenskan-lag med verifierade API-Football IDs. Deterministisk name resolution ersätter fuzzy matching. RLS aktiverad.
 - **`get_match_football_data()` (NY RPC):** 9-lager JSON (fixture, lineups, events, statistics, xg, player_stats, injuries, derived, context, player_progression). Mapping-table lookup + Swedish char normalization fallback. Coverage warnings med anti-hallucination ("FABRICERA ALDRIG").
