@@ -390,8 +390,6 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
     const fabricationCheck = checkFabricationPatterns(rawText, hasFootballStats);
     if (fabricationCheck.status === 'HALT' || fabricationCheck.status === 'WARN') {
       fabrication_warnings.push(fabricationCheck.detail);
-      qualityReport.checks.push(fabricationCheck);
-      if (fabricationCheck.status === 'HALT') qualityReport.gate = 'HALT';
     }
 
     // Evidence-level check: flag individual dimensions citing stats without API
@@ -434,6 +432,11 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
       insufficient_dimension_count: insufficientCount,
       total_dimension_count: 11,
     });
+    // P0 fix: inject fabrication check into qualityReport (moved here — was before declaration)
+    if (fabricationCheck.status === 'HALT' || fabricationCheck.status === 'WARN') {
+      qualityReport.checks.push(fabricationCheck);
+      if (fabricationCheck.status === 'HALT') qualityReport.gate = 'HALT';
+    }
     if (qualityReport.gate === 'HALT') {
       console.warn(`[scout-personality] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
     }
@@ -464,6 +467,24 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
         match_count: matchCount ?? null,
       },
     };
+
+    // P0 fix: HALT = blocking — save with status=failed, return HTTP 422
+    if (qualityReport.gate === 'HALT') {
+      await supabase.from('scout_analyses').insert({
+        player_id,
+        analysis_type: 'personality',
+        status: 'failed',
+        overall_score,
+        confidence: confidence_score,
+        recommendation,
+        summary: `QUALITY_HALT: ${composite_archetype} | Q:${qualityReport.score}`,
+        analysis_data: { ...result, failure_reason: 'QUALITY_HALT' },
+      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'QUALITY_HALT', quality_pipeline: qualityReport }),
+        { status: 422, headers: { ..._corsHeaders, 'Content-Type': 'application/json', ...rlHeaders } }
+      );
+    }
 
     await supabase.from('scout_analyses').insert({
       player_id,

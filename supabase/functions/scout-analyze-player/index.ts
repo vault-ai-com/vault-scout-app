@@ -1553,6 +1553,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }, inputCompleteness);
     if (qualityReport.gate === 'HALT') {
       console.warn(`[scout-analyze-player] QUALITY HALT: score=${qualityReport.score}, checks=${JSON.stringify(qualityReport.checks.filter(c => c.status === 'HALT'))}`);
+      // P0 fix: HALT = blocking — save with status=failed, return HTTP 422
+      try {
+        await supabaseRpc("fail_scout_analysis", {
+          p_analysis_id: analysisId,
+          p_error_message: `QUALITY_HALT: score=${qualityReport.score}, checks=${qualityReport.checks.filter(c => c.status === 'HALT').map(c => c.check).join(', ')}`,
+        });
+      } catch (failErr) {
+        console.warn('[scout-analyze-player] Failed to mark analysis as failed:', failErr);
+      }
+      return new Response(JSON.stringify({
+        success: false,
+        analysis_id: analysisId,
+        error: 'QUALITY_HALT',
+        quality_pipeline: qualityReport,
+      }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json', ...rlHeaders } });
     }
 
     // 6c. P1-1: Confidence cap — port from scout-personality-analysis (Advisory Board consensus)
