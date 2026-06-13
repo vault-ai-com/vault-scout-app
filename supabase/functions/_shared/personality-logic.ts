@@ -190,8 +190,8 @@ export function capConfidenceByDataAvailability(
       cap = Math.min(cap, 0.35);
       reason = `${matchCount} matcher: max 0.35 (minimum 15 för stabil profil)`;
     } else if (matchCount <= 15) {
-      cap = Math.min(cap, 0.45);
-      reason = reason ?? `${matchCount} matcher: max 0.45`;
+      cap = Math.min(cap, 0.55);
+      reason = reason ?? `${matchCount} matcher: max 0.55`;
     }
   }
 

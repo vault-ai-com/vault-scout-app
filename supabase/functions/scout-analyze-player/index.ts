@@ -14,7 +14,7 @@ import { authenticateRequest } from "../_shared/auth.ts";
 import { validateAnalysis, checkInputCompleteness, buildInputCompletenessWarning, type QualityReport, type InputCompletenessResult } from "../_shared/quality-validation.ts";
 import { buildSeasonContext } from "../_shared/constants.ts";
 import { callAnthropic, MODELS, AnthropicError } from "../_shared/anthropic-client.ts";
-import { sanitizePromptInput } from "../_shared/sanitize.ts";
+import { sanitizePromptInput, sanitizeJsonForPrompt } from "../_shared/sanitize.ts";
 import { capConfidenceByDataAvailability } from "../_shared/personality-logic.ts";
 
 const rateLimiter = createRateLimiter(10);
@@ -104,6 +104,7 @@ interface DimensionScore {
   dimension_name: string;
   score: number;
   evidence: string;
+  data_source_warning?: string;
 }
 
 interface AnalysisResult {
@@ -612,24 +613,24 @@ function buildUserPrompt(
 - Weight: ${pd.weight_kg != null ? `${pd.weight_kg} kg` : "Unknown"}`;
 
   const statsBlock = pd.stats
-    ? `\n## Statistics\n${JSON.stringify(pd.stats, null, 2)}`
+    ? `\n## Statistics\n${sanitizeJsonForPrompt(pd.stats)}`
     : "\n## Statistics\nNo statistical data available.";
 
   const matchHistory = pd.match_history as Record<string, unknown>[] | undefined;
   const matchBlock =
     matchHistory && matchHistory.length > 0
-      ? `\n## Recent Match History\n${JSON.stringify(matchHistory.slice(0, 10), null, 2)}`
+      ? `\n## Recent Match History\n${sanitizeJsonForPrompt(matchHistory.slice(0, 10))}`
       : "\n## Recent Match History\nNo match history available.";
 
   const metadataBlock = pd.metadata
-    ? `\n## Additional Metadata\n${JSON.stringify(pd.metadata, null, 2)}`
+    ? `\n## Additional Metadata\n${sanitizeJsonForPrompt(pd.metadata)}`
     : "";
 
   // --- Career & club history ---
   const careerParts: string[] = [];
-  if (pd.career_history) careerParts.push(JSON.stringify(pd.career_history, null, 2));
-  if (pd.career_clubs) careerParts.push(`Clubs: ${JSON.stringify(pd.career_clubs, null, 2)}`);
-  if (pd.career_timeline) careerParts.push(`Timeline: ${JSON.stringify(pd.career_timeline, null, 2)}`);
+  if (pd.career_history) careerParts.push(sanitizeJsonForPrompt(pd.career_history));
+  if (pd.career_clubs) careerParts.push(`Clubs: ${sanitizeJsonForPrompt(pd.career_clubs)}`);
+  if (pd.career_timeline) careerParts.push(`Timeline: ${sanitizeJsonForPrompt(pd.career_timeline)}`);
   if (Array.isArray(pd.previous_clubs)) careerParts.push(`Previous Clubs: ${(pd.previous_clubs as string[]).map(spi).join(", ")}`);
   else if (typeof pd.previous_clubs === "string") careerParts.push(`Previous Clubs: ${spi(pd.previous_clubs)}`);
   if (typeof pd.previous_club === "string") careerParts.push(`Previous Club: ${spi(pd.previous_club)}`);
@@ -649,16 +650,16 @@ function buildUserPrompt(
   const careerStatsBlock = careerStatsParts.length > 0 ? `\n## Career Totals\n${careerStatsParts.join("\n")}` : "";
 
   const honorsBlock = pd.awards || pd.honours
-    ? `\n## Awards & Honours\n${pd.awards ? JSON.stringify(pd.awards, null, 2) : ""}${pd.honours ? `\n${JSON.stringify(pd.honours, null, 2)}` : ""}`
+    ? `\n## Awards & Honours\n${pd.awards ? sanitizeJsonForPrompt(pd.awards) : ""}${pd.honours ? `\n${sanitizeJsonForPrompt(pd.honours)}` : ""}`
     : "";
 
   // --- Current season stats ---
   const seasonParts: string[] = [];
-  if (pd.season_2025) seasonParts.push(JSON.stringify(pd.season_2025, null, 2));
-  if (pd.allsvenskan_2026) seasonParts.push(`Allsvenskan 2026: ${JSON.stringify(pd.allsvenskan_2026, null, 2)}`);
-  if (pd.allsvenskan_stats) seasonParts.push(`Allsvenskan: ${JSON.stringify(pd.allsvenskan_stats, null, 2)}`);
-  if (pd.eliteserien_2025) seasonParts.push(`Eliteserien 2025: ${JSON.stringify(pd.eliteserien_2025, null, 2)}`);
-  if (pd.stats_2025_26) seasonParts.push(`2025/26: ${JSON.stringify(pd.stats_2025_26, null, 2)}`);
+  if (pd.season_2025) seasonParts.push(sanitizeJsonForPrompt(pd.season_2025));
+  if (pd.allsvenskan_2026) seasonParts.push(`Allsvenskan 2026: ${sanitizeJsonForPrompt(pd.allsvenskan_2026)}`);
+  if (pd.allsvenskan_stats) seasonParts.push(`Allsvenskan: ${sanitizeJsonForPrompt(pd.allsvenskan_stats)}`);
+  if (pd.eliteserien_2025) seasonParts.push(`Eliteserien 2025: ${sanitizeJsonForPrompt(pd.eliteserien_2025)}`);
+  if (pd.stats_2025_26) seasonParts.push(`2025/26: ${sanitizeJsonForPrompt(pd.stats_2025_26)}`);
   if (pd.allsvenskan_2025_starts != null) seasonParts.push(`Allsvenskan 2025 Starts: ${pd.allsvenskan_2025_starts}`);
   if (pd.allsvenskan_2025_minutes != null) seasonParts.push(`Allsvenskan 2025 Minutes: ${pd.allsvenskan_2025_minutes}`);
   if (pd.allsvenskan_2025_avg_rating != null) seasonParts.push(`Allsvenskan 2025 Avg Rating: ${pd.allsvenskan_2025_avg_rating}`);
@@ -697,7 +698,7 @@ function buildUserPrompt(
 
   // --- Injury & physical ---
   const injuryParts: string[] = [];
-  if (pd.injury_history) injuryParts.push(`History: ${JSON.stringify(pd.injury_history, null, 2)}`);
+  if (pd.injury_history) injuryParts.push(`History: ${sanitizeJsonForPrompt(pd.injury_history)}`);
   if (pd.injury_risk_score != null) injuryParts.push(`Risk Score: ${pd.injury_risk_score}/10`);
   if (pd.injury_days_total != null) injuryParts.push(`Total Injury Days: ${pd.injury_days_total}`);
   if (pd.knee_injury_months != null) injuryParts.push(`Knee Injury Duration: ${pd.knee_injury_months} months`);
@@ -723,7 +724,7 @@ function buildUserPrompt(
     ? `\n## Agent\n${spi(pd.agent)}${typeof pd.agent_note === "string" ? ` — ${spi(pd.agent_note)}` : ""}`
     : "";
 
-  const vaultFlagsBlock = pd.vault_flags ? `\n## Scout Flags\n${JSON.stringify(pd.vault_flags, null, 2)}` : "";
+  const vaultFlagsBlock = pd.vault_flags ? `\n## Scout Flags\n${sanitizeJsonForPrompt(pd.vault_flags)}` : "";
 
   const keyQuotesList = Array.isArray(pd.key_quotes) ? (pd.key_quotes as string[]).map((q) => `"${spi(q)}"`).join("\n") : typeof pd.key_quotes === "string" ? spi(pd.key_quotes) : null;
   const keyQuotesBlock = keyQuotesList ? `\n## Key Quotes\n${keyQuotesList}` : "";
@@ -1577,12 +1578,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
     ).length;
     const totalDimCount = (result.dimension_scores ?? []).length || 16;
     const dataSourceQuality = hasFootballStats ? 'MIXED' : 'PUBLIC_ONLY';
+    const matchCount = (footballStats?.matches_found as number | undefined) ?? 0;
     const confidenceCap = capConfidenceByDataAvailability(
-      result.confidence, insufficientDimCount, totalDimCount, dataSourceQuality
+      result.confidence, insufficientDimCount, totalDimCount, dataSourceQuality, matchCount
     );
     if (confidenceCap.cap_applied) {
       console.log(`[scout-analyze-player] Confidence capped: ${result.confidence} → ${confidenceCap.confidence} (${confidenceCap.cap_reason})`);
       result.confidence = confidenceCap.confidence;
+    }
+
+    // 6d. Physical dimension disclaimers — DIM-08/09/10 are LLM-inferred without tracking data
+    const PHYSICAL_DIMS = new Set(["DIM-08", "DIM-09", "DIM-10"]);
+    for (const dim of (result.dimension_scores ?? [])) {
+      if (PHYSICAL_DIMS.has(dim.dimension_id)) {
+        dim.data_source_warning = "No tracking data available — LLM-inferred estimate based on match events and public reports";
+      }
     }
 
     // 7. Save results via RPC

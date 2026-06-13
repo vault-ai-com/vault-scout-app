@@ -13,7 +13,7 @@ import { createRateLimiter, getRateLimitHeaders } from "../_shared/rate-limit.ts
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { authenticateRequest } from "../_shared/auth.ts";
 import { callAnthropic, MODELS } from "../_shared/anthropic-client.ts";
-import { sanitizePromptInput } from "../_shared/sanitize.ts";
+import { sanitizePromptInput, sanitizeLargePayload } from "../_shared/sanitize.ts";
 
 const rateLimiter = createRateLimiter(5);
 
@@ -227,10 +227,12 @@ async function loadRoutedAdvisors(
         continue;
       }
 
-      const systemPrompt = persona
-        .sort((a, b) => a.chunk_index - b.chunk_index)
-        .map((c) => c.chunk_text)
-        .join("");
+      const systemPrompt = sanitizeLargePayload(
+        persona
+          .sort((a, b) => a.chunk_index - b.chunk_index)
+          .map((c) => c.chunk_text)
+          .join("")
+      );
 
       advisors.push({
         advisor_id: advisor.advisor_id,
@@ -263,7 +265,7 @@ ${dimFramework}
 ## Spelanalys att granska
 Spelare: ${sanitizePromptInput(playerName)}
 
-${analysisJson}
+${sanitizeLargePayload(analysisJson)}
 
 ## Din uppgift
 1. Granska analysen ur ditt expertperspektiv
