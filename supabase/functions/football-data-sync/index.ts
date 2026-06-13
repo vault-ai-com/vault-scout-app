@@ -843,6 +843,15 @@ async function syncCoaches(teamId: number): Promise<{ team_id: number; coaches_s
   const sb = getServiceClient();
   let count = 0;
 
+  // Deactivate all coaches for this team before upserting fresh API data.
+  // Coaches returned by the API are re-activated below; any coach no longer
+  // in the API response remains is_active=false.
+  const { error: deactivateError } = await sb
+    .from("football_coaches")
+    .update({ is_active: false })
+    .eq("current_team_id", teamId);
+  if (deactivateError) throw new Error(`Coach deactivate: ${deactivateError.message}`);
+
   for (const entry of resp.response ?? []) {
     const career = (entry.career as Array<Record<string, unknown>>) ?? [];
     const careerHistory = career.map((c) => ({
@@ -850,11 +859,13 @@ async function syncCoaches(teamId: number): Promise<{ team_id: number; coaches_s
       team_name: (c.team as Record<string, unknown>)?.name,
       start: c.start,
       end: c.end,
+      role: (c.role as string) ?? null,
     }));
 
     // Find current team from career (end === null)
     const currentCareer = career.find((c) => c.end === null);
     const currentTeam = currentCareer?.team as Record<string, unknown> | undefined;
+    const currentRole = (currentCareer?.role as string) ?? null;
 
     const { error } = await sb.from("football_coaches").upsert(
       {
@@ -868,8 +879,11 @@ async function syncCoaches(teamId: number): Promise<{ team_id: number; coaches_s
         photo_url: (entry.photo as string) ?? null,
         current_team_id: (currentTeam?.id as number) ?? teamId,
         current_team_name: (currentTeam?.name as string) ?? null,
+        role: currentRole,
         career_history: careerHistory,
         raw_profile: entry,
+        is_active: true,
+        last_confirmed_at: new Date().toISOString(),
         synced_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
