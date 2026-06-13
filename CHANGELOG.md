@@ -1,5 +1,12 @@
 # Changelog
 
+## Sprint 211 — Football Coaches Data Quality (2026-06-13)
+- **`is_active` lifecycle:** Deactivate-then-upsert pattern i `syncCoaches()` — coaches som API-Football inte längre returnerar markeras automatiskt inaktiva.
+- **3 nya kolumner på `football_coaches`:** `is_active` (boolean), `last_confirmed_at` (timestamptz), `role` (text). Index på `(current_team_id, is_active)`.
+- **Bridge-fix:** `sync_football_coaches_to_scout()` filtrerar nu på `is_active = true` — inaktiva coaches propageras INTE till `scout_coaches`.
+- **IFK Göteborg cleanup:** 3 stale coaches (Nilsson, Tjelmeland, Westerberg) markerade inaktiva. Billborn bevarad som aktiv huvudtränare.
+- **V64 GO 8.3/10.** VCE09 PASS (bridge-fix identifierad). C66 GO LOW.
+
 ## Sprint 209 — Scout DB Enforcement Hardening (2026-06-07)
 - **`enforce_match_prediction_gates()` GATE 4:** array_position ordering — MP10 måste köra FÖRE MP09. INSERT bypass fixat med ny INSERT-trigger.
 - **`complete_scout_analysis()` RPC:** Auto-extraherar quality_gate/quality_flag från analysis_data->quality_pipeline->gate.
