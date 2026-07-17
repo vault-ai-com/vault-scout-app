@@ -11,6 +11,13 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 // --- Config ---
 const FOOTYSTATS_ALLSVENSKAN_SEASON_2026 = "16576";
+const FOOTYSTATS_SUPERETTAN_SEASON_2026 = "16575";
+
+// League ID → FootyStats season mapping
+const FOOTYSTATS_SEASON_MAP: Record<number, string> = {
+  113: FOOTYSTATS_ALLSVENSKAN_SEASON_2026,  // Allsvenskan
+  114: FOOTYSTATS_SUPERETTAN_SEASON_2026,   // Superettan
+};
 
 // Fuzzy team name matching — handles API-Football vs FootyStats naming differences
 function fuzzyTeamMatch(apiName: string, otherName: string): boolean {
@@ -110,14 +117,15 @@ async function syncMatchXg(apiFixtureId: number): Promise<{
   const sb = getServiceClient();
 
   const { data: fixture } = await sb.from("football_fixtures")
-    .select("id, home_team_name, away_team_name, match_date")
+    .select("id, home_team_name, away_team_name, match_date, league_id")
     .eq("api_fixture_id", apiFixtureId)
     .single();
 
   if (!fixture) throw new Error(`Fixture ${apiFixtureId} not found in DB. Sync it first via football-data-sync.`);
 
-  // FootyStats xG
-  const footyMatches = await fetchFootystatsXg(FOOTYSTATS_ALLSVENSKAN_SEASON_2026);
+  // FootyStats xG — select correct season based on league
+  const seasonId = FOOTYSTATS_SEASON_MAP[fixture.league_id] ?? FOOTYSTATS_ALLSVENSKAN_SEASON_2026;
+  const footyMatches = await fetchFootystatsXg(seasonId);
   const footyMatch = footyMatches.find((m) =>
     fuzzyTeamMatch(fixture.home_team_name, m.home_team) &&
     fuzzyTeamMatch(fixture.away_team_name, m.away_team)
@@ -154,84 +162,100 @@ async function syncMatchXg(apiFixtureId: number): Promise<{
 }
 
 // --- Action: sync_league_xg ---
-// Sync xG for all finished fixtures in DB that lack xG data
-async function syncLeagueXg(): Promise<{
+// Sync xG for all finished fixtures in DB that lack xG data.
+// Processes each league separately using correct FootyStats season ID.
+// Optional league_id parameter to sync only one league.
+async function syncLeagueXg(leagueId?: number): Promise<{
   checked: number;
   synced: number;
-  results: Array<{ fixture: string; source: string; xg: string }>;
+  results: Array<{ fixture: string; league: number; source: string; xg: string }>;
 }> {
   const sb = getServiceClient();
 
-  const { data: fixtures } = await sb.from("football_fixtures")
-    .select("id, api_fixture_id, home_team_name, away_team_name")
-    .eq("status_short", "FT")
-    .order("match_date", { ascending: false })
-    .limit(50);
+  // Determine which leagues to process
+  const leagueIds = leagueId ? [leagueId] : Object.keys(FOOTYSTATS_SEASON_MAP).map(Number);
+  const allResults: Array<{ fixture: string; league: number; source: string; xg: string }> = [];
+  let totalChecked = 0;
 
-  if (!fixtures || fixtures.length === 0) {
-    return { checked: 0, synced: 0, results: [] };
-  }
+  for (const lid of leagueIds) {
+    const seasonId = FOOTYSTATS_SEASON_MAP[lid];
+    if (!seasonId) continue;
 
-  const fixtureIds = fixtures.map((f) => f.api_fixture_id);
-  const { data: existingXg } = await sb.from("football_xg")
-    .select("api_fixture_id")
-    .in("api_fixture_id", fixtureIds);
-  const hasXg = new Set((existingXg ?? []).map((x) => x.api_fixture_id));
+    // Fetch fixtures for THIS league — limit 200 to cover full season
+    const { data: fixtures } = await sb.from("football_fixtures")
+      .select("id, api_fixture_id, home_team_name, away_team_name, league_id")
+      .eq("status_short", "FT")
+      .eq("league_id", lid)
+      .order("match_date", { ascending: false })
+      .limit(200);
 
-  const missing = fixtures.filter((f) => !hasXg.has(f.api_fixture_id));
+    if (!fixtures || fixtures.length === 0) continue;
+    totalChecked += fixtures.length;
 
-  // Fetch FootyStats once for all matches (single API call)
-  const footyMatches = await fetchFootystatsXg(FOOTYSTATS_ALLSVENSKAN_SEASON_2026);
-  const results = [];
+    const fixtureIds = fixtures.map((f) => f.api_fixture_id);
+    const { data: existingXg } = await sb.from("football_xg")
+      .select("api_fixture_id")
+      .in("api_fixture_id", fixtureIds);
+    const hasXg = new Set((existingXg ?? []).map((x) => x.api_fixture_id));
 
-  for (const f of missing) {
-    try {
-      const footyMatch = footyMatches.find((m) =>
-        fuzzyTeamMatch(f.home_team_name, m.home_team) &&
-        fuzzyTeamMatch(f.away_team_name, m.away_team)
-      );
+    const missing = fixtures.filter((f) => !hasXg.has(f.api_fixture_id));
+    if (missing.length === 0) continue;
 
-      if (footyMatch && footyMatch.home_xg !== null) {
-        const { error } = await sb.from("football_xg").upsert(
-          {
-            fixture_id: f.id,
-            api_fixture_id: f.api_fixture_id,
-            home_xg: footyMatch.home_xg,
-            away_xg: footyMatch.away_xg,
-            source: "footystats",
-            shot_xg_data: {
-              footystats_xg: { home: footyMatch.home_xg, away: footyMatch.away_xg },
-              footystats_prematch_xg: { home: footyMatch.home_xg_prematch, away: footyMatch.away_xg_prematch },
-            },
-          },
-          { onConflict: "api_fixture_id,source" },
+    // Fetch FootyStats ONCE per league (single API call per season)
+    const footyMatches = await fetchFootystatsXg(seasonId);
+
+    for (const f of missing) {
+      try {
+        const footyMatch = footyMatches.find((m) =>
+          fuzzyTeamMatch(f.home_team_name, m.home_team) &&
+          fuzzyTeamMatch(f.away_team_name, m.away_team)
         );
-        if (error) throw new Error(error.message);
-        results.push({
+
+        if (footyMatch && footyMatch.home_xg !== null) {
+          const { error } = await sb.from("football_xg").upsert(
+            {
+              fixture_id: f.id,
+              api_fixture_id: f.api_fixture_id,
+              home_xg: footyMatch.home_xg,
+              away_xg: footyMatch.away_xg,
+              source: "footystats",
+              shot_xg_data: {
+                footystats_xg: { home: footyMatch.home_xg, away: footyMatch.away_xg },
+                footystats_prematch_xg: { home: footyMatch.home_xg_prematch, away: footyMatch.away_xg_prematch },
+              },
+            },
+            { onConflict: "api_fixture_id,source" },
+          );
+          if (error) throw new Error(error.message);
+          allResults.push({
+            fixture: `${f.home_team_name} vs ${f.away_team_name}`,
+            league: lid,
+            source: "footystats",
+            xg: `${footyMatch.home_xg?.toFixed(2)} - ${footyMatch.away_xg?.toFixed(2)}`,
+          });
+        } else {
+          allResults.push({
+            fixture: `${f.home_team_name} vs ${f.away_team_name}`,
+            league: lid,
+            source: "none",
+            xg: "N/A",
+          });
+        }
+      } catch (err) {
+        allResults.push({
           fixture: `${f.home_team_name} vs ${f.away_team_name}`,
-          source: "footystats",
-          xg: `${footyMatch.home_xg?.toFixed(2)} - ${footyMatch.away_xg?.toFixed(2)}`,
-        });
-      } else {
-        results.push({
-          fixture: `${f.home_team_name} vs ${f.away_team_name}`,
-          source: "none",
-          xg: "N/A",
+          league: lid,
+          source: "error",
+          xg: String(err),
         });
       }
-    } catch (err) {
-      results.push({
-        fixture: `${f.home_team_name} vs ${f.away_team_name}`,
-        source: "error",
-        xg: String(err),
-      });
     }
   }
 
   return {
-    checked: fixtures.length,
-    synced: results.filter((r) => r.source === "footystats").length,
-    results,
+    checked: totalChecked,
+    synced: allResults.filter((r) => r.source === "footystats").length,
+    results: allResults,
   };
 }
 
@@ -261,86 +285,105 @@ Deno.serve(async (req: Request) => {
       }
 
       case "sync_league_xg": {
-        const result = await syncLeagueXg();
+        // Optional league_id to sync only one league (113=Allsvenskan, 114=Superettan)
+        const leagueIdParam = body.league_id as number | undefined;
+        const result = await syncLeagueXg(leagueIdParam);
         return jsonResponse({ ok: true, ...result }, corsHeaders);
       }
 
       case "test_footystats": {
-        const footyMatches = await fetchFootystatsXg(FOOTYSTATS_ALLSVENSKAN_SEASON_2026);
-        return jsonResponse({
-          ok: true,
-          footystats_reachable: footyMatches.length > 0,
-          matches_found: footyMatches.length,
-          sample: footyMatches.slice(0, 3).map((m) => ({
-            match: `${m.home_team} vs ${m.away_team}`,
-            date: m.date,
-            xg: `${m.home_xg} - ${m.away_xg}`,
-            prematch_xg: `${m.home_xg_prematch} - ${m.away_xg_prematch}`,
-          })),
-        }, corsHeaders);
+        // Test both leagues
+        const testResults: Record<string, { reachable: boolean; matches: number; sample: unknown[] }> = {};
+        for (const [lid, sid] of Object.entries(FOOTYSTATS_SEASON_MAP)) {
+          const footyMatches = await fetchFootystatsXg(sid);
+          const leagueName = lid === "113" ? "Allsvenskan" : "Superettan";
+          testResults[leagueName] = {
+            reachable: footyMatches.length > 0,
+            matches: footyMatches.length,
+            sample: footyMatches.slice(0, 2).map((m) => ({
+              match: `${m.home_team} vs ${m.away_team}`,
+              date: m.date,
+              xg: `${m.home_xg} - ${m.away_xg}`,
+            })),
+          };
+        }
+        return jsonResponse({ ok: true, leagues: testResults }, corsHeaders);
       }
 
       case "resync_all_xg": {
+        // Resync all xG for all leagues — processes per league with correct season
         const sbResync = getServiceClient();
-        const { data: allFixtures } = await sbResync.from("football_fixtures")
-          .select("id, api_fixture_id, home_team_name, away_team_name")
-          .eq("status_short", "FT")
-          .order("match_date", { ascending: false })
-          .limit(50);
+        const resyncResults: Array<{ fixture: string; league: number; source: string; xg: string }> = [];
+        let resyncTotal = 0;
 
-        const fixtureIds = (allFixtures ?? []).map((f) => f.api_fixture_id);
-        await sbResync.from("football_xg").delete().in("api_fixture_id", fixtureIds);
+        for (const [lid, sid] of Object.entries(FOOTYSTATS_SEASON_MAP)) {
+          const leagueId = Number(lid);
 
-        // Single FootyStats fetch for all
-        const footyMatches = await fetchFootystatsXg(FOOTYSTATS_ALLSVENSKAN_SEASON_2026);
-        const results = [];
+          const { data: leagueFixtures } = await sbResync.from("football_fixtures")
+            .select("id, api_fixture_id, home_team_name, away_team_name")
+            .eq("status_short", "FT")
+            .eq("league_id", leagueId)
+            .order("match_date", { ascending: false })
+            .limit(200);
 
-        for (const f of (allFixtures ?? [])) {
-          try {
-            const footyMatch = footyMatches.find((m) =>
-              fuzzyTeamMatch(f.home_team_name, m.home_team) &&
-              fuzzyTeamMatch(f.away_team_name, m.away_team)
-            );
+          if (!leagueFixtures || leagueFixtures.length === 0) continue;
+          resyncTotal += leagueFixtures.length;
 
-            if (footyMatch && footyMatch.home_xg !== null) {
-              await sbResync.from("football_xg").upsert({
-                fixture_id: f.id,
-                api_fixture_id: f.api_fixture_id,
-                home_xg: footyMatch.home_xg,
-                away_xg: footyMatch.away_xg,
-                source: "footystats",
-                shot_xg_data: {
-                  footystats_xg: { home: footyMatch.home_xg, away: footyMatch.away_xg },
-                  footystats_prematch_xg: { home: footyMatch.home_xg_prematch, away: footyMatch.away_xg_prematch },
-                },
-              }, { onConflict: "api_fixture_id,source" });
+          const fixtureIds = leagueFixtures.map((f) => f.api_fixture_id);
+          await sbResync.from("football_xg").delete().in("api_fixture_id", fixtureIds);
 
-              results.push({
+          const footyMatches = await fetchFootystatsXg(sid);
+
+          for (const f of leagueFixtures) {
+            try {
+              const footyMatch = footyMatches.find((m) =>
+                fuzzyTeamMatch(f.home_team_name, m.home_team) &&
+                fuzzyTeamMatch(f.away_team_name, m.away_team)
+              );
+
+              if (footyMatch && footyMatch.home_xg !== null) {
+                await sbResync.from("football_xg").upsert({
+                  fixture_id: f.id,
+                  api_fixture_id: f.api_fixture_id,
+                  home_xg: footyMatch.home_xg,
+                  away_xg: footyMatch.away_xg,
+                  source: "footystats",
+                  shot_xg_data: {
+                    footystats_xg: { home: footyMatch.home_xg, away: footyMatch.away_xg },
+                    footystats_prematch_xg: { home: footyMatch.home_xg_prematch, away: footyMatch.away_xg_prematch },
+                  },
+                }, { onConflict: "api_fixture_id,source" });
+
+                resyncResults.push({
+                  fixture: `${f.home_team_name} vs ${f.away_team_name}`,
+                  league: leagueId,
+                  source: "footystats",
+                  xg: `${footyMatch.home_xg?.toFixed(2)} - ${footyMatch.away_xg?.toFixed(2)}`,
+                });
+              } else {
+                resyncResults.push({
+                  fixture: `${f.home_team_name} vs ${f.away_team_name}`,
+                  league: leagueId,
+                  source: "none",
+                  xg: "N/A",
+                });
+              }
+            } catch (err) {
+              resyncResults.push({
                 fixture: `${f.home_team_name} vs ${f.away_team_name}`,
-                source: "footystats",
-                xg: `${footyMatch.home_xg?.toFixed(2)} - ${footyMatch.away_xg?.toFixed(2)}`,
-              });
-            } else {
-              results.push({
-                fixture: `${f.home_team_name} vs ${f.away_team_name}`,
-                source: "none",
-                xg: "N/A",
+                league: leagueId,
+                source: "error",
+                xg: String(err),
               });
             }
-          } catch (err) {
-            results.push({
-              fixture: `${f.home_team_name} vs ${f.away_team_name}`,
-              source: "error",
-              xg: String(err),
-            });
           }
         }
 
         return jsonResponse({
           ok: true,
-          total: (allFixtures ?? []).length,
-          synced: results.filter((r) => r.source === "footystats").length,
-          results,
+          total: resyncTotal,
+          synced: resyncResults.filter((r) => r.source === "footystats").length,
+          results: resyncResults,
         }, corsHeaders);
       }
 

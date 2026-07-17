@@ -97,7 +97,9 @@ export async function callAnthropic(opts: AnthropicOptions): Promise<AnthropicRe
   };
 
   if (opts.system !== undefined) body.system = opts.system;
-  if (opts.temperature !== undefined) body.temperature = opts.temperature;
+  // 2026-07-04: Opus 4.8+/current models reject `temperature` (400 "temperature is deprecated
+  // for this model"). No longer forwarded — determinism is now enforced API-side. The
+  // `temperature` option is kept in the interface for backward compat but intentionally ignored.
 
   const response = await fetch(ANTHROPIC_API_URL, {
     method: "POST",

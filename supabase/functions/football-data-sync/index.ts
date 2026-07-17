@@ -304,6 +304,20 @@ async function syncFixture(fixtureId: number): Promise<{
         return isNaN(n) ? null : n;
       };
 
+      // Ensure football_players entry exists (auto-create if missing)
+      const apiPlayerId = toNum(player.id);
+      if (apiPlayerId) {
+        await sb.from("football_players").upsert(
+          {
+            api_player_id: apiPlayerId,
+            name: (player.name as string) ?? "Unknown",
+            current_team_id: toNum(team.id),
+            synced_at: new Date().toISOString(),
+          },
+          { onConflict: "api_player_id", ignoreDuplicates: true },
+        );
+      }
+
       const { error: psErr } = await sb.from("football_player_stats").upsert(
         {
           fixture_id: fixtureUuid,
@@ -312,6 +326,9 @@ async function syncFixture(fixtureId: number): Promise<{
           team_name: (team.name as string) ?? null,
           player_id: toNum(player.id) ?? 0,
           player_name: (player.name as string) ?? "Unknown",
+          api_player_id: apiPlayerId,
+          league_id: (league.id as number) ?? null,
+          season: (league.season as number) ?? CURRENT_SEASON,
           position: (games?.position as string) ?? null,
           rating: toNum(games?.rating),
           minutes_played: toNum(games?.minutes),
@@ -532,11 +549,12 @@ async function syncPlayerStatsOnly(fixtureId: number): Promise<{
 
   const sb = getServiceClient();
 
-  // Resolve fixture UUID
+  // Resolve fixture UUID + league_id + season
   const { data: fxRow } = await sb.from("football_fixtures")
-    .select("id").eq("api_fixture_id", fixtureId).single();
+    .select("id, league_id, season").eq("api_fixture_id", fixtureId).single();
   if (!fxRow) throw new Error(`Fixture ${fixtureId} not found in DB`);
   const fixtureUuid = fxRow.id;
+  const fixtureLeagueId = fxRow.league_id as number | null;
 
   let count = 0;
   for (const teamData of (playersResp.response ?? []) as Array<Record<string, unknown>>) {
@@ -573,6 +591,20 @@ async function syncPlayerStatsOnly(fixtureId: number): Promise<{
         return isNaN(n) ? null : n;
       };
 
+      // Ensure football_players entry exists (auto-create if missing)
+      const apiPlayerId = toNum(player.id);
+      if (apiPlayerId) {
+        await sb.from("football_players").upsert(
+          {
+            api_player_id: apiPlayerId,
+            name: (player.name as string) ?? "Unknown",
+            current_team_id: toNum(team.id),
+            synced_at: new Date().toISOString(),
+          },
+          { onConflict: "api_player_id", ignoreDuplicates: true },
+        );
+      }
+
       const { error: psErr } = await sb.from("football_player_stats").upsert(
         {
           fixture_id: fixtureUuid,
@@ -581,6 +613,9 @@ async function syncPlayerStatsOnly(fixtureId: number): Promise<{
           team_name: (team.name as string) ?? null,
           player_id: toNum(player.id) ?? 0,
           player_name: (player.name as string) ?? "Unknown",
+          api_player_id: apiPlayerId,
+          league_id: fixtureLeagueId,
+          season: fxRow.season as number | null,
           position: (games?.position as string) ?? null,
           rating: toNum(games?.rating),
           minutes_played: toNum(games?.minutes),
@@ -862,8 +897,8 @@ async function syncCoaches(teamId: number): Promise<{ team_id: number; coaches_s
       role: (c.role as string) ?? null,
     }));
 
-    // Find current team from career (end === null)
-    const currentCareer = career.find((c) => c.end === null);
+    // Find current team from career (end null/empty = still active there)
+    const currentCareer = career.find((c) => c.end === null || c.end === "");
     const currentTeam = currentCareer?.team as Record<string, unknown> | undefined;
     const currentRole = (currentCareer?.role as string) ?? null;
 
@@ -877,12 +912,14 @@ async function syncCoaches(teamId: number): Promise<{ team_id: number; coaches_s
         birth_date: ((entry.birth as Record<string, unknown>)?.date as string) ?? null,
         age: (entry.age as number) ?? null,
         photo_url: (entry.photo as string) ?? null,
-        current_team_id: (currentTeam?.id as number) ?? teamId,
+        current_team_id: (currentTeam?.id as number) ?? null,
         current_team_name: (currentTeam?.name as string) ?? null,
         role: currentRole,
         career_history: careerHistory,
         raw_profile: entry,
-        is_active: true,
+        // Active only while the coach has an ongoing engagement (career end===null).
+        // Former coaches returned by /coachs (career-linked) stay is_active=false.
+        is_active: currentTeam != null,
         last_confirmed_at: new Date().toISOString(),
         synced_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -892,6 +929,10 @@ async function syncCoaches(teamId: number): Promise<{ team_id: number; coaches_s
     if (error) throw new Error(`Coach upsert: ${error.message}`);
     count++;
   }
+
+  // Reconcile against lineup ground truth — API /coachs career data leaves end=null on former
+  // coaches (e.g. AIK still lists Thomassen), so the latest lineup coach is the authority.
+  await sb.rpc("reconcile_active_coaches", { p_team_id: teamId });
 
   return { team_id: teamId, coaches_synced: count };
 }
@@ -955,6 +996,189 @@ async function syncTeamStats(
   if (error) throw new Error(`Team stats upsert: ${error.message}`);
 
   return { team_id: teamId, league_id: leagueId, season };
+}
+
+// --- Action: probe_coverage ---
+// Kollar vilka features API-Football täcker för en liga+säsong (predictions/players/odds/statistics)
+async function probeCoverage(
+  leagueId: number,
+  season: number,
+): Promise<Record<string, unknown>> {
+  const resp = (await apiFootball("leagues", { id: leagueId, season })) as {
+    response: Array<{ league: Record<string, unknown>; seasons: Array<Record<string, unknown>> }>;
+  };
+  const entry = resp.response?.[0];
+  const seasonObj = entry?.seasons?.find((s) => (s.year as number) === season) ?? entry?.seasons?.[0];
+  return {
+    league_id: leagueId,
+    league_name: entry?.league?.name ?? null,
+    season,
+    coverage: (seasonObj?.coverage as Record<string, unknown>) ?? null,
+  };
+}
+
+// --- Action: sync_team_profiles ---
+// Hämtar fullständig lagprofil + venue (kapacitet/underlag) för alla lag i en liga+säsong
+async function syncTeamProfiles(
+  leagueId: number,
+  season: number,
+): Promise<{ league_id: number; season: number; teams_synced: number; venues_synced: number }> {
+  const resp = (await apiFootball("teams", { league: leagueId, season })) as {
+    response: Array<{ team: Record<string, unknown>; venue: Record<string, unknown> }>;
+  };
+  const rows = resp.response ?? [];
+  const sb = getServiceClient();
+  const toNum = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    return isNaN(n) ? null : n;
+  };
+  let teams = 0, venues = 0;
+  for (const r of rows) {
+    const t = r.team ?? {};
+    const v = r.venue ?? {};
+    const venueId = toNum(v.id);
+    if (venueId) {
+      const { error: vErr } = await sb.from("football_venues").upsert({
+        venue_id: venueId,
+        name: (v.name as string) ?? null,
+        address: (v.address as string) ?? null,
+        city: (v.city as string) ?? null,
+        country: (t.country as string) ?? null,
+        capacity: toNum(v.capacity),
+        surface: (v.surface as string) ?? null,
+        image_url: (v.image as string) ?? null,
+        synced_at: new Date().toISOString(),
+      }, { onConflict: "venue_id" });
+      if (!vErr) venues++;
+    }
+    const { error: tErr } = await sb.from("football_teams").update({
+      founded: toNum(t.founded),
+      country: (t.country as string) ?? null,
+      team_code: (t.code as string) ?? null,
+      is_national: (t.national as boolean) ?? null,
+      logo_url: (t.logo as string) ?? null,
+      venue_id: venueId,
+      venue_name: (v.name as string) ?? null,
+      venue_city: (v.city as string) ?? null,
+      venue_address: (v.address as string) ?? null,
+      venue_capacity: toNum(v.capacity),
+      venue_surface: (v.surface as string) ?? null,
+      profile_synced_at: new Date().toISOString(),
+    }).eq("api_team_id", toNum(t.id) as number);
+    if (!tErr) teams++;
+  }
+  return { league_id: leagueId, season, teams_synced: teams, venues_synced: venues };
+}
+
+// --- Action: sync_league_injuries ---
+// AKTUELLA skador via API-Football /injuries (league+season) — INTE stale /sidelined
+async function syncLeagueInjuries(
+  leagueId: number,
+  season: number,
+): Promise<{ league_id: number; season: number; injuries_synced: number; players: number }> {
+  const resp = (await apiFootball("injuries", { league: leagueId, season })) as {
+    response: Array<{
+      player: { id: number; name: string };
+      team: { id: number; name: string };
+      fixture: { id: number; date: string };
+      type: string; reason: string;
+    }>;
+  };
+  const rows = resp.response ?? [];
+  const sb = getServiceClient();
+  const players = new Set<number>();
+  let synced = 0;
+  for (const r of rows) {
+    const pl = r.player as Record<string, unknown> ?? {};
+    const { error } = await sb.from("football_current_injuries").upsert({
+      api_player_id: pl.id ?? null,
+      player_name: pl.name ?? null,
+      team_id: r.team?.id ?? null,
+      team_name: r.team?.name ?? null,
+      league_id: leagueId,
+      season,
+      fixture_id: r.fixture?.id ?? null,
+      fixture_date: r.fixture?.date ?? null,
+      injury_type: (pl.type as string) ?? null,
+      injury_reason: (pl.reason as string) ?? null,
+      raw_data: r,
+      synced_at: new Date().toISOString(),
+    }, { onConflict: "api_player_id,fixture_id" });
+    if (!error) { synced++; if (r.player?.id) players.add(r.player.id); }
+  }
+  return { league_id: leagueId, season, injuries_synced: synced, players: players.size };
+}
+
+// --- Action: sync_predictions ---
+// Hämtar API-Footballs egen förhandsmodell (sannolikheter + attack/försvar/form-rating) per match
+async function syncPredictions(
+  leagueId: number,
+  season: number,
+  offset: number,
+  batchSize: number,
+): Promise<{ league_id: number; season: number; predictions_synced: number; fixtures_seen: number; next_offset: number | null }> {
+  const sb = getServiceClient();
+  const { data: fixtures } = await sb.from("football_fixtures")
+    .select("id, api_fixture_id, match_date, home_team_id, away_team_id")
+    .eq("league_id", leagueId).eq("season", season)
+    .order("match_date", { ascending: true })
+    .range(offset, offset + batchSize - 1);
+  const rows = fixtures ?? [];
+  const pct = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(String(v).replace("%", "").trim());
+    return isNaN(n) ? null : n;
+  };
+  const toInt = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v); return isNaN(n) ? null : Math.trunc(n);
+  };
+  let synced = 0;
+  for (const fx of rows) {
+    try {
+      const resp = (await apiFootball("predictions", { fixture: fx.api_fixture_id })) as {
+        response: Array<Record<string, unknown>>;
+      };
+      const p = resp.response?.[0];
+      if (!p) continue;
+      const pred = (p.predictions as Record<string, unknown>) ?? {};
+      const winner = (pred.winner as Record<string, unknown>) ?? {};
+      const percent = (pred.percent as Record<string, unknown>) ?? {};
+      const goals = (pred.goals as Record<string, unknown>) ?? {};
+      const cmp = (p.comparison as Record<string, Record<string, unknown>>) ?? {};
+      const cg = (k: string, side: string) => pct(cmp?.[k]?.[side]);
+      const { error } = await sb.from("football_predictions").upsert({
+        api_fixture_id: fx.api_fixture_id,
+        fixture_uuid: fx.id,
+        league_id: leagueId,
+        season,
+        match_date: fx.match_date,
+        home_team_id: fx.home_team_id,
+        away_team_id: fx.away_team_id,
+        pred_winner_id: toInt(winner.id),
+        pred_winner_name: (winner.name as string) ?? null,
+        pred_winner_comment: (winner.comment as string) ?? null,
+        advice: (pred.advice as string) ?? null,
+        win_or_draw: (pred.win_or_draw as boolean) ?? null,
+        under_over: (pred.under_over as string) ?? null,
+        pct_home: pct(percent.home), pct_draw: pct(percent.draw), pct_away: pct(percent.away),
+        goals_home: (goals.home as string) ?? null, goals_away: (goals.away as string) ?? null,
+        cmp_form_home: cg("form", "home"), cmp_form_away: cg("form", "away"),
+        cmp_att_home: cg("att", "home"), cmp_att_away: cg("att", "away"),
+        cmp_def_home: cg("def", "home"), cmp_def_away: cg("def", "away"),
+        cmp_poisson_home: cg("poisson_distribution", "home"), cmp_poisson_away: cg("poisson_distribution", "away"),
+        cmp_h2h_home: cg("h2h", "home"), cmp_h2h_away: cg("h2h", "away"),
+        cmp_goals_home: cg("goals", "home"), cmp_goals_away: cg("goals", "away"),
+        cmp_total_home: cg("total", "home"), cmp_total_away: cg("total", "away"),
+        raw_data: p,
+        synced_at: new Date().toISOString(),
+      }, { onConflict: "api_fixture_id" });
+      if (!error) synced++;
+    } catch (_e) { /* enskild match utan prediction — hoppa */ }
+  }
+  const next = rows.length === batchSize ? offset + batchSize : null;
+  return { league_id: leagueId, season, predictions_synced: synced, fixtures_seen: rows.length, next_offset: next };
 }
 
 // --- Action: sync_full_league ---
@@ -1265,6 +1489,36 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ ok: true, ...result }, corsHeaders);
       }
 
+      case "probe_coverage": {
+        const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
+        const season = (body.season as number) ?? CURRENT_SEASON;
+        const result = await probeCoverage(leagueId, season);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_team_profiles": {
+        const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
+        const season = (body.season as number) ?? CURRENT_SEASON;
+        const result = await syncTeamProfiles(leagueId, season);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_league_injuries": {
+        const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
+        const season = (body.season as number) ?? CURRENT_SEASON;
+        const result = await syncLeagueInjuries(leagueId, season);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
+      case "sync_predictions": {
+        const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
+        const season = (body.season as number) ?? CURRENT_SEASON;
+        const offset = (body.offset as number) ?? 0;
+        const batchSize = (body.batch_size as number) ?? 30;
+        const result = await syncPredictions(leagueId, season, offset, batchSize);
+        return jsonResponse({ ok: true, ...result }, corsHeaders);
+      }
+
       case "sync_full_league": {
         const leagueId = (body.league_id as number) ?? ALLSVENSKAN_LEAGUE_ID;
         const season = (body.season as number) ?? CURRENT_SEASON;
@@ -1289,9 +1543,23 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ ok: true, ...result }, corsHeaders);
       }
 
+      case "verify_integrity": {
+        const sb = getServiceClient();
+        // Auto-fix orphans first
+        const { data: fixResult } = await sb.rpc("fix_football_data_orphans");
+        // Then verify all relationships
+        const leagueId = (body.league_id as number) ?? null;
+        const season = (body.season as number) ?? null;
+        const { data: verifyResult } = await sb.rpc("verify_football_data_integrity", {
+          p_league_id: leagueId,
+          p_season: season,
+        });
+        return jsonResponse({ ok: true, fix: fixResult, integrity: verifyResult }, corsHeaders);
+      }
+
       default:
         return errorResponse(
-          `Unknown action: ${action}. Valid: sync_fixture, sync_league_recent, sync_standings, sync_upcoming, sync_all, sync_player_stats, sync_all_player_stats, sync_player_profiles, sync_transfers, sync_injuries, sync_trophies, sync_coaches, sync_team_stats, sync_full_league, sync_historical, sync_season_fixtures`,
+          `Unknown action: ${action}. Valid: sync_fixture, sync_league_recent, sync_standings, sync_upcoming, sync_all, sync_player_stats, sync_all_player_stats, sync_player_profiles, sync_transfers, sync_injuries, sync_trophies, sync_coaches, sync_team_stats, sync_full_league, sync_historical, sync_season_fixtures, verify_integrity`,
           corsHeaders,
         );
     }

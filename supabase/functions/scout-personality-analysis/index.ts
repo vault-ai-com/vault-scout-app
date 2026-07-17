@@ -2,7 +2,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const VERSION = "v25-data-provenance";
+const VERSION = "v28-enrichment-gate";
 
 import { createRateLimiter, getRateLimitHeaders, type RateLimitResult } from "../_shared/rate-limit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -69,12 +69,14 @@ Deno.serve(async (req: Request) => {
 
     const rlHeaders = getRateLimitHeaders(rl);
 
-    // Check cache (48h) — FIX: use analysis_data column + maybeSingle
+    // Check cache (48h) — only serve completed analyses with PASS/GO/WARN gate (never HALT/failed)
     const { data: cached } = await supabase
       .from('scout_analyses')
       .select('id, analysis_data, created_at')
       .eq('player_id', player_id)
       .eq('analysis_type', 'personality')
+      .eq('status', 'completed')
+      .in('quality_gate', ['GO', 'PASS', 'WARN'])
       .gte('created_at', new Date(Date.now() - 48 * 3600 * 1000).toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
@@ -90,7 +92,7 @@ Deno.serve(async (req: Request) => {
     // FIX: use date_of_birth (not age) + maybeSingle
     const { data: player, error: playerErr } = await supabase
       .from('scout_players')
-      .select('id, name, position_primary, date_of_birth, nationality, current_club, current_league, tier, career_phase, profile_data')
+      .select('id, name, position_primary, date_of_birth, nationality, current_club, current_league, tier, career_phase, profile_data, enrichment_status, enriched_at')
       .eq('id', player_id)
       .maybeSingle();
 
@@ -156,6 +158,38 @@ Deno.serve(async (req: Request) => {
     });
     const _inputCompletenessWarning = buildInputCompletenessWarning(inputCompleteness);
     const _seasonContext = buildSeasonContext(player.profile_data as Record<string, unknown> | null);
+
+    // Enrichment gate: EMPTY profile + no football stats + not yet enriched → 202
+    // MINIMAL with football stats = enough for Opus to work with (stats provide behavioral signal)
+    const enrichmentStatus = (player as Record<string, unknown>).enrichment_status as string | null;
+    const isEmptyProfile = inputCompleteness.level === 'EMPTY';
+    const isThinNoStats = inputCompleteness.level === 'MINIMAL' && footballStatsBlock.length === 0;
+    const needsEnrichment = isEmptyProfile || isThinNoStats;
+
+    if (needsEnrichment && enrichmentStatus !== 'enriched') {
+      // Mark as pending if not already
+      if (enrichmentStatus !== 'pending') {
+        await supabase
+          .from('scout_players')
+          .update({ enrichment_status: 'pending' })
+          .eq('id', player_id);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          status: 'enrichment_needed',
+          enrichment_status: enrichmentStatus ?? 'pending',
+          player_id,
+          player_name: player.name,
+          input_completeness: inputCompleteness.level,
+          message: 'Profile too thin for quality BPA. Run OSINT enrichment first, then retry.',
+          retry_after_seconds: 90,
+          _v: VERSION,
+        }),
+        { status: 202, headers: { ..._corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '90', ...rlHeaders } }
+      );
+    }
 
     const systemPrompt = `Du är en världsledande fotbollspsykolog och beteendeanalytiker.
 Din uppgift är att analysera en fotbollsspelares psykologiska profil baserat på tillgänglig information.
@@ -384,6 +418,13 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
 
     // --- P0: Code-enforced fabrication detection (shared + inline) ---
     const hasFootballStats = !!footballStatsBlock && !footballStatsBlock.includes('INGEN DATA TILLGÄNGLIG');
+
+    // Source count: actual data sources consumed by this analysis
+    const source_count = 1  // player DB record (always)
+      + (hasFootballStats ? 1 : 0)  // football API stats
+      + (kbRows?.length ?? 0)  // KB entries loaded
+      + (player.profile_data ? 1 : 0);  // profile_data present
+
     let fabrication_warnings: string[] = [];
 
     // Shared 5-pattern check on full LLM output
@@ -479,6 +520,9 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
         recommendation,
         summary: `QUALITY_HALT: ${composite_archetype} | Q:${qualityReport.score}`,
         analysis_data: { ...result, failure_reason: 'QUALITY_HALT' },
+        source_count,
+        quality_gate: 'HALT',
+        duration_ms,
       });
       return new Response(
         JSON.stringify({ success: false, error: 'QUALITY_HALT', quality_pipeline: qualityReport }),
@@ -489,11 +533,16 @@ Returnera JSON med exakt ovanstående struktur. Alla dimensionsscores 1-10. cont
     await supabase.from('scout_analyses').insert({
       player_id,
       analysis_type: 'personality',
+      status: 'completed',
       overall_score,
       confidence: confidence_score,
       recommendation,
       summary: `Arketyp: ${composite_archetype} | ${recommendation} | Q:${qualityReport.score}/${qualityReport.gate}`,
       analysis_data: result,
+      source_count,
+      quality_gate: qualityReport.gate,
+      duration_ms,
+      agents_used: ['claude-opus-4-6'],
     });
 
     return new Response(
