@@ -1,32 +1,38 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, TrendingUp, Users, AlertTriangle, MessageCircle, CheckCircle2, Clock } from "lucide-react";
+import { Search, TrendingUp, Users, AlertTriangle, MessageCircle, Clock, ArrowUpRight } from "lucide-react";
 import { useScoutDashboard } from "@/hooks/use-scout-search";
+import { EASE_OUT_QUART } from "@/lib/motion";
 
-function AnimatedNumber({ value, duration = 600 }: { value: number; duration?: number }) {
+function AnimatedNumber({ value, duration = 900 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(0);
   const raf = useRef(0);
   useEffect(() => {
     const start = performance.now();
-    const from = 0;
     const step = (now: number) => {
       const t = Math.min((now - start) / duration, 1);
       const ease = 1 - Math.pow(1 - t, 3);
-      setDisplay(Math.round(from + (value - from) * ease));
+      setDisplay(Math.round(value * ease));
       if (t < 1) raf.current = requestAnimationFrame(step);
     };
     raf.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf.current);
   }, [value, duration]);
-  return <>{display}</>;
+  return <>{display.toLocaleString("sv-SE")}</>;
 }
 
 const statConfig = [
-  { key: "total_players", label: "Spelare", icon: Users, fallback: "0" },
-  { key: "total_analyses", label: "Analyser", icon: Search, fallback: "0" },
-  { key: "watchlist_count", label: "Bevakade", icon: TrendingUp, fallback: "0" },
+  { key: "total_players", label: "Spelare", icon: Users, context: "i databasen" },
+  { key: "total_analyses", label: "Analyser", icon: Search, context: "genomförda" },
+  { key: "watchlist_count", label: "Bevakade", icon: TrendingUp, context: "på din lista" },
 ];
+
+const recMeta: Record<string, { cls: string; label: string }> = {
+  SIGN: { cls: "text-success", label: "Värva" },
+  MONITOR: { cls: "text-warning", label: "Bevaka" },
+  PASS: { cls: "text-destructive", label: "Avstå" },
+};
 
 const Dashboard = () => {
   const { data, isLoading, error } = useScoutDashboard();
@@ -37,107 +43,118 @@ const Dashboard = () => {
   }>;
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}>
+    <div className="mx-auto max-w-[1160px] px-5 md:px-8 py-8 md:py-12 space-y-10">
+      {/* Editorial hero */}
+      <motion.header initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: EASE_OUT_QUART }}>
         <span className="eyebrow">Scouting</span>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-foreground mt-3 tracking-tight" style={{ letterSpacing: "-0.03em" }}>Dashboard</h1>
-        <p className="lead text-sm text-muted-foreground mt-2">Överblick av din scoutingaktivitet</p>
-      </motion.div>
+        <h1 className="mt-3 text-3xl md:text-[40px] font-extrabold text-foreground leading-[1.05]" style={{ letterSpacing: "-0.03em" }}>
+          Dashboard
+        </h1>
+        <p className="mt-2 text-[15px] text-muted-foreground max-w-xl">Överblick av din scoutingaktivitet.</p>
+      </motion.header>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+      {/* KPI strip */}
+      <section className="grid grid-cols-2 lg:grid-cols-3 gap-px bg-border rounded-md overflow-hidden border border-border">
         {statConfig.map((stat, i) => (
           <motion.div key={stat.key}
-            initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: i * 0.08, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="rounded-xl glass-premium gradient-accent-top card-interactive p-5 md:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{stat.label}</span>
-              <div className="w-8 h-8 rounded-lg icon-premium flex items-center justify-center">
-                <stat.icon className="w-4 h-4 text-accent" />
-              </div>
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: i * 0.07, ease: EASE_OUT_QUART }}
+            className="relative bg-card px-6 py-7 last:col-span-2 lg:last:col-span-1">
+            <div className="absolute inset-x-0 top-0 h-px bg-accent/50" />
+            <div className="flex items-center justify-between">
+              <span className="eyebrow !text-[10px] !tracking-[0.2em]">{stat.label}</span>
+              <stat.icon className="w-4 h-4 text-accent/60" strokeWidth={1.8} />
             </div>
             {isLoading ? (
-              <div className="h-10 w-28 rounded-lg skeleton-shimmer" />
+              <div className="mt-4 h-11 w-24 rounded-sm skeleton-shimmer" />
             ) : (
-              <div className="text-3xl md:text-4xl font-extrabold tabular-nums stat-gold">
+              <div className="mt-3 stat-gold text-[44px] md:text-[52px] leading-none">
                 <AnimatedNumber value={Number(stats[stat.key]) || 0} />
               </div>
             )}
+            <div className="mt-2.5 text-xs text-muted-foreground">{stat.context}</div>
           </motion.div>
         ))}
-      </div>
+      </section>
 
       {/* Error */}
       {error && (
-        <motion.div role="alert" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
-          className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+        <motion.div role="alert" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className="flex items-center gap-3 p-4 rounded-sm bg-destructive/10 border border-destructive/25 text-destructive text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {error instanceof Error ? error.message : "Kunde inte ladda dashboard"}
         </motion.div>
       )}
 
-      {/* Recent analyses */}
+      {/* Recent analyses — editorial list */}
       {!isLoading && recentAnalyses.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Clock className="w-4 h-4 text-accent" />
-              Senaste analyser
-            </h2>
-            <Link to="/players" className="text-xs text-accent hover:underline">Visa alla spelare</Link>
+        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2, ease: EASE_OUT_QUART }}>
+          <div className="flex items-end justify-between mb-4">
+            <div>
+              <span className="eyebrow">Senaste</span>
+              <h2 className="mt-2 text-xl font-bold text-foreground tracking-tight">Analyser</h2>
+            </div>
+            <Link to="/players" className="group inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-accent transition-colors">
+              Visa alla
+              <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            </Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {recentAnalyses.map((a, i) => (
-              <motion.div key={a.id}
-                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.25 + i * 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="rounded-xl glass-premium p-4 card-interactive">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-foreground truncate">{a.name}</span>
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${
-                    a.recommendation === "SIGN" ? "text-success" :
-                    a.recommendation === "MONITOR" ? "text-warning" :
-                    "text-destructive"
-                  }`}>
-                    <CheckCircle2 className="w-3 h-3" />
-                    {a.recommendation}
+          <div className="card-editorial divide-y divide-border">
+            {recentAnalyses.slice(0, 6).map((a) => {
+              const rec = recMeta[a.recommendation ?? ""] ?? { cls: "text-muted-foreground", label: a.recommendation ?? "—" };
+              return (
+                <div key={a.id} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/50">
+                  <div className="score-circle shrink-0">{a.overall_score?.toFixed(1) ?? "—"}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-foreground">{a.name}</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{a.analysis_type === "full_scout" ? "Full scout" : a.analysis_type === "personality" ? "Personlighet" : a.analysis_type}</span>
+                      <span className="text-muted-foreground/40">·</span>
+                      <span>{a.completed_at ? new Date(a.completed_at).toLocaleDateString("sv-SE", { day: "numeric", month: "short" }) : ""}</span>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${rec.cls}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {rec.label}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="stat-gold font-bold">{a.overall_score?.toFixed(1) ?? "—"}</span>
-                  <span>{a.analysis_type === "full_scout" ? "Full" : a.analysis_type}</span>
-                  <span>{a.completed_at ? new Date(a.completed_at).toLocaleDateString("sv-SE") : ""}</span>
-                </div>
-              </motion.div>
-            ))}
+              );
+            })}
           </div>
-        </motion.div>
+        </motion.section>
       )}
 
       {/* Quick actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-        {[
-          { to: "/players", icon: Search, label: "Sök spelare", desc: "Hitta och analysera spelare" },
-          { to: "/chat", icon: MessageCircle, label: "Prata med Bosse", desc: "Fråga AI-scouten" },
-          { to: "/players?watchlist=true", icon: TrendingUp, label: "Bevakningslista", desc: "Dina bevakade spelare" },
-        ].map((action, i) => (
-          <motion.div key={action.to + action.label}
-            initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.3 + i * 0.06, ease: [0.25, 0.46, 0.45, 0.94] }}>
-            <Link to={action.to}
-              className="block rounded-xl glass-premium gradient-accent-top card-interactive p-5 md:p-6 group">
-              <div className="w-10 h-10 rounded-xl icon-premium flex items-center justify-center mb-3">
-                <action.icon className="w-4 h-4 text-accent" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground group-hover:text-accent transition-colors">{action.label}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{action.desc}</p>
-            </Link>
-          </motion.div>
-        ))}
-      </div>
+      <section>
+        <span className="eyebrow">Genvägar</span>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { to: "/players", icon: Search, label: "Sök spelare", desc: "Hitta och analysera spelare" },
+            { to: "/chat", icon: MessageCircle, label: "Prata med Bosse", desc: "Fråga AI-scouten" },
+            { to: "/players?watchlist=true", icon: TrendingUp, label: "Bevakningslista", desc: "Dina bevakade spelare" },
+          ].map((action, i) => (
+            <motion.div key={action.to + action.label}
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.28 + i * 0.06, ease: EASE_OUT_QUART }}>
+              <Link to={action.to}
+                className="group relative flex flex-col gap-3 card-editorial card-interactive p-5 h-full">
+                <div className="flex items-center justify-between">
+                  <span className="grid h-10 w-10 place-items-center rounded-sm icon-premium">
+                    <action.icon className="w-4 h-4 text-accent" strokeWidth={2} />
+                  </span>
+                  <ArrowUpRight className="w-4 h-4 text-muted-foreground/40 transition-all group-hover:text-accent group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">{action.label}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">{action.desc}</p>
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

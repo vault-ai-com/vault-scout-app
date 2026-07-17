@@ -37,11 +37,11 @@ export function TenantCrest({ size = 36, showName = true, compact = false }: Ten
         />
       ) : (
         <div
-          className="rounded-xl bg-gradient-to-br from-accent to-success/70 flex items-center justify-center shadow-lg shadow-accent/20 shrink-0"
+          className="rounded-sm bg-primary flex items-center justify-center shrink-0"
           style={{ width: px, height: px }}
           aria-hidden="true"
         >
-          <Search className="text-accent-foreground" style={{ width: size * 0.42, height: size * 0.42 }} />
+          <Search className="text-primary-foreground" style={{ width: size * 0.44, height: size * 0.44, strokeWidth: 2.4 }} />
         </div>
       )}
       {showName && (
