@@ -126,7 +126,7 @@ export function ClipDrawer({ clip, onClose }: { clip: ClipRef | null; onClose: (
               </div>
               <div className="mt-5 rounded-sm border border-dashed border-border bg-secondary/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
                 {clip.video_url
-                  ? "Riktigt BP-matchklipp från klubbens Wyscout-bank. Exakt scoreboard-ankring per svaghet kopplas in i nästa steg."
+                  ? "Riktigt BP-matchklipp från klubbens videobank. Exakt scoreboard-ankring per svaghet kopplas in i nästa steg."
                   : "Videouppspelning kopplas in när klippbanken (B1) är live. Timecoden pekar på rätt moment i källmatchen."}
               </div>
             </div>

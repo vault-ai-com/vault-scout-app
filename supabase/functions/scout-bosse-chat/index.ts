@@ -150,12 +150,20 @@ Deno.serve(async (req: Request) => {
         // Use fallback persona
       }
     } else {
-      // Load agent from agents table
+      // Load agent from agents table — RESTRICTED to scout-relevant clusters (IP-skydd:
+      // förhindra att godtyckliga agent_id laddar system_prompt från andra domäner, t.ex. M&A/KYC/build).
+      const SCOUT_CHAT_CLUSTERS = [
+        "vault_ai_scout", "vault_player_report", "vault_coach_report", "vault_team_report",
+        "vault_sport_advisors", "vault_ai_coach", "vault_match_prediction",
+        "vault_match_coach_prep", "vault_post_match_review",
+        "universal_clone_factory", "brutal_person_analysis", "person_clones",
+      ];
       const { data: agentRow, error: agentErr } = await supabase
         .from("agents")
         .select("name, system_prompt, llm_model, purpose, cluster")
         .eq("agent_id", agent_id)
         .eq("is_active", true)
+        .in("cluster", SCOUT_CHAT_CLUSTERS)
         .single();
 
       if (agentErr || !agentRow) {
@@ -315,6 +323,15 @@ Deno.serve(async (req: Request) => {
     const decoder = new TextDecoder();
     let fullContent = "";
     let buffer = "";
+    let streamCarry = ""; // håller tillbaka svansen så känsliga nyckelord ej splittras över chunk-gränser
+
+    // IP-skydd (defense-in-depth utöver prompt-regeln): redigera bort datakällor/arkitektur
+    // ur BÅDE live-strömmen till klienten OCH det persisterade svaret.
+    const redactSensitive = (text: string): string =>
+      text
+        .replace(/\b(FootyStats|Wyscout|Brand24|HIBP|Dehashed|IntelX|Have I Been Pwned)\b/gi, "Vault AI")
+        .replace(/\bclaude-[a-z0-9.\-]+\b/gi, "Vault AI-modellen")
+        .replace(/\b(vault_[a-z0-9_]+|clone_[a-z0-9_]+|mai_[a-z0-9_]+|kyc\d{2}_[a-z0-9_]+|vei\d{2}_[a-z0-9_]+|ars\d{2}_[a-z0-9_]+)\b/g, "Vault AI");
 
     // ReadableStream pull pattern (NOT TransformStream — broken in SupabaseEdgeRuntime)
     const stream = new ReadableStream({
@@ -328,7 +345,7 @@ Deno.serve(async (req: Request) => {
                 session_id,
                 tenant_id: chatTenant,
                 role: "assistant",
-                content: fullContent,
+                content: redactSensitive(fullContent),
               });
               const { count: messageCount } = await supabase
                 .from("scout_chat_messages")
@@ -341,6 +358,12 @@ Deno.serve(async (req: Request) => {
                   message_count: messageCount ?? 0,
                 })
                 .eq("id", session_id);
+            }
+            if (streamCarry) {
+              ctrl.enqueue(new TextEncoder().encode(
+                `data: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: redactSensitive(streamCarry) } })}\n`
+              ));
+              streamCarry = "";
             }
             ctrl.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
             ctrl.close();
@@ -356,15 +379,35 @@ Deno.serve(async (req: Request) => {
             const payload = line.slice(6).trim();
             if (payload === "[DONE]") continue;
 
-            try {
-              const evt = JSON.parse(payload);
-              if (evt.type === "content_block_delta" && evt.delta?.text) {
-                fullContent += evt.delta.text;
+            let evt: unknown = null;
+            try { evt = JSON.parse(payload); } catch { /* skip malformed */ }
+            const e = evt as { type?: string; index?: number; delta?: { text?: string } } | null;
+
+            // Text-delta redigeras LIVE innan den skickas till klienten. Carry-bufferten
+            // håller tillbaka de sista HOLD tecknen så inget skyddat nyckelord splittras.
+            if (e && e.type === "content_block_delta" && e.delta?.text) {
+              fullContent += e.delta.text;
+              const HOLD = 48; // >= längsta skyddade token
+              const combined = streamCarry + e.delta.text;
+              const emitLen = Math.max(0, combined.length - HOLD);
+              const toEmit = combined.slice(0, emitLen);
+              streamCarry = combined.slice(emitLen);
+              if (toEmit) {
+                ctrl.enqueue(new TextEncoder().encode(
+                  `data: ${JSON.stringify({ type: "content_block_delta", index: e.index ?? 0, delta: { type: "text_delta", text: redactSensitive(toEmit) } })}\n`
+                ));
               }
-            } catch {
-              // Skip
+              continue;
             }
 
+            // Kontroll-event (message_start/stop, content_block_start/stop, ping):
+            // flusha ev. kvarhållen text FÖRST så ordningen bevaras, skicka sedan eventet oförändrat.
+            if (streamCarry) {
+              ctrl.enqueue(new TextEncoder().encode(
+                `data: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: redactSensitive(streamCarry) } })}\n`
+              ));
+              streamCarry = "";
+            }
             ctrl.enqueue(new TextEncoder().encode(line + "\n"));
           }
         } catch (err) {
