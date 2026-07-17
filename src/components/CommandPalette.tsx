@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, LayoutDashboard, Users, GraduationCap, Bot, MessageCircle,
+  Search, LayoutDashboard, Users, GraduationCap, MessageCircle,
   Star, CornerDownLeft, User, type LucideIcon,
 } from "lucide-react";
 import { useScoutSearch } from "@/hooks/use-scout-search";
@@ -59,7 +59,6 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       { id: "nav-dash", label: "Dashboard", icon: LayoutDashboard, group: "Navigation", run: () => go("/") },
       { id: "nav-players", label: "Spelare", icon: Users, group: "Navigation", run: () => go("/players") },
       { id: "nav-coaches", label: "Tränare", icon: GraduationCap, group: "Navigation", run: () => go("/coaches") },
-      { id: "nav-agents", label: "Agenter", icon: Bot, group: "Navigation", run: () => go("/agents") },
       { id: "nav-chat", label: "Bosse AI", icon: MessageCircle, group: "Navigation", run: () => go("/chat") },
     ].filter((i) => match(i.label));
 
