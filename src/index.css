@@ -57,6 +57,7 @@
     --warning: 38 70% 56%;
     --info: 213 45% 58%;
     --danger: 4 62% 52%;
+    --violet: 258 55% 74%;           /* provenance TOLKAT */
   }
 
   /* Light / editorial-report surfaces (PlayerDetail export, print) */
@@ -85,6 +86,7 @@
     --success: 152 45% 34%;
     --warning: 38 72% 40%;
     --info: 213 55% 40%;
+    --violet: 258 40% 44%;           /* provenance TOLKAT on paper */
   }
 }
 

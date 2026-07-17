@@ -19,6 +19,8 @@ const ScoutAgents = lazyRetry(() => import("./pages/ScoutAgents"));
 const Coaches = lazyRetry(() => import("./pages/Coaches"));
 const CoachDetail = lazyRetry(() => import("./pages/CoachDetail"));
 const Comparison = lazyRetry(() => import("./pages/Comparison"));
+const Opponents = lazyRetry(() => import("./pages/Opponents"));
+const MatchReport = lazyRetry(() => import("./pages/MatchReport"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,6 +58,8 @@ const AppRoutes = () => {
         <Route path="/" element={<ErrorBoundary fallbackMessage="Dashboard kunde inte laddas."><Dashboard /></ErrorBoundary>} />
         <Route path="/players" element={<ErrorBoundary fallbackMessage="Spelarlistan kunde inte laddas."><Players /></ErrorBoundary>} />
         <Route path="/players/:id" element={<ErrorBoundary fallbackMessage="Spelarprofilen kunde inte laddas."><PlayerDetail /></ErrorBoundary>} />
+        <Route path="/opponents" element={<ErrorBoundary fallbackMessage="Motståndarlistan kunde inte laddas."><Opponents /></ErrorBoundary>} />
+        <Route path="/opponents/:id" element={<ErrorBoundary fallbackMessage="Matchunderlaget kunde inte laddas."><MatchReport /></ErrorBoundary>} />
         <Route path="/coaches" element={<ErrorBoundary fallbackMessage="Tränarlistan kunde inte laddas."><Coaches /></ErrorBoundary>} />
         <Route path="/coaches/:id" element={<ErrorBoundary fallbackMessage="Tränarprofilen kunde inte laddas."><CoachDetail /></ErrorBoundary>} />
         <Route path="/agents" element={<ErrorBoundary fallbackMessage="Agenterna kunde inte laddas."><ScoutAgents /></ErrorBoundary>} />

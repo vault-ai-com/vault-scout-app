@@ -2,7 +2,7 @@ import { Suspense, useLayoutEffect, useState, useEffect } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { LayoutDashboard, Users, LogOut, MessageCircle, Bot, GraduationCap, Search } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, MessageCircle, Bot, GraduationCap, Search, ClipboardList } from "lucide-react";
 import { TenantCrest } from "@/components/TenantCrest";
 import { TenantSwitcher } from "@/components/TenantSwitcher";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -29,6 +29,7 @@ interface AppLayoutProps {
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/opponents", icon: ClipboardList, label: "Motståndare" },
   { to: "/players", icon: Users, label: "Spelare" },
   { to: "/coaches", icon: GraduationCap, label: "Tränare" },
   { to: "/agents", icon: Bot, label: "Agenter" },
