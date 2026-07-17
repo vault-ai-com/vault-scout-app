@@ -1,5 +1,20 @@
 # Changelog
 
+## Sprint 218 — App-wide editorial-token migrering (2026-07-17)
+- **`glass-premium` → `card-editorial`:** Migrerade kvarvarande legacy-kort till editorial-systemet i 7 filer (CoachCard, PlayerCard, CoachAnalysisPanel, CoachPersonalityPanel, AppLayout-skeleton, Comparison, Players watchlist-header). `card-editorial` ger egen radie + guld-hårlinje (::before) — släppte redundant `gradient-accent-top`.
+- **`section-tag` → `eyebrow`:** Designsystemets föredragna etikett. `icon-premium` behållet (current token, matchar Dashboard/Opponents — ej legacy). Semantiska `card-accent-left-green/red/gold`-kanter bevarade.
+- **Arkitektur:** Comparison INTE tvingat in i SearchScaffold — det är ett jämförelseverktyg (spelarkolumner + dimensionstabell + spara), inte en sökyta. Fel abstraktion, medvetet avstått.
+- **V64-fix:** CoachPersonalityPanel tappade nu-redundant Brain-ikon så eyebrow-guld-dashen blir enda ledande markör (matchar kanoniskt idiom).
+- **Ren className-migrering, noll funktionsändring** (28/31 rader). Kvarvarande dead-CSS `.glass-premium`/`.section-tag`-defs i index.css → separat städsprint.
+- **Gates:** V61 tsc 0/vite 0. V64 Blind Critic WARN→löst 8.4/10 (21/23 premium, 100% pattern-coverage, 0 blockers). Pipeline 3399b718.
+
+## Sprint 217 — Delade scaffolds: SearchScaffold + DossierScaffold (2026-07-17)
+- **`SearchScaffold`:** Extraherade en config-driven, delad sök/filter/AI-discover-yta ur ~90% dubblerad markup i Players + Coaches. Datakälla ägs per sida via render-hook (`config.useResults`) → rules-of-hooks-säkert, varje sida behåller sin egen RPC/edge-fn-källa. Coaches 136→53 rader.
+- **`DossierScaffold`:** Delat dossier-skal (breadcrumb → hero → scroll-spy secnav → sektioner) ovanpå befintliga `report/`-primitiver med noll ändringar där. Hero via ReactNode-slot, sektionsinnehåll via `(spy) => children` render-prop. CoachDetail migrerad.
+- **Players watchlist-läge bevarat verbatim.** Editorial-klasser (eyebrow/card-editorial) ersatte legacy inom migrerade ytor.
+- **Net −417/+215 rader på sidorna.** tsc 0, vite build 0.
+- **Gates:** V61 tsc 0/vite 0. V64 Blind Critic GO 8.57/10 (21/23 premium, 0 blockers, 0 any/dead-code, rules-of-hooks verifierat). Pipeline 69710bba.
+
 ## Sprint 216 — Delade primitiver + auth-yta (2026-07-17)
 - **Delat komponentbibliotek:** extraherade `EmptyState` (message/onboarding-varianter) + `Skeleton` (composable SkeletonLine/Hero/SecNav/Card + PageSkeleton) ur dubblerad inline-markup i PlayerDetail/Opponents/MatchReport — en källa, byte-identisk output (0 visuell regression, JIT-grid-literaler bevarade). `PlayerHero` exporterar nu `ScoreDial`/`FactItem`/`LabeledPill` för S3-återanvändning.
 - **Auth-yta till editorial:** `Login` + `TenantSwitcher` restylade till design-systemet (rounded-sm, card-editorial, bg-accent-token; inline gradient/hsl-stilar bort). Glow-blobbar behållna.
