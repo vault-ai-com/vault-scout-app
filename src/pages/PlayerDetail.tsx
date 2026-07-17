@@ -23,6 +23,8 @@ import { ComparablePlayersPanel } from "@/components/ComparablePlayersPanel";
 import { VideoSection } from "@/components/VideoSection";
 import { NotesPanel } from "@/components/NotesPanel";
 import { ProvenanceBadge } from "@/components/Provenance";
+import { EmptyState } from "@/components/EmptyState";
+import { PageSkeleton, SkeletonHero, SkeletonLine } from "@/components/Skeleton";
 import {
   SecNavDesktop,
   SecNavMobile,
@@ -111,14 +113,6 @@ const ANALYSIS_TYPES: { value: AnalysisType; label: string }[] = [
 // Small building blocks
 // ---------------------------------------------------------------------------
 
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-sm border border-dashed border-border bg-secondary/40 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
 function BulletList({ items, tone }: { items: string[]; tone: "success" | "destructive" | "warning" }) {
   const dot = {
     success: "bg-success",
@@ -169,44 +163,16 @@ function AnalysisControls({
 
 function PlayerDetailSkeleton() {
   return (
-    <div className="mx-auto max-w-[1240px] px-5 py-8 md:px-8 md:py-12" aria-busy="true" aria-label="Laddar spelarprofil">
-      <div className="h-3 w-40 rounded-sm skeleton-shimmer" />
-      <div className="mt-6 rounded-sm border border-border p-6 md:p-8">
-        <div className="flex items-start justify-between gap-6">
-          <div className="flex-1 space-y-4">
-            <div className="h-3 w-28 rounded-sm skeleton-shimmer" />
-            <div className="h-10 w-2/3 max-w-md rounded-sm skeleton-shimmer" />
-            <div className="h-4 w-1/2 max-w-sm rounded-sm skeleton-shimmer" />
-            <div className="flex gap-2 pt-2">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-7 w-28 rounded-full skeleton-shimmer" />
-              ))}
-            </div>
-          </div>
-          <div className="hidden h-[120px] w-[120px] flex-none rounded-full skeleton-shimmer md:block" />
-        </div>
-      </div>
-      <div className="mt-10 grid gap-8 lg:grid-cols-[210px_1fr]">
-        <div className="hidden space-y-2.5 lg:block">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="h-3.5 rounded-sm skeleton-shimmer" style={{ width: `${60 + (i % 3) * 14}%` }} />
-          ))}
-        </div>
-        <div className="space-y-6">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="card-editorial p-6 skeleton-reveal" style={{ animationDelay: `${i * 80}ms` }}>
-              <div className="h-3 w-28 rounded-sm skeleton-shimmer" />
-              <div className="mt-3 h-6 w-56 rounded-sm skeleton-shimmer" />
-              <div className="mt-5 space-y-2.5">
-                <div className="h-3.5 w-full rounded-sm skeleton-shimmer" />
-                <div className="h-3.5 w-11/12 rounded-sm skeleton-shimmer" />
-                <div className="h-3.5 w-4/5 rounded-sm skeleton-shimmer" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <PageSkeleton
+      ariaLabel="Laddar spelarprofil"
+      gridClassName="lg:grid-cols-[210px_1fr]"
+      header={
+        <>
+          <SkeletonLine className="h-3 w-40" />
+          <SkeletonHero />
+        </>
+      }
+    />
   );
 }
 

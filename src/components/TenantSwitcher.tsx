@@ -45,7 +45,7 @@ export function TenantSwitcher({ variant = "sidebar" }: { variant?: "sidebar" | 
         aria-expanded={open}
         aria-label="Byt organisation"
         data-testid="tenant-switcher-trigger"
-        className="flex items-center gap-2 w-full min-h-11 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors disabled:opacity-60"
+        className="flex items-center gap-2 w-full min-h-11 px-3 py-2 rounded-sm text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors disabled:opacity-60"
       >
         {isSwitching ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
         <span className="truncate flex-1 text-left">{label}</span>
@@ -56,7 +56,7 @@ export function TenantSwitcher({ variant = "sidebar" }: { variant?: "sidebar" | 
         <div
           role="menu"
           aria-label="Organisationer"
-          className="absolute left-3 right-3 z-40 mt-1 rounded-lg border border-border/40 bg-popover shadow-xl overflow-hidden"
+          className="absolute left-3 right-3 z-40 mt-1 rounded-sm border border-border/40 bg-popover shadow-xl overflow-hidden"
         >
           {availableTenants.map((t) => {
             const active = t.tenantId === currentTenant?.tenantId;

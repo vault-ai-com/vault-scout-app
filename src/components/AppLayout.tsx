@@ -2,10 +2,11 @@ import { Suspense, useLayoutEffect, useState, useEffect } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { LayoutDashboard, Users, LogOut, MessageCircle, GraduationCap, Search, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, MessageCircle, GraduationCap, Search, ClipboardList, AlertCircle } from "lucide-react";
 import { TenantCrest } from "@/components/TenantCrest";
 import { TenantSwitcher } from "@/components/TenantSwitcher";
 import { CommandPalette } from "@/components/CommandPalette";
+import { useTenant } from "@/hooks/use-tenant";
 import { SPRING_BOUNCY, EASE_OUT_QUART } from "@/lib/motion";
 
 const InlineLoader = () => (
@@ -38,6 +39,7 @@ const navItems = [
 const AppLayout = ({ onSignOut }: AppLayoutProps) => {
   const { pathname } = useLocation();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const { hasStaleTenantClaim } = useTenant();
 
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
@@ -54,6 +56,32 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
+
+  // Stale JWT: authenticated but no active tenant in this session. A tenant-scoped
+  // app would render empty (looks like a bug) — force a clear re-auth instead of an
+  // indefinite spinner.
+  if (hasStaleTenantClaim) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4">
+        <div className="card-editorial w-full max-w-sm p-8 text-center">
+          <div className="mx-auto mb-5 grid h-12 w-12 place-items-center rounded-sm bg-destructive/10 text-destructive">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h1 className="text-lg font-bold text-foreground">Din session behöver förnyas</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Ditt konto saknar en aktiv organisation i den här sessionen. Logga in igen för att fortsätta.
+          </p>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="mt-6 w-full rounded-sm bg-accent py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
+          >
+            Logga in igen
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background relative overflow-x-hidden">

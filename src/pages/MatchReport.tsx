@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useMatchReport } from "@/hooks/use-match-reports";
 import { ProvenanceBadge, ProvenanceLegend } from "@/components/Provenance";
+import { PageSkeleton, SkeletonLine } from "@/components/Skeleton";
 import {
   ClipChip,
   ClipDrawer,
@@ -507,31 +508,17 @@ function DuelScaleRow({ duel }: { duel: Duel }) {
 
 function ReportSkeleton() {
   return (
-    <div className="mx-auto max-w-[1240px] px-5 py-8 md:px-8 md:py-12" aria-busy="true" aria-label="Laddar matchunderlag">
-      <div className="h-3 w-32 rounded-sm skeleton-shimmer" />
-      <div className="mt-4 h-9 w-2/3 max-w-md rounded-sm skeleton-shimmer" />
-      <div className="mt-3 h-4 w-1/2 max-w-sm rounded-sm skeleton-shimmer" />
-      <div className="mt-10 grid gap-8 lg:grid-cols-[200px_1fr]">
-        <div className="hidden space-y-2.5 lg:block">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="h-3.5 rounded-sm skeleton-shimmer" style={{ width: `${60 + (i % 3) * 14}%` }} />
-          ))}
-        </div>
-        <div className="space-y-6">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="card-editorial p-6 skeleton-reveal" style={{ animationDelay: `${i * 80}ms` }}>
-              <div className="h-3 w-28 rounded-sm skeleton-shimmer" />
-              <div className="mt-3 h-6 w-56 rounded-sm skeleton-shimmer" />
-              <div className="mt-5 space-y-2.5">
-                <div className="h-3.5 w-full rounded-sm skeleton-shimmer" />
-                <div className="h-3.5 w-11/12 rounded-sm skeleton-shimmer" />
-                <div className="h-3.5 w-4/5 rounded-sm skeleton-shimmer" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <PageSkeleton
+      ariaLabel="Laddar matchunderlag"
+      gridClassName="lg:grid-cols-[200px_1fr]"
+      header={
+        <>
+          <SkeletonLine className="h-3 w-32" />
+          <SkeletonLine className="mt-4 h-9 w-2/3 max-w-md" />
+          <SkeletonLine className="mt-3 h-4 w-1/2 max-w-sm" />
+        </>
+      }
+    />
   );
 }
 

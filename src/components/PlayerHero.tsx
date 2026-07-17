@@ -59,7 +59,7 @@ function useCountUp(target: number | null, decimals = 1): string {
 const RING_R = 56;
 const RING_C = 2 * Math.PI * RING_R;
 
-function ScoreDial({ score, confidence }: { score: number | null; confidence: number | null }) {
+export function ScoreDial({ score, confidence }: { score: number | null; confidence: number | null }) {
   const clamped = score == null ? null : Math.min(10, Math.max(0, score));
   const conf = confidence == null ? null : Math.min(1, Math.max(0, confidence));
   const display = useCountUp(clamped);
@@ -116,7 +116,7 @@ function ScoreDial({ score, confidence }: { score: number | null; confidence: nu
 // Fact item — honest gaps: missing data renders "—", never a bluffed value
 // ---------------------------------------------------------------------------
 
-function FactItem({ icon: Icon, label, value }: { icon: typeof Trophy; label: string; value: string | null }) {
+export function FactItem({ icon: Icon, label, value }: { icon: typeof Trophy; label: string; value: string | null }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <Icon className="h-3.5 w-3.5 flex-none text-accent/50" aria-hidden="true" />
@@ -134,7 +134,7 @@ function FactItem({ icon: Icon, label, value }: { icon: typeof Trophy; label: st
 // Verdict / archetype / tier pills — verdict is SEPARATE from the raw score
 // ---------------------------------------------------------------------------
 
-function LabeledPill({
+export function LabeledPill({
   label,
   value,
   className,

@@ -17,16 +17,19 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
+      setHasSession(!!session?.user);
       setActiveTenantId(readTenantId(session?.user?.app_metadata));
       setAuthReady(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
+      setHasSession(!!session?.user);
       setActiveTenantId(readTenantId(session?.user?.app_metadata));
       setAuthReady(true);
     });
@@ -81,8 +84,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       switchTenant,
       isSwitching,
       isLoading: !authReady || tenantsLoading,
+      hasStaleTenantClaim: authReady && hasSession && activeTenantId === null,
     }),
-    [currentTenant, availableTenants, activeTenantId, switchTenant, isSwitching, authReady, tenantsLoading],
+    [currentTenant, availableTenants, activeTenantId, switchTenant, isSwitching, authReady, tenantsLoading, hasSession],
   );
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;

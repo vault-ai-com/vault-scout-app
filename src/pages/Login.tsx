@@ -53,7 +53,7 @@ const Login = ({ onLogin }: LoginProps) => {
             initial={{ scale: 0.8, opacity: 0.5 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-            className="mx-auto mb-5 w-[72px] h-[72px] rounded-2xl bg-accent flex items-center justify-center"
+            className="mx-auto mb-5 w-[72px] h-[72px] rounded-sm bg-accent flex items-center justify-center"
           >
             <Search className="w-8 h-8 text-accent-foreground" />
           </motion.div>
@@ -65,15 +65,14 @@ const Login = ({ onLogin }: LoginProps) => {
 
         {/* Login form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-xl p-6 space-y-4"
-            style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
+          <div className="card-editorial p-6 space-y-4">
             <div>
               <label htmlFor="login-email" className="block text-xs font-medium mb-1.5 text-muted-foreground">
                 E-post
               </label>
               <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="namn@example.com" required autoFocus autoComplete="email"
-                className="w-full px-3 py-2.5 rounded-lg text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all bg-input border border-border text-foreground" />
+                className="w-full px-3 py-2.5 rounded-sm text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all bg-input border border-border text-foreground" />
             </div>
 
             <div>
@@ -83,7 +82,7 @@ const Login = ({ onLogin }: LoginProps) => {
               <div className="relative">
                 <input id="login-password" type={showPassword ? "text" : "password"} value={password}
                   onChange={e => setPassword(e.target.value)} required autoComplete="current-password"
-                  className="w-full px-3 py-2.5 pr-10 rounded-lg text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all bg-input border border-border text-foreground" />
+                  className="w-full px-3 py-2.5 pr-10 rounded-sm text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all bg-input border border-border text-foreground" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -94,7 +93,7 @@ const Login = ({ onLogin }: LoginProps) => {
             <div aria-live="polite">
               {error && (
                 <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2 text-xs p-2.5 rounded-lg bg-destructive/10 text-destructive border border-destructive/20" role="alert">
+                  className="flex items-center gap-2 text-xs p-2.5 rounded-sm bg-destructive/10 text-destructive border border-destructive/20" role="alert">
                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                   {error}
                 </motion.div>
@@ -102,8 +101,7 @@ const Login = ({ onLogin }: LoginProps) => {
             </div>
 
             <button type="submit" disabled={loading || !email || !password}
-              className="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, hsl(var(--accent)), hsl(var(--success)))' }}>
+              className="w-full py-2.5 rounded-sm text-sm font-semibold bg-accent text-accent-foreground transition-all hover:bg-accent/90 disabled:opacity-50">
               {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Logga in"}
             </button>
           </div>

@@ -1,5 +1,13 @@
 # Changelog
 
+## Sprint 216 — Delade primitiver + auth-yta (2026-07-17)
+- **Delat komponentbibliotek:** extraherade `EmptyState` (message/onboarding-varianter) + `Skeleton` (composable SkeletonLine/Hero/SecNav/Card + PageSkeleton) ur dubblerad inline-markup i PlayerDetail/Opponents/MatchReport — en källa, byte-identisk output (0 visuell regression, JIT-grid-literaler bevarade). `PlayerHero` exporterar nu `ScoreDial`/`FactItem`/`LabeledPill` för S3-återanvändning.
+- **Auth-yta till editorial:** `Login` + `TenantSwitcher` restylade till design-systemet (rounded-sm, card-editorial, bg-accent-token; inline gradient/hsl-stilar bort). Glow-blobbar behållna.
+- **Stale-JWT re-auth:** `TenantProvider.hasStaleTenantClaim` (authReady && hasSession && tenant_id saknas) + `AppLayout` re-auth-interstitial — inloggad-utan-tenant ger tydlig "logga in igen" istället för tom app/evig spinner. Gated på authReady (ingen falsk-positiv under laddning), hooks-regel-kompatibel.
+- **YAGNI-disciplin:** DossierScaffold/SearchScaffold uppskjutna till S3 (extraheras vid faktisk 2:a konsument, ej spekulativt).
+- **Gates:** VCE09 GO, V61 tsc 0/vite grön, V64 Blind Critic 8.5/10, C94 Frost GO(LOW). Pipeline c9cc443b.
+- **Fast-follow:** differentierad "kontakta admin"-copy för genuint tenant-lösa konton; cn()-helper vid 3:e primitiv.
+
 ## Sprint 215 — Säkerhet + backend-kontrakt: IP-läcka, C79, provenance (2026-07-17)
 - **IP-läcka stängd (LLM07):** Raderade `src/pages/ScoutAgents.tsx` (renderade agent_id/kluster/llm_model), samt transitivt döda `AnalysisPanel.tsx` + `lib/format-content.tsx`. `ClipDrawer.tsx` "Wyscout-bank" → "videobank" (kundvänd källneutralitet). `index.css` källkommentar borttagen. Grep-verifierat: 0 kundvända datakälle-/arkitektur-strängar i `src/`.
 - **C79 tenant-härdning:** `get_scout_tenant_id()` läser BARA `app_metadata` (borttagen client-forgeable top-level jwt-claim) + regression-assertion. BEFORE INS/UPD-triggers härleder `tenant_id` DB-sidigt på `scout_scores` (via `analysis_id`) + `scout_chat_messages` (via `session_id`) — stänger gapet att `service_role` bypassar RLS.

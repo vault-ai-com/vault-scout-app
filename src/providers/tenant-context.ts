@@ -20,6 +20,8 @@ export interface TenantContextValue {
   switchTenant: (tenantId: string) => Promise<void>;
   isSwitching: boolean;
   isLoading: boolean;
+  /** Authenticated but JWT lacks app_metadata.tenant_id — needs forced re-auth (never an infinite spinner). */
+  hasStaleTenantClaim: boolean;
 }
 
 export const TenantContext = createContext<TenantContextValue | undefined>(undefined);

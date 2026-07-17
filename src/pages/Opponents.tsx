@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowUpRight, CalendarDays, MapPin } from "lucide-react"
 import { useMatchReports } from "@/hooks/use-match-reports";
 import { reportStatusMeta, type MatchReport, type ReportStatusTone } from "@/types/match-report";
 import { EASE_OUT_QUART } from "@/lib/motion";
+import { EmptyState } from "@/components/EmptyState";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -157,35 +158,6 @@ const EMPTY_STEPS = [
   "Underlaget landar här — härkomst-taggat och klart att briefa staben.",
 ];
 
-function EmptyState() {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: EASE_OUT_QUART }}
-      className="card-editorial mx-auto max-w-xl p-8 text-center"
-    >
-      <span className="eyebrow justify-center">Inga underlag ännu</span>
-      <h2 className="mt-3 text-xl font-bold tracking-tight text-foreground">
-        Ditt första matchunderlag byggs härifrån
-      </h2>
-      <ol className="mx-auto mt-6 max-w-md space-y-4 text-left">
-        {EMPTY_STEPS.map((step, i) => (
-          <li key={step} className="flex items-start gap-3.5">
-            <span
-              className="grid h-7 w-7 flex-none place-items-center rounded-full border border-accent/40 bg-accent/10 font-mono text-xs font-bold"
-              style={{ color: "hsl(var(--gold-text))" }}
-            >
-              {i + 1}
-            </span>
-            <span className="pt-1 text-sm text-muted-foreground">{step}</span>
-          </li>
-        ))}
-      </ol>
-    </motion.div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -225,7 +197,12 @@ const Opponents = () => {
       {isLoading ? (
         <LoadingGrid />
       ) : !error && (reports?.length ?? 0) === 0 ? (
-        <EmptyState />
+        <EmptyState
+          variant="onboarding"
+          eyebrow="Inga underlag ännu"
+          title="Ditt första matchunderlag byggs härifrån"
+          steps={EMPTY_STEPS}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {(reports ?? []).map((report, i) => (
