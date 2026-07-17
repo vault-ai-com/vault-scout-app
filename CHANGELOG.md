@@ -1,5 +1,15 @@
 # Changelog
 
+## Sprint 215 — Säkerhet + backend-kontrakt: IP-läcka, C79, provenance (2026-07-17)
+- **IP-läcka stängd (LLM07):** Raderade `src/pages/ScoutAgents.tsx` (renderade agent_id/kluster/llm_model), samt transitivt döda `AnalysisPanel.tsx` + `lib/format-content.tsx`. `ClipDrawer.tsx` "Wyscout-bank" → "videobank" (kundvänd källneutralitet). `index.css` källkommentar borttagen. Grep-verifierat: 0 kundvända datakälle-/arkitektur-strängar i `src/`.
+- **C79 tenant-härdning:** `get_scout_tenant_id()` läser BARA `app_metadata` (borttagen client-forgeable top-level jwt-claim) + regression-assertion. BEFORE INS/UPD-triggers härleder `tenant_id` DB-sidigt på `scout_scores` (via `analysis_id`) + `scout_chat_messages` (via `session_id`) — stänger gapet att `service_role` bypassar RLS.
+- **Chatt-säkerhet:** `scout-bosse-chat` — cluster-allowlist på `agent_id` (förhindrar att godtyckliga agent_id laddar system_prompt från M&A/KYC/build) + `redactSensitive()` live på SSE-strömmen (carry-buffert HOLD=48, ingen split-läcka) OCH på persisterat svar.
+- **Provenance-datakontrakt:** enum `scout_provenance_tier` (MATT/FILM/TOLK/KLIPP) + tabell `scout_claims` + tenant-scopad RLS + derive-trigger. Vitlistade fail-closed RPC:er `search_scout_entities` / `compare_scout_players` (SECURITY DEFINER, GRANT authenticated, REVOKE anon) + vy `v_scout_coach_public` (security_invoker).
+- **Isolation intakt:** IFK 117/117 spelare har `tenant_id` (0 NULL). RPC:er dubbelt fail-closed (ingen anon-EXECUTE + NULL-tenant-filter).
+- **Migrationer:** `scout_tenant_claim_hardening` + `scout_claims_provenance` + `scout_public_read_rpcs` (repo-filer matchar applicerad DB).
+- **VCE09 GO** (blockade först på migration-drift + live-stream-redaction-gap — båda fixade). **V61 tsc 0/vite grön. V64 Blind Critic GO 8.5/10. V65 Migration Guardian GO. C79 Miessler GO(MEDIUM).**
+- **Fast-follow:** `ao@isp-sport.se` saknar scout `app_metadata.tenant_id` (fail-closed → 0 rader); runtime SSE-test; redaction-denylist som test-vaktad artefakt.
+
 ## Sprint 213 — P0 RLS-fix: passthrough SELECT-policyer (2026-07-17)
 - **P0 säkerhet (DBH-audit 2026-06-08):** Tre passthrough SELECT-policyer med `qual=true` gav cross-tenant läsning. Droppade: `hooks_read_scout_pipelines` (anon) + `pipelines_select_authenticated` (authenticated) på `scout_analysis_pipelines`; `violations_select_authenticated` (authenticated) på `scout_analysis_violations`.
 - **Behållna:** `pipelines_all_service_role` + `violations_all_service_role` (service_role ALL). RLS förblir enabled → default-deny för anon/authenticated.
