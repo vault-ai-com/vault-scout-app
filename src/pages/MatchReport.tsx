@@ -1,22 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   CalendarDays,
   Check,
-  Film,
-  Play,
-  X,
 } from "lucide-react";
 import { useMatchReport } from "@/hooks/use-match-reports";
-import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { ProvenanceBadge, ProvenanceLegend } from "@/components/Provenance";
 import {
+  ClipChip,
+  ClipDrawer,
+  SecNavDesktop,
+  SecNavMobile,
+  SectionShell,
+  useScrollSpy,
+} from "@/components/report";
+import {
   AVAILABILITY_LABELS,
-  formatTimecode,
   type Availability,
   type ClipRef,
   type Duel,
@@ -24,7 +27,7 @@ import {
   type SetPieceSide,
   type XiPlayer,
 } from "@/types/match-report";
-import { EASE_OUT_QUART, SPRING_SNAPPY, prefersReducedMotion } from "@/lib/motion";
+import { EASE_OUT_QUART, SPRING_SNAPPY } from "@/lib/motion";
 
 // ---------------------------------------------------------------------------
 // Chart tokens — all colors come from the design system CSS variables
@@ -78,56 +81,6 @@ const SECTION_DEFS: SectionDef[] = [
 // ---------------------------------------------------------------------------
 // Building blocks
 // ---------------------------------------------------------------------------
-
-interface SectionShellProps {
-  id: string;
-  index: number;
-  title: string;
-  sub?: string | null;
-  registerRef: (id: string, el: HTMLElement | null) => void;
-  children: React.ReactNode;
-}
-
-function SectionShell({ id, index, title, sub, registerRef, children }: SectionShellProps) {
-  return (
-    <motion.section
-      id={`sec-${id}`}
-      ref={(el: HTMLElement | null) => registerRef(id, el)}
-      data-section={id}
-      aria-labelledby={`sec-${id}-title`}
-      className="scroll-mt-28 md:scroll-mt-16"
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -60px 0px" }}
-      transition={{ duration: 0.45, ease: EASE_OUT_QUART }}
-    >
-      <div className="mb-5">
-        <span className="eyebrow">{`Sektion ${String(index).padStart(2, "0")}`}</span>
-        <h2 id={`sec-${id}-title`} className="mt-2 text-[22px] font-extrabold tracking-tight text-foreground md:text-2xl">
-          {title}
-        </h2>
-        {sub && <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">{sub}</p>}
-        <div className="rule-gold mt-4" />
-      </div>
-      {children}
-    </motion.section>
-  );
-}
-
-function ClipChip({ clip, onOpen }: { clip: ClipRef; onOpen: (c: ClipRef) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(clip)}
-      aria-haspopup="dialog"
-      aria-label={`Öppna klipp: ${clip.label}`}
-      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-sm border border-border bg-background/50 px-2.5 font-mono text-[11px] font-medium text-muted-foreground transition-all duration-150 hover:-translate-y-px hover:border-accent/60 hover:text-foreground md:min-h-0 md:py-1.5"
-    >
-      <Play className="h-3 w-3 text-accent" aria-hidden="true" />
-      {clip.label}
-    </button>
-  );
-}
 
 function NoteBox({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "warn" | "act" }) {
   if (tone === "warn") {
@@ -549,106 +502,6 @@ function DuelScaleRow({ duel }: { duel: Duel }) {
 }
 
 // ---------------------------------------------------------------------------
-// Clip drawer — timecode + video placeholder (B1 wires real playback)
-// ---------------------------------------------------------------------------
-
-function ClipDrawer({ clip, onClose }: { clip: ClipRef | null; onClose: () => void }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(panelRef, !!clip);
-
-  useEffect(() => {
-    if (!clip) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.documentElement.style.overflow = prevOverflow;
-    };
-  }, [clip, onClose]);
-
-  const tc = clip ? formatTimecode(clip) : null;
-
-  return (
-    <AnimatePresence>
-      {clip && (
-        <>
-          <motion.div
-            key="scrim"
-            className="fixed inset-0 z-40 bg-background/70 backdrop-blur-[2px]"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            aria-hidden="true"
-          />
-          <motion.div
-            key="panel"
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Klipp: ${clip.label}`}
-            className="fixed inset-y-0 right-0 z-50 flex w-[420px] max-w-[94vw] flex-col border-l border-border bg-card shadow-elevated"
-            initial={{ x: "104%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "104%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          >
-            <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
-              <Film className="h-4 w-4 text-accent" aria-hidden="true" />
-              <span className="text-sm font-bold text-foreground">Klipp</span>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Stäng klippanel"
-                className="ml-auto grid h-11 w-11 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:h-8 md:w-8"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="p-4">
-              <div className="relative grid aspect-video place-items-center overflow-hidden rounded-sm border border-border surface-hero">
-                <div className="grid h-14 w-14 place-items-center rounded-full border border-accent/40 bg-accent/15">
-                  <Play className="ml-0.5 h-5 w-5" style={{ color: "hsl(var(--gold-text))" }} aria-hidden="true" />
-                </div>
-                {tc && (
-                  <span className="absolute bottom-2.5 left-3 rounded-sm bg-background/80 px-2 py-0.5 font-mono text-[11px]" style={{ color: "hsl(var(--gold-text))" }}>
-                    {tc}
-                  </span>
-                )}
-                <span className="absolute right-3 top-2.5 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "hsl(var(--gold-text))" }}>
-                  Videobevis · B1 kommer
-                </span>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-5 pb-6">
-              <div className="text-sm font-bold text-foreground">{clip.label}</div>
-              {clip.anchor && <div className="mt-1 text-xs text-muted-foreground">Hör till: {clip.anchor}</div>}
-              <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
-                {clip.task ?? "Koda momentet på film — fynden skrivs tillbaka till rätt kort i underlaget (KLIPP → FILM)."}
-              </p>
-              <div className="mt-4 flex items-center gap-2.5">
-                <ProvenanceBadge kind="KLIPP" />
-                <span className="text-xs text-muted-foreground">markera fynd → skrivs tillbaka till underlaget</span>
-              </div>
-              <div className="mt-5 rounded-sm border border-dashed border-border bg-secondary/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-                Videouppspelning kopplas in när klippbanken (B1) är live. Timecoden pekar på rätt moment i källmatchen.
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Loading / error states
 // ---------------------------------------------------------------------------
 
@@ -689,10 +542,8 @@ function ReportSkeleton() {
 const MatchReport = () => {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, error } = useMatchReport(id);
-  const [activeSection, setActiveSection] = useState<string | null>(null);
   const [clip, setClip] = useState<ClipRef | null>(null);
   const [xiConfirmed, setXiConfirmed] = useState(false);
-  const sectionEls = useRef<Map<string, HTMLElement>>(new Map());
 
   const report = data?.report ?? null;
 
@@ -701,35 +552,8 @@ const MatchReport = () => {
     [report],
   );
 
-  const registerRef = useCallback((sectionId: string, el: HTMLElement | null) => {
-    if (el) sectionEls.current.set(sectionId, el);
-    else sectionEls.current.delete(sectionId);
-  }, []);
-
-  // Scroll spy — highlight active section in the secnav
-  useEffect(() => {
-    if (sections.length === 0) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const sid = (entry.target as HTMLElement).dataset.section;
-            if (sid) setActiveSection(sid);
-          }
-        }
-      },
-      { rootMargin: "-25% 0px -65% 0px" },
-    );
-    sectionEls.current.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [sections]);
-
-  const scrollToSection = useCallback((sectionId: string) => {
-    const el = sectionEls.current.get(sectionId);
-    if (!el) return;
-    setActiveSection(sectionId);
-    el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
-  }, []);
+  const sectionIds = useMemo(() => sections.map((s) => s.id), [sections]);
+  const { activeSection, registerRef, scrollToSection } = useScrollSpy(sectionIds);
 
   const openClip = useCallback((c: ClipRef) => setClip(c), []);
   const closeClip = useCallback(() => setClip(null), []);
@@ -812,67 +636,17 @@ const MatchReport = () => {
       {report && (
         <>
           {/* Mobile section nav — sticky horizontal strip */}
-          <nav
-            aria-label="Sektioner"
-            className="scrollbar-hide sticky top-14 z-20 -mx-5 mt-6 flex gap-1.5 overflow-x-auto border-b border-border/60 bg-background/90 px-5 py-2.5 backdrop-blur-xl md:top-0 lg:hidden"
-          >
-            {sections.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => scrollToSection(s.id)}
-                aria-current={activeSection === s.id ? "true" : undefined}
-                className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                  activeSection === s.id
-                    ? "border-accent/50 bg-accent/10"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                }`}
-                style={activeSection === s.id ? { color: "hsl(var(--gold-text))" } : undefined}
-              >
-                {s.label}
-              </button>
-            ))}
-          </nav>
+          <SecNavMobile items={sections} activeId={activeSection} onSelect={scrollToSection} />
 
           <div className="mt-8 grid gap-10 lg:grid-cols-[200px_1fr]">
             {/* Desktop sticky secnav */}
-            <nav aria-label="Sektioner" className="sticky top-8 hidden max-h-[calc(100vh-64px)] self-start overflow-y-auto lg:block">
-              {(["Tränare", "Analys", "Video"] as const).map((group) => {
-                const items = sections.filter((s) => s.group === group);
-                if (items.length === 0) return null;
-                return (
-                  <div key={group}>
-                    <div className="px-3 pb-1.5 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/60 first:pt-0">
-                      {group}
-                    </div>
-                    {items.map((s) => {
-                      const active = activeSection === s.id;
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => scrollToSection(s.id)}
-                          aria-current={active ? "true" : undefined}
-                          className={`relative block w-full rounded-sm px-3 py-2 text-left text-[12.5px] transition-colors duration-150 ${
-                            active ? "font-semibold text-foreground" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-                          }`}
-                        >
-                          {active && (
-                            <motion.span
-                              layoutId="secnav-indicator"
-                              className="absolute inset-y-1 left-0 w-[3px] rounded-full bg-accent"
-                              style={{ boxShadow: "0 0 10px hsl(var(--accent) / 0.55)" }}
-                              transition={SPRING_SNAPPY}
-                            />
-                          )}
-                          <span className={active ? "pl-2.5" : ""}>{s.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </nav>
+            <SecNavDesktop
+              items={sections}
+              groups={["Tränare", "Analys", "Video"]}
+              activeId={activeSection}
+              onSelect={scrollToSection}
+              layoutId="matchreport-secnav-indicator"
+            />
 
             {/* Report body */}
             <div className="min-w-0 space-y-14">

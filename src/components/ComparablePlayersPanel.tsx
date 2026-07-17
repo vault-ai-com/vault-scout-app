@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Users, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { PlayerCard } from "@/components/PlayerCard";
 import { useComparablePlayers } from "@/hooks/use-scout-comparable-players";
 import type { ScoutPlayer } from "@/types/scout";
@@ -14,12 +14,7 @@ export function ComparablePlayersPanel({ player }: ComparablePlayersPanelProps) 
   if (!player) return null;
 
   return (
-    <div className="rounded-xl p-6 md:p-8 glass-premium card-accent-left space-y-4">
-      <h3 className="section-tag flex items-center gap-1.5">
-        <Users className="w-3.5 h-3.5" />
-        Liknande spelare
-      </h3>
-
+    <div className="card-editorial p-5 md:p-6 space-y-4">
       {isLoading && (
         <div className="flex items-center gap-2 py-4" role="status" aria-live="polite">
           <Loader2 className="w-4 h-4 animate-spin text-accent" />

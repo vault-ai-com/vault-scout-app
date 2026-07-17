@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Plus, Loader2, StickyNote } from "lucide-react";
+import { Trash2, Plus, Loader2 } from "lucide-react";
 import { usePlayerNotes, useCreateNote, useDeleteNote } from "@/hooks/use-scout-notes";
 
 interface NotesPanelProps {
@@ -34,15 +34,8 @@ export function NotesPanel({ playerId }: NotesPanelProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="rounded-xl glass-premium card-accent-left p-6 md:p-8"
+      className="card-editorial p-5 md:p-6"
     >
-      <div className="flex items-center gap-2.5 mb-5">
-        <div className="w-8 h-8 rounded-lg icon-premium flex items-center justify-center">
-          <StickyNote className="w-4 h-4 text-primary" />
-        </div>
-        <span className="section-tag">Anteckningar</span>
-      </div>
-
       {/* Add note form */}
       <div className="space-y-2.5 mb-5">
         <input

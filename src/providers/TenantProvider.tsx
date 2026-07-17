@@ -56,8 +56,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       if (tenantId === activeTenantId) return;
       setIsSwitching(true);
       try {
-        // Validates membership + updates server-side active tenant.
-        const { error } = await supabase.rpc("set_scout_active_tenant", { p_tenant_id: tenantId });
+        // Edge fn validates membership + writes app_metadata.tenant_id via admin API
+        // (app_metadata is server-controlled — a plain RPC cannot change the JWT source).
+        const { error } = await supabase.functions.invoke("scout-set-tenant", {
+          body: { tenant_id: tenantId },
+        });
         if (error) throw new Error(error.message);
         // Refresh JWT so app_metadata.tenant_id (and thus RLS) reflects the new tenant.
         await supabase.auth.refreshSession();

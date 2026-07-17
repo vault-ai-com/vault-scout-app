@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Users, Loader2, AlertTriangle, CheckCircle, ShieldAlert, MessageSquare } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle, ShieldAlert, MessageSquare } from "lucide-react";
 import type { AdvisorReviewResponse, AdvisorOpinion } from "@/types/scout";
 import { VERDICT_LABELS, VERDICT_COLORS } from "@/types/scout";
 
@@ -99,22 +99,22 @@ function OpinionCard({ opinion }: { opinion: AdvisorOpinion }) {
 
 export function AdvisorReviewPanel({ review, loading, error, onReview }: AdvisorReviewPanelProps) {
   return (
-    <div className="rounded-xl p-6 md:p-8 glass-premium card-accent-left space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="section-tag flex items-center gap-1.5">
-          <Users className="w-3.5 h-3.5" />
-          Sport Advisory Board
-        </h3>
-        {!review && !loading && (
+    <div className="card-editorial p-5 md:p-6 space-y-4">
+      {!review && !loading && (
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-xl text-[12.5px] leading-relaxed text-muted-foreground">
+            Expertpanelen granskar analysen oberoende — varje rådgivare ger verdikt,
+            risker och rekommendationer med konfidens per bedömning.
+          </p>
           <button
             type="button"
             onClick={onReview}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10 btn-premium transition-colors"
+            className="inline-flex min-h-[44px] flex-none items-center rounded-sm border border-accent/30 px-4 text-xs font-semibold text-accent transition-colors hover:bg-accent/10"
           >
             Begär expertgranskning
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center gap-2 py-4" role="status" aria-live="polite">

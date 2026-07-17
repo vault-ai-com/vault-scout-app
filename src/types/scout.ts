@@ -284,6 +284,37 @@ export const DIMENSION_LABELS: Record<string, string> = {
   "DIM-16": "Drivkraft",
 };
 
+// Dimension groups — canonical 5-group weighting for the 16-dim framework.
+// SSOT for StatGrid + report rendering. Weights sum to 100.
+export interface DimensionGroup {
+  id: string;
+  label: string;
+  weightPct: number;
+  dims: readonly string[];
+}
+
+export const DIMENSION_GROUPS: readonly DimensionGroup[] = [
+  { id: "tactical", label: "Taktisk", weightPct: 22, dims: ["DIM-01", "DIM-02", "DIM-03"] },
+  { id: "technical", label: "Teknisk", weightPct: 27, dims: ["DIM-04", "DIM-05", "DIM-06", "DIM-07"] },
+  { id: "physical", label: "Fysisk", weightPct: 18, dims: ["DIM-08", "DIM-09", "DIM-10"] },
+  { id: "mental", label: "Mental", weightPct: 23, dims: ["DIM-11", "DIM-12", "DIM-15", "DIM-16"] },
+  { id: "social", label: "Social & kontext", weightPct: 10, dims: ["DIM-13", "DIM-14"] },
+] as const;
+
+export const RECOMMENDATION_LABELS: Record<Recommendation, string> = {
+  SIGN: "Signa",
+  MONITOR: "Bevaka",
+  PASS: "Avstå",
+  INSUFFICIENT_DATA: "Otillräcklig data",
+};
+
+/** Narrow an arbitrary DB string to a known Recommendation (or null). */
+export function asRecommendation(value: string | null | undefined): Recommendation | null {
+  return value === "SIGN" || value === "MONITOR" || value === "PASS" || value === "INSUFFICIENT_DATA"
+    ? value
+    : null;
+}
+
 export const TIER_LABELS: Record<string, string> = {
   world_class: "Världsklass",
   elite: "Elit",

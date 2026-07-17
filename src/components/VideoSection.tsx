@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Video, Plus, X, ExternalLink, Loader2, GripVertical } from "lucide-react";
+import { Plus, X, ExternalLink, Loader2, GripVertical } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -186,20 +186,15 @@ export function VideoSection({ playerId, videos, onUpdate }: VideoSectionProps) 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="rounded-xl glass-premium card-accent-left p-6 md:p-8"
+      className="card-editorial p-5 md:p-6"
     >
-      {/* Header */}
-      <div className="flex items-center gap-2.5 mb-5">
-        <div className="w-8 h-8 rounded-lg icon-premium flex items-center justify-center">
-          <Video className="w-4 h-4 text-primary" />
-        </div>
-        <span className="section-tag">Videor</span>
-        {videos.length > 0 && (
-          <span className="ml-auto text-xs text-muted-foreground/60 tabular-nums">
-            {videos.length}/{MAX_VIDEOS}
+      {videos.length > 0 && (
+        <div className="mb-4 flex justify-end">
+          <span className="text-xs tabular-nums text-muted-foreground/60">
+            {videos.length}/{MAX_VIDEOS} videor
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Add video form */}
       <div className="space-y-2.5 mb-5">

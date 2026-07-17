@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Brain, Loader2, AlertTriangle, Shield, Zap, Flame } from "lucide-react";
+import { Loader2, AlertTriangle, Shield, Zap, Flame } from "lucide-react";
 import type { PersonalityProfile, PersonalityDimension, ContradictionDimension } from "@/types/scout";
 import { ARCHETYPE_LABELS, ARCHETYPE_COLORS, DATA_SOURCE_LABELS } from "@/types/scout";
 
@@ -82,22 +82,22 @@ function getTopDimensions(profile: PersonalityProfile) {
 
 export function PersonalityPanel({ profile, loading, error, onAnalyze }: PersonalityPanelProps) {
   return (
-    <div className="rounded-xl p-6 md:p-8 glass-premium card-accent-left space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="section-tag flex items-center gap-1.5">
-          <Brain className="w-3.5 h-3.5" />
-          Psykologisk profil
-        </h3>
-        {!profile && !loading && (
+    <div className="card-editorial p-5 md:p-6 space-y-4">
+      {!profile && !loading && (
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-xl text-[12.5px] leading-relaxed text-muted-foreground">
+            Ingen personlighetsprofil ännu. Djupanalysen kartlägger 11 psykologiska dimensioner,
+            stressarketyp, coachingförslag och integrationsrisker.
+          </p>
           <button
             type="button"
             onClick={onAnalyze}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10 btn-premium transition-colors"
+            className="inline-flex min-h-[44px] flex-none items-center rounded-sm border border-accent/30 px-4 text-xs font-semibold text-accent transition-colors hover:bg-accent/10"
           >
             Kör djupanalys
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center gap-2 py-4" role="status" aria-live="polite">
