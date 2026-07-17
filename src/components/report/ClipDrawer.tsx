@@ -69,19 +69,37 @@ export function ClipDrawer({ clip, onClose }: { clip: ClipRef | null; onClose: (
             </div>
 
             <div className="p-4">
-              <div className="relative grid aspect-video place-items-center overflow-hidden rounded-sm border border-border surface-hero">
-                <div className="grid h-14 w-14 place-items-center rounded-full border border-accent/40 bg-accent/15">
-                  <Play className="ml-0.5 h-5 w-5" style={{ color: "hsl(var(--gold-text))" }} aria-hidden="true" />
-                </div>
-                {tc && (
-                  <span className="absolute bottom-2.5 left-3 rounded-sm bg-background/80 px-2 py-0.5 font-mono text-[11px]" style={{ color: "hsl(var(--gold-text))" }}>
-                    {tc}
+              {clip.video_url ? (
+                <div className="relative overflow-hidden rounded-sm border border-border bg-black">
+                  <video
+                    key={clip.video_url}
+                    src={clip.video_url}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="aspect-video w-full"
+                  >
+                    Din webbläsare stödjer inte videouppspelning.
+                  </video>
+                  <span className="pointer-events-none absolute right-3 top-2.5 rounded-full border border-accent/50 bg-background/80 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "hsl(var(--gold-text))" }}>
+                    Videobevis
                   </span>
-                )}
-                <span className="absolute right-3 top-2.5 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "hsl(var(--gold-text))" }}>
-                  Videobevis · B1 kommer
-                </span>
-              </div>
+                </div>
+              ) : (
+                <div className="relative grid aspect-video place-items-center overflow-hidden rounded-sm border border-border surface-hero">
+                  <div className="grid h-14 w-14 place-items-center rounded-full border border-accent/40 bg-accent/15">
+                    <Play className="ml-0.5 h-5 w-5" style={{ color: "hsl(var(--gold-text))" }} aria-hidden="true" />
+                  </div>
+                  {tc && (
+                    <span className="absolute bottom-2.5 left-3 rounded-sm bg-background/80 px-2 py-0.5 font-mono text-[11px]" style={{ color: "hsl(var(--gold-text))" }}>
+                      {tc}
+                    </span>
+                  )}
+                  <span className="absolute right-3 top-2.5 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "hsl(var(--gold-text))" }}>
+                    Videobevis · B1 kommer
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 pb-6">
@@ -95,7 +113,9 @@ export function ClipDrawer({ clip, onClose }: { clip: ClipRef | null; onClose: (
                 <span className="text-xs text-muted-foreground">markera fynd → skrivs tillbaka till underlaget</span>
               </div>
               <div className="mt-5 rounded-sm border border-dashed border-border bg-secondary/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-                Videouppspelning kopplas in när klippbanken (B1) är live. Timecoden pekar på rätt moment i källmatchen.
+                {clip.video_url
+                  ? "Riktigt BP-matchklipp från klubbens Wyscout-bank. Exakt scoreboard-ankring per svaghet kopplas in i nästa steg."
+                  : "Videouppspelning kopplas in när klippbanken (B1) är live. Timecoden pekar på rätt moment i källmatchen."}
               </div>
             </div>
           </motion.div>

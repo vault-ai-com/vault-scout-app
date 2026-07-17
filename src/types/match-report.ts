@@ -39,6 +39,8 @@ export const ClipRefSchema = z.object({
   anchor: z.string().nullable().optional(),
   /** Coding task shown in the drawer. */
   task: z.string().nullable().optional(),
+  /** Playable video URL (B1 — real clip from the club's bank). When present, the drawer plays it. */
+  video_url: z.string().nullable().optional(),
 });
 export type ClipRef = z.infer<typeof ClipRefSchema>;
 
