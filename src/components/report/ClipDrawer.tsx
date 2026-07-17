@@ -70,20 +70,32 @@ export function ClipDrawer({ clip, onClose }: { clip: ClipRef | null; onClose: (
 
             <div className="p-4">
               {clip.video_url ? (
-                <div className="relative overflow-hidden rounded-sm border border-border bg-black">
-                  <video
-                    key={clip.video_url}
-                    src={clip.video_url}
-                    controls
-                    autoPlay
-                    playsInline
-                    className="aspect-video w-full"
+                <div>
+                  <div className="relative overflow-hidden rounded-sm border border-border bg-black">
+                    <video
+                      key={clip.video_url}
+                      src={clip.video_url}
+                      controls
+                      autoPlay
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="aspect-video w-full bg-black"
+                    >
+                      Din webbläsare stödjer inte videouppspelning.
+                    </video>
+                    <span className="pointer-events-none absolute right-3 top-2.5 rounded-full border border-accent/50 bg-background/80 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "hsl(var(--gold-text))" }}>
+                      Videobevis
+                    </span>
+                  </div>
+                  <a
+                    href={clip.video_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-accent"
                   >
-                    Din webbläsare stödjer inte videouppspelning.
-                  </video>
-                  <span className="pointer-events-none absolute right-3 top-2.5 rounded-full border border-accent/50 bg-background/80 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "hsl(var(--gold-text))" }}>
-                    Videobevis
-                  </span>
+                    <Play className="h-3 w-3" /> Öppna klippet i ny flik
+                  </a>
                 </div>
               ) : (
                 <div className="relative grid aspect-video place-items-center overflow-hidden rounded-sm border border-border surface-hero">
