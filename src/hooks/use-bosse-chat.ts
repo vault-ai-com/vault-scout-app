@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/hooks/use-tenant";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -52,14 +53,17 @@ export function useChatMessages(sessionId: string | null) {
 // --- Create session ---
 export function useCreateSession() {
   const qc = useQueryClient();
+  const { currentTenant } = useTenant();
   return useMutation<ChatSession, Error, { title?: string; player_id?: string; agent_id?: string | null }>({
     mutationFn: async ({ title, player_id, agent_id }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
+      if (!currentTenant) throw new Error("Ingen organisation vald");
       const { data, error } = await supabase
         .from("scout_chat_sessions")
         .insert({
           user_id: session.user.id,
+          tenant_id: currentTenant.tenantId,
           title: title ?? null,
           player_id: player_id ?? null,
           agent_id: agent_id ?? null,

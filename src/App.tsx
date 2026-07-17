@@ -6,6 +6,7 @@ import { MotionConfig } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/AppLayout";
 import { useAuth } from "@/hooks/use-auth";
+import { TenantProvider } from "@/providers/TenantProvider";
 import { lazyRetry } from "@/lib/lazy-retry";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -73,7 +74,9 @@ const App = () => (
         <Toaster richColors position="top-right" />
         <BrowserRouter basename={import.meta.env.BASE_URL?.replace(/\/$/, '') || ''}>
           <Suspense fallback={<PageLoader />}>
-            <AppRoutes />
+            <TenantProvider>
+              <AppRoutes />
+            </TenantProvider>
           </Suspense>
         </BrowserRouter>
       </MotionConfig>

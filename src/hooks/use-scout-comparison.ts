@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/hooks/use-tenant";
 import { ComparisonEntrySchema, safeArray } from "@/types/scout";
 import type { ComparisonEntry } from "@/types/scout";
 
@@ -25,13 +26,15 @@ interface CreateComparisonArgs {
 
 export function useCreateComparison() {
   const qc = useQueryClient();
+  const { currentTenant } = useTenant();
   return useMutation<ComparisonEntry, Error, CreateComparisonArgs>({
     mutationFn: async ({ title, player_ids }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
+      if (!currentTenant) throw new Error("Ingen organisation vald");
       const { data, error } = await supabase
         .from("scout_comparisons")
-        .insert({ title, player_ids, comparison_type: "manual", created_by: session.user.id })
+        .insert({ title, player_ids, comparison_type: "manual", created_by: session.user.id, tenant_id: currentTenant.tenantId })
         .select()
         .single();
       if (error) throw new Error(error.message);

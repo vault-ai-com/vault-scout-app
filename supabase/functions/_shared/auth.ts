@@ -8,6 +8,8 @@ export interface AuthResult {
   ok: true;
   userId: string;
   isServiceRole: boolean;
+  /** Tenant the caller belongs to (from JWT app_metadata.tenant_id). null for service-role/terminal. */
+  tenantId: string | null;
 }
 
 export interface AuthError {
@@ -42,10 +44,10 @@ export async function authenticateRequest(
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const legacyServiceKey = Deno.env.get("LEGACY_SERVICE_ROLE_KEY") ?? "";
   if (serviceRoleKey && token === serviceRoleKey) {
-    return { ok: true, userId: "terminal-pipeline", isServiceRole: true };
+    return { ok: true, userId: "terminal-pipeline", isServiceRole: true, tenantId: null };
   }
   if (legacyServiceKey && token === legacyServiceKey) {
-    return { ok: true, userId: "terminal-pipeline", isServiceRole: true };
+    return { ok: true, userId: "terminal-pipeline", isServiceRole: true, tenantId: null };
   }
 
   // Standard user JWT authentication
@@ -59,7 +61,10 @@ export async function authenticateRequest(
     if (authErr || !user) {
       return { ok: false, error: "Unauthorized", status: 401 };
     }
-    return { ok: true, userId: user.id, isServiceRole: false };
+    // Tenant scoping: derive tenant from server-controlled app_metadata (never client-writable).
+    const appMeta = (user.app_metadata ?? {}) as Record<string, unknown>;
+    const tenantId = typeof appMeta.tenant_id === "string" ? appMeta.tenant_id : null;
+    return { ok: true, userId: user.id, isServiceRole: false, tenantId };
   } catch {
     return { ok: false, error: "Authentication failed", status: 401 };
   }

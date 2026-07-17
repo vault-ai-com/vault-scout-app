@@ -35,6 +35,16 @@ Deno.serve(async (req: Request) => {
       });
     }
     const user = { id: authResult.userId };
+    const isServiceRole = authResult.isServiceRole;
+    const callerTenant = authResult.tenantId;
+    // Tenant scoping: non-service-role callers MUST resolve to a tenant, else fail closed.
+    // service_role (terminal) is trusted and scopes per-session tenant below.
+    if (!isServiceRole && !callerTenant) {
+      return new Response(JSON.stringify({ code: 403, message: "No tenant context" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -91,22 +101,28 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Verify session ownership
+    // Verify session ownership + tenant scoping
     const { data: session, error: sessionError } = await supabase
       .from("scout_chat_sessions")
-      .select("id, user_id")
+      .select("id, user_id, tenant_id")
       .eq("id", session_id)
       .single();
-    if (sessionError || !session || session.user_id !== user.id) {
+    if (
+      sessionError || !session || session.user_id !== user.id ||
+      (!isServiceRole && session.tenant_id !== callerTenant)
+    ) {
       return new Response(JSON.stringify({ code: 403, message: "Session not found or not owned" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // Tenant used for all writes/reads below (from the session, so terminal calls stay scoped too).
+    const chatTenant = session.tenant_id as string;
 
     // Save user message
     await supabase.from("scout_chat_messages").insert({
       session_id,
+      tenant_id: chatTenant,
       role: "user",
       content: message,
     });
@@ -188,6 +204,7 @@ Deno.serve(async (req: Request) => {
           .from("scout_players")
           .select("*")
           .eq("id", player_id)
+          .eq("tenant_id", chatTenant)
           .single();
         if (player) {
           const spi = sanitizePromptInput;
@@ -198,6 +215,7 @@ Deno.serve(async (req: Request) => {
             .from("scout_analyses")
             .select("id, analysis_type, overall_score, confidence, summary, strengths, weaknesses, risk_factors, recommendation, created_at")
             .eq("player_id", player_id)
+            .eq("tenant_id", chatTenant)
             .eq("status", "completed")
             .order("created_at", { ascending: false })
             .limit(1);
@@ -224,6 +242,7 @@ Deno.serve(async (req: Request) => {
               .from("scout_scores")
               .select("dimension_id, dimension_name, score, confidence, evidence")
               .eq("analysis_id", a.id)
+              .eq("tenant_id", chatTenant)
               .order("dimension_id", { ascending: true });
 
             if (scores && scores.length > 0) {
@@ -307,6 +326,7 @@ Deno.serve(async (req: Request) => {
             if (fullContent) {
               await supabase.from("scout_chat_messages").insert({
                 session_id,
+                tenant_id: chatTenant,
                 role: "assistant",
                 content: fullContent,
               });

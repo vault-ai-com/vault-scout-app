@@ -2,7 +2,9 @@ import { Suspense, useLayoutEffect } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { LayoutDashboard, Users, LogOut, Search, MessageCircle, Bot, GraduationCap } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, MessageCircle, Bot, GraduationCap } from "lucide-react";
+import { TenantCrest } from "@/components/TenantCrest";
+import { TenantSwitcher } from "@/components/TenantSwitcher";
 
 const InlineLoader = () => (
   <div className="flex-1 bg-background p-4 md:p-6 lg:p-8 space-y-4">
@@ -54,16 +56,12 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
 
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden md:flex w-[220px] flex-col border-r border-border/30 sidebar-glass">
-        {/* Logo */}
+        {/* Logo / tenant crest */}
         <div className="flex items-center gap-3 px-5 h-16 border-b border-border/20">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-success/70 flex items-center justify-center shadow-lg shadow-accent/20">
-            <Search className="w-4.5 h-4.5 text-accent-foreground" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-sidebar-foreground tracking-tight">Vault Scout</span>
-            <span className="text-[10px] text-muted-foreground/50 font-medium tracking-wider uppercase">AI Scouting</span>
-          </div>
+          <TenantCrest size={36} showName />
         </div>
+        {/* Tenant switcher (hidden when only one tenant) */}
+        <TenantSwitcher variant="sidebar" />
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-5 space-y-1" aria-label="Huvudnavigation">
@@ -96,12 +94,8 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
       <div className="ml-0 md:ml-[220px] flex flex-col min-h-screen transition-all duration-200">
         {/* Mobile header */}
         <header className="md:hidden sticky top-0 z-20 h-14 flex items-center justify-between px-4 border-b border-border/30 bg-background/90 backdrop-blur-xl">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent to-success/70 flex items-center justify-center shadow-md shadow-accent/20">
-              <Search className="w-3.5 h-3.5 text-accent-foreground" />
-            </div>
-            <span className="text-sm font-bold text-foreground tracking-tight">Vault Scout</span>
-          </div>
+          <TenantCrest size={32} showName />
+
           <button type="button" onClick={onSignOut} className="text-muted-foreground p-2 rounded-lg hover:bg-card transition-colors" aria-label="Logga ut">
             <LogOut className="w-4 h-4" />
           </button>
