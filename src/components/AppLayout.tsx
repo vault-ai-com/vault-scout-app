@@ -5,6 +5,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LayoutDashboard, Users, LogOut, MessageCircle, Bot, GraduationCap } from "lucide-react";
 import { TenantCrest } from "@/components/TenantCrest";
 import { TenantSwitcher } from "@/components/TenantSwitcher";
+import { SPRING_BOUNCY, EASE_OUT_QUART } from "@/lib/motion";
 
 const InlineLoader = () => (
   <div className="flex-1 bg-background p-4 md:p-6 lg:p-8 space-y-4">
@@ -68,14 +69,24 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
           {navItems.map(item => (
             <NavLink key={item.to} to={item.to} end={item.to === "/"}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                `relative flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium transition-colors duration-200 ${
                   isActive
-                    ? 'nav-active text-accent'
+                    ? 'bg-sidebar-accent text-accent'
                     : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                 }`
               }>
-              <item.icon className="w-4 h-4" />
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <motion.span layoutId="nav-indicator"
+                      className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-accent"
+                      style={{ boxShadow: "0 0 12px hsl(var(--accent) / 0.6)" }}
+                      transition={SPRING_BOUNCY} />
+                  )}
+                  <item.icon className="w-4 h-4" strokeWidth={isActive ? 2.2 : 1.8} />
+                  {item.label}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -103,10 +114,10 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
 
         <main id="main-content" className="flex-1 pb-16 md:pb-0 relative" role="main" aria-label="Huvudinnehåll" tabIndex={-1}>
           <ErrorBoundary>
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="popLayout" initial={false}>
               <motion.div key={pathname}
-                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}>
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: EASE_OUT_QUART }}>
                 <Suspense fallback={<InlineLoader />}>
                   <Outlet />
                 </Suspense>

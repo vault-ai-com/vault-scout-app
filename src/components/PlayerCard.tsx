@@ -5,9 +5,9 @@ import type { ScoutPlayer } from "@/types/scout";
 import { TIER_LABELS, TIER_COLORS } from "@/types/scout";
 
 const recColors: Record<string, string> = {
-  SIGN: "text-emerald-400",
-  MONITOR: "text-amber-400",
-  PASS: "text-red-400",
+  SIGN: "text-success",
+  MONITOR: "text-warning",
+  PASS: "text-destructive",
 };
 
 const phaseLabels: Record<string, string> = {
@@ -87,9 +87,9 @@ export function PlayerCard({ player }: PlayerCardProps) {
       onClick={() => toggleWatchlist.mutate({ playerId: player.id, isOnWatchlist, watchlistId })}
       disabled={toggleWatchlist.isPending}
       aria-label={isOnWatchlist ? "Ta bort från bevakningslista" : "Lägg till i bevakningslista"}
-      className="absolute top-2 right-2 p-1.5 rounded-lg text-muted-foreground/40 hover:text-amber-400 transition-colors disabled:opacity-30 z-10"
+      className="absolute top-2 right-2 p-1.5 rounded-lg text-muted-foreground/40 hover:text-primary transition-colors disabled:opacity-30 z-10"
     >
-      <Star className={`w-3.5 h-3.5 ${isOnWatchlist ? "fill-amber-400 text-amber-400" : ""}`} />
+      <Star className={`w-3.5 h-3.5 ${isOnWatchlist ? "fill-primary text-primary" : ""}`} />
     </button>
     </div>
   );

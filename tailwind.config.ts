@@ -61,9 +61,15 @@ export default {
         danger: "hsl(var(--danger))",
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        /* Editorial sharp scale — pitch profile uses 2px on cards.
+           Pills/circles keep rounded-full (unaffected). */
+        DEFAULT: "2px",
+        sm: "1px",
+        md: "var(--radius)",   /* 2px */
+        lg: "var(--radius)",   /* 2px */
+        xl: "3px",
+        "2xl": "4px",
+        "3xl": "6px",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

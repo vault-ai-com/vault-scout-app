@@ -39,9 +39,9 @@ const Dashboard = () => {
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}>
-        <span className="section-tag">Scouting</span>
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1 tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Överblick av din scoutingaktivitet</p>
+        <span className="eyebrow">Scouting</span>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-foreground mt-3 tracking-tight" style={{ letterSpacing: "-0.03em" }}>Dashboard</h1>
+        <p className="lead text-sm text-muted-foreground mt-2">Överblick av din scoutingaktivitet</p>
       </motion.div>
 
       {/* Stats grid */}
@@ -98,9 +98,9 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold text-foreground truncate">{a.name}</span>
                   <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${
-                    a.recommendation === "SIGN" ? "text-emerald-400" :
-                    a.recommendation === "MONITOR" ? "text-amber-400" :
-                    "text-red-400"
+                    a.recommendation === "SIGN" ? "text-success" :
+                    a.recommendation === "MONITOR" ? "text-warning" :
+                    "text-destructive"
                   }`}>
                     <CheckCircle2 className="w-3 h-3" />
                     {a.recommendation}
