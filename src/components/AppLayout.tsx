@@ -1,10 +1,11 @@
-import { Suspense, useLayoutEffect } from "react";
+import { Suspense, useLayoutEffect, useState, useEffect } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { LayoutDashboard, Users, LogOut, MessageCircle, Bot, GraduationCap } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, MessageCircle, Bot, GraduationCap, Search } from "lucide-react";
 import { TenantCrest } from "@/components/TenantCrest";
 import { TenantSwitcher } from "@/components/TenantSwitcher";
+import { CommandPalette } from "@/components/CommandPalette";
 import { SPRING_BOUNCY, EASE_OUT_QUART } from "@/lib/motion";
 
 const InlineLoader = () => (
@@ -36,10 +37,23 @@ const navItems = [
 
 const AppLayout = ({ onSignOut }: AppLayoutProps) => {
   const { pathname } = useLocation();
+  const [cmdOpen, setCmdOpen] = useState(false);
 
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
   }, [pathname]);
+
+  // Global ⌘K / Ctrl+K command palette
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCmdOpen((v) => !v);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background relative overflow-x-hidden">
@@ -63,6 +77,17 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
         </div>
         {/* Tenant switcher (hidden when only one tenant) */}
         <TenantSwitcher variant="sidebar" />
+
+        {/* Command palette trigger */}
+        <div className="px-3 pt-1 pb-2">
+          <button type="button" onClick={() => setCmdOpen(true)}
+            aria-label="Öppna sök (Command K)"
+            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-sm text-sm text-sidebar-foreground/50 bg-sidebar-accent/40 border border-sidebar-border hover:text-sidebar-foreground hover:border-accent/40 transition-colors">
+            <Search className="w-3.5 h-3.5" />
+            <span className="flex-1 text-left">Sök</span>
+            <kbd className="text-[10px] rounded-sm border border-sidebar-border px-1.5 py-0.5">⌘K</kbd>
+          </button>
+        </div>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-5 space-y-1" aria-label="Huvudnavigation">
@@ -148,6 +173,8 @@ const AppLayout = ({ onSignOut }: AppLayoutProps) => {
           </NavLink>
         ))}
       </nav>
+
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
       <div aria-live="polite" aria-atomic="true" className="sr-only" id="app-live-region" />
     </div>
