@@ -1,5 +1,14 @@
 # Changelog
 
+## Sprint 213 — P0 RLS-fix: passthrough SELECT-policyer (2026-07-17)
+- **P0 säkerhet (DBH-audit 2026-06-08):** Tre passthrough SELECT-policyer med `qual=true` gav cross-tenant läsning. Droppade: `hooks_read_scout_pipelines` (anon) + `pipelines_select_authenticated` (authenticated) på `scout_analysis_pipelines`; `violations_select_authenticated` (authenticated) på `scout_analysis_violations`.
+- **Behållna:** `pipelines_all_service_role` + `violations_all_service_role` (service_role ALL). RLS förblir enabled → default-deny för anon/authenticated.
+- **Åtkomst opåverkad:** Alla scout-enforcement-RPC:er är SECURITY DEFINER (immuna mot RLS). 0 klientkonsumenter över alla 5 repon (verifierat).
+- **Känd regression (accepterad):** `session-end-unpushed.py` läste `scout_analysis_pipelines` via anon → fail-openar nu (ingen krash), tappar scout-unpushed-varning. P1 loggad: migrera hooken till SECURITY DEFINER-RPC.
+- **Least-privilege-härdning (V64 P2):** `REVOKE ALL ... FROM authenticated` på båda tabellerna — tog bort oanvända Supabase-default table-grants. Tabellerna är nu låsta till `service_role` + SECURITY DEFINER-RPC:er (RLS + grants i samklang, inte RLS som enda spärr).
+- **Migrationer:** `sprint213_scout_rls_drop_passthrough_select_policies` + `sprint213_scout_rls_revoke_authenticated_table_grants`. Reversibla via `CREATE POLICY` / `GRANT`.
+- **VCE09 ACQUITTED/GO** (24 tool calls, 5 attacker). **V64 GO 9.33/10.** **V65 Migration Guardian GO** (0 nya issues). **C91 Kerstiens GO LOW.**
+
 ## Sprint 211 — Football Coaches Data Quality (2026-06-13)
 - **`is_active` lifecycle:** Deactivate-then-upsert pattern i `syncCoaches()` — coaches som API-Football inte längre returnerar markeras automatiskt inaktiva.
 - **3 nya kolumner på `football_coaches`:** `is_active` (boolean), `last_confirmed_at` (timestamptz), `role` (text). Index på `(current_team_id, is_active)`.
