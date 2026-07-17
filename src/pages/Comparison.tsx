@@ -60,8 +60,8 @@ function DimensionTable({ entries, playerNames }: { entries: AnalysisEntry[]; pl
 
   if (anyLoading) {
     return (
-      <div className="rounded-xl glass-premium p-6 space-y-2">
-        <span className="section-tag block mb-4">Dimensioner</span>
+      <div className="card-editorial p-6 space-y-2">
+        <span className="eyebrow mb-4">Dimensioner</span>
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-6 rounded skeleton-shimmer" />
         ))}
@@ -71,8 +71,8 @@ function DimensionTable({ entries, playerNames }: { entries: AnalysisEntry[]; pl
 
   if (allEmpty) {
     return (
-      <div className="rounded-xl glass-premium p-6">
-        <span className="section-tag block mb-3">Dimensioner</span>
+      <div className="card-editorial p-6">
+        <span className="eyebrow mb-3">Dimensioner</span>
         <p className="text-xs text-muted-foreground/70">
           Ingen analys har körts ännu. Kör en AI-analys på spelarprofilsidan för att se dimensionspoäng här.
         </p>
@@ -81,9 +81,9 @@ function DimensionTable({ entries, playerNames }: { entries: AnalysisEntry[]; pl
   }
 
   return (
-    <div className="rounded-xl glass-premium gradient-accent-top overflow-hidden">
+    <div className="card-editorial overflow-hidden">
       <div className="p-5 pb-3">
-        <span className="section-tag block mb-1">Dimensioner</span>
+        <span className="eyebrow mb-1">Dimensioner</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -146,7 +146,7 @@ function PlayerColumn({ playerId, index, analysisEntry }: { playerId: string; in
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.08, duration: 0.3 }}
-        className="flex-1 rounded-xl glass-premium p-5 space-y-3"
+        className="flex-1 card-editorial p-5 space-y-3"
       >
         <div className="h-5 w-32 rounded skeleton-shimmer" />
         <div className="h-4 w-24 rounded skeleton-shimmer" />
@@ -156,7 +156,7 @@ function PlayerColumn({ playerId, index, analysisEntry }: { playerId: string; in
 
   if (!player) {
     return (
-      <div className="flex-1 rounded-xl glass-premium p-5">
+      <div className="flex-1 card-editorial p-5">
         <p className="text-sm text-muted-foreground/60">Spelare hittades inte.</p>
       </div>
     );
@@ -171,7 +171,7 @@ function PlayerColumn({ playerId, index, analysisEntry }: { playerId: string; in
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.3 }}
-      className="flex-1 rounded-xl glass-premium p-5"
+      className="flex-1 card-editorial p-5"
     >
       <div className="flex items-start gap-3 mb-3">
         {/* Score circle with conditional color (VCE09 KRAV 1) */}
@@ -302,7 +302,7 @@ const Comparison = () => {
       </motion.div>
 
       {playerIds.length === 0 ? (
-        <div className="rounded-xl glass-premium p-8 text-center">
+        <div className="card-editorial p-8 text-center">
           <GitCompare className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">Inga spelare valda. Gå till en spelarprofil och välj Jämför.</p>
           <Link to="/players" className="inline-flex items-center gap-1.5 mt-4 text-sm text-primary hover:underline">
@@ -334,9 +334,9 @@ const Comparison = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="rounded-xl glass-premium card-accent-left p-5"
+              className="card-editorial card-accent-left p-5"
             >
-              <span className="section-tag block mb-3">Spara jämförelse</span>
+              <span className="eyebrow mb-3">Spara jämförelse</span>
               <div className="flex items-center gap-3">
                 <input
                   type="text"
@@ -370,9 +370,9 @@ const Comparison = () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="rounded-xl glass-premium p-6"
+          className="card-editorial p-6"
         >
-          <span className="section-tag block mb-3">Sparade jämförelser</span>
+          <span className="eyebrow mb-3">Sparade jämförelser</span>
           <ul className="space-y-2">
             {savedComparisons.map((c) => (
               <li key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-card/50 border border-border/30">

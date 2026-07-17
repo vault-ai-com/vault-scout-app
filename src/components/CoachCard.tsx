@@ -16,7 +16,7 @@ interface CoachCardProps {
 export function CoachCard({ coach }: CoachCardProps) {
   return (
     <Link to={`/coaches/${coach.id}`}
-      className="block rounded-xl p-4 glass-premium gradient-accent-top card-interactive group">
+      className="block card-editorial card-interactive p-4 group">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl icon-premium flex items-center justify-center flex-shrink-0">
           <User className="w-[18px] h-[18px] text-accent" />

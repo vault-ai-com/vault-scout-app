@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Brain, Loader2, AlertTriangle, Shield, Zap } from "lucide-react";
+import { Loader2, AlertTriangle, Shield, Zap } from "lucide-react";
 import { COACH_ARCHETYPE_LABELS, COACH_ARCHETYPE_COLORS, DATA_SOURCE_LABELS } from "@/types/scout";
 import type { DataSourceQuality } from "@/types/scout";
 import type { CoachPersonalityResponse } from "@/hooks/use-coach-personality";
@@ -79,12 +79,9 @@ export function CoachPersonalityPanel({ data, loading, error, onAnalyze }: Coach
   const profile = data?.profile ?? null;
 
   return (
-    <div className="rounded-xl p-6 md:p-8 glass-premium card-accent-left space-y-4">
+    <div className="card-editorial card-accent-left p-6 md:p-8 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="section-tag flex items-center gap-1.5">
-          <Brain className="w-3.5 h-3.5" />
-          Tränarpersonlighet (BPA)
-        </h3>
+        <h3 className="eyebrow">Tränarpersonlighet (BPA)</h3>
         {!profile && !loading && (
           <button type="button" onClick={onAnalyze}
             className="px-3 py-1.5 rounded-lg text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10 btn-premium transition-colors">

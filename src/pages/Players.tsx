@@ -107,7 +107,7 @@ const Players = () => {
             <ArrowLeft className="w-4 h-4 text-muted-foreground" />
           </Link>
           <div>
-            <span className="section-tag">Spelare</span>
+            <span className="eyebrow">Spelare</span>
             <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1 tracking-tight">Bevakningslista</h1>
           </div>
         </div>

@@ -14,7 +14,7 @@ const InlineLoader = () => (
     <div className="h-8 w-48 rounded-xl skeleton-shimmer" />
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
       {[0, 1, 2].map(i => (
-        <div key={i} className="rounded-xl p-5 glass-premium gradient-accent-top">
+        <div key={i} className="card-editorial p-5">
           <div className="h-3 w-20 rounded skeleton-shimmer mb-3" />
           <div className="h-8 w-24 rounded skeleton-shimmer mb-2" />
           <div className="h-3 w-16 rounded skeleton-shimmer" />

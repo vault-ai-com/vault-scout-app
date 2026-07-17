@@ -46,7 +46,7 @@ export function CoachAnalysisPanel({ result, loading, error, onAnalyze }: CoachA
 
       {loading && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className="flex items-center gap-2 p-4 rounded-xl glass-premium" role="status" aria-live="polite">
+          className="flex items-center gap-2 p-4 card-editorial" role="status" aria-live="polite">
           <Loader2 className="w-4 h-4 animate-spin text-accent" />
           <span className="text-sm text-muted-foreground">Analyserar tränare...</span>
         </motion.div>
@@ -82,17 +82,17 @@ export function CoachAnalysisPanel({ result, loading, error, onAnalyze }: CoachA
             </div>
           </div>
 
-          <div className="rounded-xl p-4 glass-premium">
+          <div className="card-editorial p-4">
             <p className="text-sm text-foreground/90 leading-relaxed">{result.summary}</p>
           </div>
 
-          <div className="rounded-xl p-4 glass-premium">
-            <h3 className="section-tag mb-3">CDIM-analys (16 dimensioner)</h3>
+          <div className="card-editorial p-4">
+            <h3 className="eyebrow mb-3">CDIM-analys (16 dimensioner)</h3>
             <DimensionChart scores={result.dimension_scores} labelMap={COACH_DIMENSION_LABELS} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="rounded-xl p-4 glass-premium card-accent-left-green">
+            <div className="card-editorial p-4 card-accent-left-green">
               <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Styrkor</h3>
               <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.strengths.map((s, i) => (
@@ -103,7 +103,7 @@ export function CoachAnalysisPanel({ result, loading, error, onAnalyze }: CoachA
                 ))}
               </motion.ul>
             </div>
-            <div className="rounded-xl p-4 glass-premium card-accent-left-red">
+            <div className="card-editorial p-4 card-accent-left-red">
               <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Svagheter</h3>
               <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.weaknesses.map((w, i) => (
@@ -117,7 +117,7 @@ export function CoachAnalysisPanel({ result, loading, error, onAnalyze }: CoachA
           </div>
 
           {result.risk_factors.length > 0 && (
-            <div className="rounded-xl p-4 glass-premium card-accent-left-gold">
+            <div className="card-editorial p-4 card-accent-left-gold">
               <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Riskfaktorer</h3>
               <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.risk_factors.map((r, i) => (
