@@ -15,7 +15,6 @@ const Dashboard = lazyRetry(() => import("./pages/Dashboard"));
 const Players = lazyRetry(() => import("./pages/Players"));
 const PlayerDetail = lazyRetry(() => import("./pages/PlayerDetail"));
 const BosseChat = lazyRetry(() => import("./pages/BosseChat"));
-const ScoutAgents = lazyRetry(() => import("./pages/ScoutAgents"));
 const Coaches = lazyRetry(() => import("./pages/Coaches"));
 const CoachDetail = lazyRetry(() => import("./pages/CoachDetail"));
 const Comparison = lazyRetry(() => import("./pages/Comparison"));
@@ -62,7 +61,6 @@ const AppRoutes = () => {
         <Route path="/opponents/:id" element={<ErrorBoundary fallbackMessage="Matchunderlaget kunde inte laddas."><MatchReport /></ErrorBoundary>} />
         <Route path="/coaches" element={<ErrorBoundary fallbackMessage="Tränarlistan kunde inte laddas."><Coaches /></ErrorBoundary>} />
         <Route path="/coaches/:id" element={<ErrorBoundary fallbackMessage="Tränarprofilen kunde inte laddas."><CoachDetail /></ErrorBoundary>} />
-        <Route path="/agents" element={<ErrorBoundary fallbackMessage="Agenterna kunde inte laddas."><ScoutAgents /></ErrorBoundary>} />
         <Route path="/chat" element={<ErrorBoundary fallbackMessage="Chatten kunde inte laddas."><BosseChat /></ErrorBoundary>} />
         <Route path="/comparison" element={<ErrorBoundary fallbackMessage="Jämförelsen kunde inte laddas."><Comparison /></ErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
