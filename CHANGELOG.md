@@ -1,5 +1,14 @@
 # Changelog
 
+## Sprint 219 — Världsklass-lyft: färgsystem + Comparison + Zod-härdning (2026-07-18)
+- **Färgsystem enhetliggjort:** migrerade hårdkodat `emerald/amber/red` → semantiska designtokens (`text-success`/`warning`/`destructive`) i 6 komponenter (AdvisorReviewPanel, DimensionChart, PersonalityPanel, CoachCard, CoachAnalysisPanel, CoachPersonalityPanel) + delade konstanter `VERDICT_COLORS`/`RECOMMENDATION_COLORS` i types/scout.ts. Röd → `--destructive` (dual-theme-tunat) ej föräldralösa `--danger`. VCE09-prosecutor fångade att migreringen läckte via delade konstanter — remedierat.
+- **Kategoriska paletter medvetet kvar:** `ARCHETYPE_COLORS`/`TIER_COLORS`/`COACH_ARCHETYPE_COLORS` är multi-hue identitetsfärger (nominella, ej status-semantiska) → kommenterade som separat concern. C94 Brad Frost bekräftade beslutet (att tvinga dem på status-tokens = kategorifel).
+- **Comparison-sidan → dossier-paritet:** omskriven 400→270 rader + 4 nya filer. `use-comparison-slots` (fixed-arity `useGetPlayer`×3/`usePlayerLatestAnalysis`×3 → Rules-of-Hooks-säker), `ComparisonSlots` (1-3 platser + lägg-till-CTA + X på ej-laddad plats = ingen dead-end), `ComparisonMatrix` (StatGrid-stil grupperad, bäst-i-grupp via `--success`, delta-chips, fel≠tomt via ErrorBanner), `ComparisonVerdictBar` (overall-mini-bars + gold vinnar-badge). Breadcrumb + SectionShell (delad m PlayerDetail).
+- **Fail-closed Zod-härdning:** `use-player-latest-analysis` fick `safeParse`-med-throw + explicita kolumner (as-cast borttaget), 4 hooks payload-narrowing (`select("*")` → explicita kolumner), `chat.ts`/`scout.ts` nullability mot live-DB. VQA04 fastställde 9/10 kontrakt redan Zod-validerade.
+- **18 filer, +1024/−443.** tsc 0/vite 0 (byggt ~11s). Touch-target-fix: Comparison remove-X 36→44px.
+- **Gates:** V61 0 fel, VCE09 GO (fångade färgläcka), V64 Blind Critic 8.29/10 (22/23), VCE01 dataflöde 10/10 intakt, VQA03 designtokens 100%, VFE04 UX-gate GO (efter dead-end/error-masking-fix). Advisor C94 Brad Frost GO/LOW. Pipeline 1906064b.
+- **Fast-follow:** promota kategoriska paletter till token-scale `--cat-1..8` (Brad Frost-rek); separat dep-uppgraderingssprint (vitest/vite dev-vulns).
+
 ## Sprint 218 — App-wide editorial-token migrering (2026-07-17)
 - **`glass-premium` → `card-editorial`:** Migrerade kvarvarande legacy-kort till editorial-systemet i 7 filer (CoachCard, PlayerCard, CoachAnalysisPanel, CoachPersonalityPanel, AppLayout-skeleton, Comparison, Players watchlist-header). `card-editorial` ger egen radie + guld-hårlinje (::before) — släppte redundant `gradient-accent-top`.
 - **`section-tag` → `eyebrow`:** Designsystemets föredragna etikett. `icon-premium` behållet (current token, matchar Dashboard/Opponents — ej legacy). Semantiska `card-accent-left-green/red/gold`-kanter bevarade.
