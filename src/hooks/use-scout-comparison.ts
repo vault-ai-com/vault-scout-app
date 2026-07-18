@@ -10,7 +10,7 @@ export function useComparisons() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("scout_comparisons")
-        .select("*")
+        .select("id, title, player_ids, created_at")
         .order("created_at", { ascending: false });
       if (error) throw new Error(error.message);
       return safeArray(ComparisonEntrySchema, data);

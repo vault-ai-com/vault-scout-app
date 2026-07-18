@@ -4,9 +4,9 @@ import type { ScoutCoach } from "@/types/scout";
 import { TIER_LABELS, TIER_COLORS, COACH_CAREER_PHASE_LABELS } from "@/types/scout";
 
 const recColors: Record<string, string> = {
-  SIGN: "text-emerald-400",
-  MONITOR: "text-amber-400",
-  PASS: "text-red-400",
+  SIGN: "text-success",
+  MONITOR: "text-warning",
+  PASS: "text-destructive",
 };
 
 interface CoachCardProps {

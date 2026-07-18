@@ -44,7 +44,7 @@ function ScoreBar({ score, label, evidence }: { score: number; label: string; ev
   const clamped = Math.min(10, Math.max(1, score));
   const pct = (clamped / 10) * 100;
   const color =
-    clamped >= 7 ? "bg-emerald-500" : clamped >= 4 ? "bg-amber-500" : "bg-red-500";
+    clamped >= 7 ? "bg-success" : clamped >= 4 ? "bg-warning" : "bg-destructive";
 
   return (
     <div className="space-y-1">
@@ -145,7 +145,7 @@ export function PersonalityPanel({ profile, loading, error, onAnalyze }: Persona
                   {top3.map((d) => (
                     <div key={d.key} className="flex items-center gap-1.5">
                       <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-extrabold ${
-                        d.dim.score >= 7 ? "border-emerald-500/60 text-emerald-400" : d.dim.score >= 4 ? "border-amber-500/60 text-amber-400" : "border-red-500/60 text-red-400"
+                        d.dim.score >= 7 ? "border-success/60 text-success" : d.dim.score >= 4 ? "border-warning/60 text-warning" : "border-destructive/60 text-destructive"
                       }`}>
                         {d.dim.score.toFixed(0)}
                       </div>
@@ -198,8 +198,8 @@ export function PersonalityPanel({ profile, loading, error, onAnalyze }: Persona
               {profile.contradiction_score && (() => {
                 const cs = profile.contradiction_score as ContradictionDimension;
                 const pct = Math.round(cs.score * 100);
-                const color = pct >= 70 ? "text-red-400" : pct >= 40 ? "text-amber-400" : "text-emerald-400";
-                const barColor = pct >= 70 ? "bg-red-500" : pct >= 40 ? "bg-amber-500" : "bg-emerald-500";
+                const color = pct >= 70 ? "text-destructive" : pct >= 40 ? "text-warning" : "text-success";
+                const barColor = pct >= 70 ? "bg-destructive" : pct >= 40 ? "bg-warning" : "bg-success";
                 return (
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
@@ -232,25 +232,25 @@ export function PersonalityPanel({ profile, loading, error, onAnalyze }: Persona
           {/* Coaching approach + Integration risks */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <h4 className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider mb-1.5">
+              <h4 className="text-[10px] font-semibold text-success uppercase tracking-wider mb-1.5">
                 Coachingförslag
               </h4>
               <ul className="space-y-1">
                 {profile.coaching_approach.map((item, i) => (
                   <li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5">
-                    <span className="text-emerald-400 mt-0.5">→</span> {item}
+                    <span className="text-success mt-0.5">→</span> {item}
                   </li>
                 ))}
               </ul>
             </div>
             <div>
-              <h4 className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-1.5">
+              <h4 className="text-[10px] font-semibold text-warning uppercase tracking-wider mb-1.5">
                 Integrationsrisker
               </h4>
               <ul className="space-y-1">
                 {profile.integration_risks.map((item, i) => (
                   <li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5">
-                    <AlertTriangle className="w-3 h-3 text-amber-400 mt-0.5 flex-shrink-0" /> {item}
+                    <AlertTriangle className="w-3 h-3 text-warning mt-0.5 flex-shrink-0" /> {item}
                   </li>
                 ))}
               </ul>

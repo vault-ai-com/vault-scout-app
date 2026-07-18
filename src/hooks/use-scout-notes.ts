@@ -10,7 +10,7 @@ export function usePlayerNotes(playerId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("scout_notes")
-        .select("*")
+        .select("id, player_id, title, content, created_at, updated_at")
         .eq("player_id", playerId)
         .order("created_at", { ascending: false });
       if (error) throw new Error(error.message);

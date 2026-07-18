@@ -3,7 +3,7 @@ import { z } from "zod";
 // --- Chat session schema ---
 export const ChatSessionSchema = z.object({
   id: z.string(),
-  user_id: z.string(),
+  user_id: z.string().nullable(),
   title: z.string().nullable(),
   player_id: z.string().nullable(),
   agent_id: z.string().nullable().optional(),
@@ -16,7 +16,7 @@ export type ChatSession = z.infer<typeof ChatSessionSchema>;
 // --- Chat message schema ---
 export const ChatMessageSchema = z.object({
   id: z.string(),
-  session_id: z.string(),
+  session_id: z.string().nullable(),
   role: z.enum(["user", "assistant"]),
   content: z.string(),
   metadata: z.record(z.unknown()).nullable(),

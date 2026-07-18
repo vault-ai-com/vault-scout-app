@@ -16,7 +16,7 @@ export function useMatchReports() {
     queryFn: async () => {
       let query = supabase
         .from("match_reports")
-        .select("*")
+        .select("id, tenant_id, home_team, away_team, match_date, competition, venue, status, report_data, created_at, updated_at")
         .order("match_date", { ascending: true, nullsFirst: false });
       if (currentTenant) {
         query = query.eq("tenant_id", currentTenant.tenantId);
@@ -37,7 +37,7 @@ export function useMatchReport(id: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("match_reports")
-        .select("*")
+        .select("id, tenant_id, home_team, away_team, match_date, competition, venue, status, report_data, created_at, updated_at")
         .eq("id", id as string)
         .maybeSingle();
       if (error) throw new Error(error.message);

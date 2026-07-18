@@ -204,6 +204,9 @@ export const ARCHETYPE_LABELS: Record<CompositeArchetype, string> = {
   RELIABLE_SOLDIER: "Pålitlig Soldat",
 };
 
+// Categorical identity palette (multi-hue) — intentionally NOT status tokens
+// (success/warning/danger). Each archetype has its own hue; a separate
+// design-system concern from the status-color unification (Sprint 219).
 export const ARCHETYPE_COLORS: Record<CompositeArchetype, string> = {
   COMPLETE_PROFESSIONAL: "bg-primary/10 text-primary border-primary/20",
   HIGH_PERFORMING_SOLO: "bg-amber-500/10 text-amber-400 border-amber-500/20",
@@ -323,6 +326,8 @@ export const TIER_LABELS: Record<string, string> = {
   development: "Talang",
 };
 
+// Categorical tier palette (multi-hue identity, not a good/mid/bad gradient) —
+// intentionally NOT status tokens. Separate design-system concern (Sprint 219).
 export const TIER_COLORS: Record<string, string> = {
   world_class: "bg-purple-500/10 text-purple-400 border-purple-500/20",
   elite: "bg-amber-500/10 text-amber-400 border-amber-500/20",
@@ -332,9 +337,9 @@ export const TIER_COLORS: Record<string, string> = {
 };
 
 export const RECOMMENDATION_COLORS: Record<Recommendation, string> = {
-  SIGN: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  MONITOR: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-  PASS: "text-red-400 bg-red-500/10 border-red-500/20",
+  SIGN: "text-success bg-success/10 border-success/20",
+  MONITOR: "text-warning bg-warning/10 border-warning/20",
+  PASS: "text-destructive bg-destructive/10 border-destructive/20",
   INSUFFICIENT_DATA: "text-zinc-400 bg-zinc-500/10 border-zinc-500/20",
 };
 
@@ -415,9 +420,9 @@ export const VERDICT_LABELS: Record<AdvisorVerdict, string> = {
 };
 
 export const VERDICT_COLORS: Record<AdvisorVerdict, string> = {
-  AGREE: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  CHALLENGE: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-  FLAG: "text-red-400 bg-red-500/10 border-red-500/20",
+  AGREE: "text-success bg-success/10 border-success/20",
+  CHALLENGE: "text-warning bg-warning/10 border-warning/20",
+  FLAG: "text-destructive bg-destructive/10 border-destructive/20",
 };
 
 // --- Coach Career Phase ---
@@ -521,6 +526,8 @@ export const COACH_ARCHETYPE_LABELS: Record<string, string> = {
   CULTURE_BUILDER: "Kulturskapare",
 };
 
+// Categorical identity palette (multi-hue) — intentionally NOT status tokens.
+// Separate design-system concern from status-color unification (Sprint 219).
 export const COACH_ARCHETYPE_COLORS: Record<string, string> = {
   VISIONARY_INNOVATOR: "bg-purple-500/10 text-purple-400 border-purple-500/20",
   IRON_DISCIPLINARIAN: "bg-red-500/10 text-red-400 border-red-500/20",
@@ -569,7 +576,7 @@ export const ComparisonEntrySchema = z.object({
   result_data: z.record(z.unknown()).nullable().optional(),
   winner_player_id: z.string().nullable().optional(),
   summary: z.string().nullable().optional(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string().nullable().optional(),
 });
 export type ComparisonEntry = z.infer<typeof ComparisonEntrySchema>;

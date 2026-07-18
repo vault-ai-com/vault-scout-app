@@ -15,7 +15,7 @@ export function useChatSessions(agentId?: string | null) {
     queryFn: async () => {
       let query = supabase
         .from("scout_chat_sessions")
-        .select("*")
+        .select("id, user_id, title, player_id, agent_id, created_at, updated_at, message_count")
         .order("updated_at", { ascending: false });
 
       if (agentId) {
@@ -39,7 +39,7 @@ export function useChatMessages(sessionId: string | null) {
       if (!sessionId) return [];
       const { data, error } = await supabase
         .from("scout_chat_messages")
-        .select("*")
+        .select("id, session_id, role, content, metadata, created_at")
         .eq("session_id", sessionId)
         .order("created_at", { ascending: true });
       if (error) throw new Error(error.message);

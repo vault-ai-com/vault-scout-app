@@ -13,11 +13,11 @@ interface AdvisorReviewPanelProps {
 function VerdictIcon({ verdict }: { verdict: AdvisorOpinion["verdict"] }) {
   switch (verdict) {
     case "AGREE":
-      return <CheckCircle className="w-4 h-4 text-emerald-400" />;
+      return <CheckCircle className="w-4 h-4 text-success" />;
     case "CHALLENGE":
-      return <MessageSquare className="w-4 h-4 text-amber-400" />;
+      return <MessageSquare className="w-4 h-4 text-warning" />;
     case "FLAG":
-      return <ShieldAlert className="w-4 h-4 text-red-400" />;
+      return <ShieldAlert className="w-4 h-4 text-destructive" />;
   }
 }
 
@@ -56,11 +56,11 @@ function OpinionCard({ opinion }: { opinion: AdvisorOpinion }) {
       {/* Risk flags */}
       {opinion.risk_flags.length > 0 && (
         <div>
-          <h5 className="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1">Risker</h5>
+          <h5 className="text-[10px] font-semibold text-destructive uppercase tracking-wider mb-1">Risker</h5>
           <ul className="space-y-0.5">
             {opinion.risk_flags.map((flag, i) => (
               <li key={i} className="text-[11px] text-foreground/70 flex items-start gap-1.5">
-                <AlertTriangle className="w-3 h-3 text-red-400 mt-0.5 flex-shrink-0" />
+                <AlertTriangle className="w-3 h-3 text-destructive mt-0.5 flex-shrink-0" />
                 {flag}
               </li>
             ))}
@@ -71,11 +71,11 @@ function OpinionCard({ opinion }: { opinion: AdvisorOpinion }) {
       {/* Recommendations */}
       {opinion.recommendations.length > 0 && (
         <div>
-          <h5 className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider mb-1">Rekommendationer</h5>
+          <h5 className="text-[10px] font-semibold text-success uppercase tracking-wider mb-1">Rekommendationer</h5>
           <ul className="space-y-0.5">
             {opinion.recommendations.map((rec, i) => (
               <li key={i} className="text-[11px] text-foreground/70 flex items-start gap-1.5">
-                <span className="text-emerald-400 mt-0.5">→</span> {rec}
+                <span className="text-success mt-0.5">→</span> {rec}
               </li>
             ))}
           </ul>
@@ -136,10 +136,10 @@ export function AdvisorReviewPanel({ review, loading, error, onReview }: Advisor
           {review.consensus && (
             <div className={`rounded-lg p-3 border text-sm font-medium ${
               review.opinions.some((o) => o.verdict === "FLAG")
-                ? "bg-red-500/10 border-red-500/20 text-red-400"
+                ? "bg-destructive/10 border-destructive/20 text-destructive"
                 : review.opinions.every((o) => o.verdict === "AGREE")
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                  : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                  ? "bg-success/10 border-success/20 text-success"
+                  : "bg-warning/10 border-warning/20 text-warning"
             }`}>
               {review.consensus}
             </div>

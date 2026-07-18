@@ -1,281 +1,61 @@
-import { useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useCallback, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, GitCompare, Plus, Loader2, Save } from "lucide-react";
-import { useGetPlayer } from "@/hooks/use-scout-search";
-import { usePlayerLatestAnalysis } from "@/hooks/use-player-latest-analysis";
+import { AlertTriangle, ChevronRight, GitCompare, Loader2, Plus, Save } from "lucide-react";
+import { useComparisonSlots } from "@/hooks/use-comparison-slots";
 import { useComparisons, useCreateComparison } from "@/hooks/use-scout-comparison";
-import { TIER_LABELS, TIER_COLORS, DIMENSION_LABELS, RECOMMENDATION_COLORS } from "@/types/scout";
-import type { Recommendation } from "@/types/scout";
+import { ComparisonSlots } from "@/components/comparison/ComparisonSlots";
+import { ComparisonMatrix } from "@/components/comparison/ComparisonMatrix";
+import { ComparisonVerdictBar } from "@/components/comparison/ComparisonVerdictBar";
+import { SectionShell } from "@/components/report";
+import { EmptyState } from "@/components/EmptyState";
+import { EASE_OUT_QUART } from "@/lib/motion";
 
-// --- Score color helper (VCE09 KRAV 1: conditional colors) ---
-function scoreColor(score: number): string {
-  if (score >= 7) return "text-emerald-400 border-emerald-500/30";
-  if (score >= 4) return "text-amber-400 border-amber-500/30";
-  return "text-red-400 border-red-500/30";
+// SectionShell requires a registerRef callback (shared contract with
+// PlayerDetail's scroll-spy). This page has no scroll-spy (V55: over-
+// engineering for a short page) — a stable no-op keeps the same primitive.
+function noopRegisterRef(): void {
+  // intentionally empty
 }
 
-// --- ScoreBar: color-coded bar (VCE09 KRAV 2: nullable, KRAV 3: clamp 0-10) ---
-function ScoreBar({ score }: { score: number | null }) {
-  if (score == null) {
-    return <div className="h-2 rounded-full bg-border/30 w-full" title="Ingen data" />;
-  }
-  const clamped = Math.min(10, Math.max(0, score));
-  const pct = (clamped / 10) * 100;
-  const bg = clamped >= 7 ? "bg-emerald-500" : clamped >= 4 ? "bg-amber-500" : "bg-red-500";
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 rounded-full bg-border/30 overflow-hidden">
-        <div className={`h-full rounded-full ${bg} transition-all duration-500`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-[11px] font-mono tabular-nums text-muted-foreground w-6 text-right">{clamped.toFixed(1)}</span>
-    </div>
-  );
-}
-
-// --- Analysis result type for props ---
-interface AnalysisEntry {
-  analysis: {
-    id: string;
-    overall_score: number | null;
-    confidence: number | null;
-    recommendation: string | null;
-    summary: string | null;
-  } | null;
-  scores: Array<{
-    dimension_id: string;
-    dimension_name: string;
-    score: number | null;
-  }>;
-  isLoading: boolean;
-}
-
-// --- DimensionTable (VCE09 KRAV 4: iterate DIMENSION_LABELS, KRAV 5: explicit empty-state) ---
-// Analysis data passed as props — NO hooks called in this component (V64 P1 fix)
-function DimensionTable({ entries, playerNames }: { entries: AnalysisEntry[]; playerNames: string[] }) {
-  const dimIds = Object.keys(DIMENSION_LABELS);
-
-  const anyLoading = entries.some((e) => e.isLoading);
-  const allEmpty = entries.every((e) => !e.isLoading && e.analysis == null);
-
-  if (anyLoading) {
-    return (
-      <div className="card-editorial p-6 space-y-2">
-        <span className="eyebrow mb-4">Dimensioner</span>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-6 rounded skeleton-shimmer" />
-        ))}
-      </div>
-    );
-  }
-
-  if (allEmpty) {
-    return (
-      <div className="card-editorial p-6">
-        <span className="eyebrow mb-3">Dimensioner</span>
-        <p className="text-xs text-muted-foreground/70">
-          Ingen analys har körts ännu. Kör en AI-analys på spelarprofilsidan för att se dimensionspoäng här.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card-editorial overflow-hidden">
-      <div className="p-5 pb-3">
-        <span className="eyebrow mb-1">Dimensioner</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border/30">
-              <th className="text-left px-5 py-2 text-muted-foreground/70 font-medium w-44">Dimension</th>
-              {entries.map((_, i) => (
-                <th key={i} className="text-left px-4 py-2 text-muted-foreground/70 font-medium">
-                  {playerNames[i] ?? `Spelare ${i + 1}`}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {dimIds.map((dimId, rowIdx) => (
-              <motion.tr
-                key={dimId}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: Math.min(rowIdx * 0.03, 0.4), duration: 0.25 }}
-                className="border-b border-border/10 hover:bg-card/30 transition-colors"
-              >
-                <td className="px-5 py-2.5">
-                  <span className="text-[10px] font-mono text-primary/60 mr-1.5">{dimId}</span>
-                  <span className="text-muted-foreground">{DIMENSION_LABELS[dimId]}</span>
-                </td>
-                {entries.map((entry, colIdx) => {
-                  if (!entry.analysis) {
-                    return (
-                      <td key={colIdx} className="px-4 py-2.5 text-muted-foreground/40 italic">
-                        Ingen analys
-                      </td>
-                    );
-                  }
-                  const dimScore = entry.scores.find((s) => s.dimension_id === dimId);
-                  return (
-                    <td key={colIdx} className="px-4 py-2.5 min-w-[140px]">
-                      <ScoreBar score={dimScore?.score ?? null} />
-                    </td>
-                  );
-                })}
-              </motion.tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// --- PlayerColumn with analysis summary (VCE09 KRAV 6: separate isLoading/null) ---
-// Analysis data passed as props — hooks called in parent Comparison (V64 P1 fix)
-function PlayerColumn({ playerId, index, analysisEntry }: { playerId: string; index: number; analysisEntry: AnalysisEntry }) {
-  const { data: playerData, isLoading } = useGetPlayer(playerId);
-  const player = playerData?.player ?? null;
-
-  if (isLoading) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.08, duration: 0.3 }}
-        className="flex-1 card-editorial p-5 space-y-3"
-      >
-        <div className="h-5 w-32 rounded skeleton-shimmer" />
-        <div className="h-4 w-24 rounded skeleton-shimmer" />
-      </motion.div>
-    );
-  }
-
-  if (!player) {
-    return (
-      <div className="flex-1 card-editorial p-5">
-        <p className="text-sm text-muted-foreground/60">Spelare hittades inte.</p>
-      </div>
-    );
-  }
-
-  const analysis = analysisEntry.analysis;
-  const analysisLoading = analysisEntry.isLoading;
-  const rec = analysis?.recommendation as Recommendation | null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08, duration: 0.3 }}
-      className="flex-1 card-editorial p-5"
-    >
-      <div className="flex items-start gap-3 mb-3">
-        {/* Score circle with conditional color (VCE09 KRAV 1) */}
-        {analysisLoading ? (
-          <div className="w-11 h-11 rounded-full skeleton-shimmer flex-shrink-0" />
-        ) : analysis?.overall_score != null ? (
-          <div className={`w-11 h-11 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${scoreColor(analysis.overall_score)}`}>
-            <span className="text-sm font-bold font-mono tabular-nums">{analysis.overall_score.toFixed(1)}</span>
-          </div>
-        ) : (
-          <div className="w-11 h-11 rounded-full border-2 border-border/30 flex items-center justify-center flex-shrink-0">
-            <span className="text-[10px] text-muted-foreground/50">–</span>
-          </div>
-        )}
-        <div className="min-w-0">
-          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border mb-1 ${TIER_COLORS[player.tier] ?? TIER_COLORS.development}`}>
-            {TIER_LABELS[player.tier] ?? player.tier}
-          </span>
-          <h3 className="text-base font-bold text-foreground truncate">{player.name}</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{player.position_primary} · {player.current_club}</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 text-xs text-muted-foreground/70 mb-2">
-        <span>{player.age} år</span>
-        <span>·</span>
-        <span>{player.nationality}</span>
-        {player.market_value != null && (
-          <>
-            <span>·</span>
-            <span className="badge-gold text-[10px]">€{(player.market_value / 1_000_000).toFixed(1)}M</span>
-          </>
-        )}
-      </div>
-
-      {/* Recommendation badge */}
-      {analysisLoading ? (
-        <div className="h-5 w-20 rounded skeleton-shimmer" />
-      ) : rec ? (
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${RECOMMENDATION_COLORS[rec] ?? RECOMMENDATION_COLORS.INSUFFICIENT_DATA}`}>
-            {rec}
-          </span>
-          {analysis?.confidence != null && (
-            <span className="text-[10px] text-muted-foreground/50">
-              {(analysis.confidence * 100).toFixed(0)}% konfidens
-            </span>
-          )}
-        </div>
-      ) : (
-        <p className="text-[10px] text-muted-foreground/40 italic">Ingen analys körd</p>
-      )}
-    </motion.div>
-  );
-}
-
-const Comparison = () => {
-  const [searchParams] = useSearchParams();
-  const idsParam = searchParams.get("ids") ?? "";
-  const playerIds = idsParam
+function parsePlayerIds(idsParam: string): string[] {
+  return idsParam
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 3);
+}
+
+const Comparison = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const playerIds = useMemo(() => parsePlayerIds(searchParams.get("ids") ?? ""), [searchParams]);
 
   const [saveTitle, setSaveTitle] = useState("");
   const [saved, setSaved] = useState(false);
 
-  // --- Fixed hook count: always call 3 (Rules of Hooks safe) ---
-  const a0 = usePlayerLatestAnalysis(playerIds[0]);
-  const a1 = usePlayerLatestAnalysis(playerIds[1]);
-  const a2 = usePlayerLatestAnalysis(playerIds[2]);
+  const { entries, playerNames } = useComparisonSlots(playerIds);
 
-  const p0 = useGetPlayer(playerIds[0]);
-  const p1 = useGetPlayer(playerIds[1]);
-  const p2 = useGetPlayer(playerIds[2]);
-
-  const allAnalyses = [a0, a1, a2];
-  const allPlayers = [p0, p1, p2];
-
-  // Build entries sliced to actual player count
-  const analysisEntries: AnalysisEntry[] = playerIds.map((_, i) => {
-    const a = allAnalyses[i];
-    return {
-      analysis: a.data ? {
-        id: a.data.analysis.id,
-        overall_score: a.data.analysis.overall_score,
-        confidence: a.data.analysis.confidence,
-        recommendation: a.data.analysis.recommendation,
-        summary: a.data.analysis.summary,
-      } : null,
-      scores: a.data?.scores.map((s) => ({
-        dimension_id: s.dimension_id,
-        dimension_name: s.dimension_name,
-        score: s.score,
-      })) ?? [],
-      isLoading: a.isLoading,
-    };
-  });
-
-  const playerNames = playerIds.map((_, i) => allPlayers[i].data?.player?.name ?? "");
-
-  const { data: savedComparisons = [], isLoading: loadingComparisons } = useComparisons();
+  const {
+    data: savedComparisons = [],
+    isLoading: loadingComparisons,
+    isError: savedComparisonsIsError,
+    error: savedComparisonsError,
+    refetch: refetchSavedComparisons,
+  } = useComparisons();
   const createComparison = useCreateComparison();
+
+  const handleRemove = useCallback(
+    (playerId: string) => {
+      const next = playerIds.filter((id) => id !== playerId);
+      setSaved(false);
+      if (next.length > 0) {
+        setSearchParams({ ids: next.join(",") });
+      } else {
+        setSearchParams({});
+      }
+    },
+    [playerIds, setSearchParams],
+  );
 
   const handleSave = () => {
     const title = saveTitle.trim() || `Jämförelse ${new Date().toLocaleDateString("sv-SE")}`;
@@ -285,114 +65,230 @@ const Comparison = () => {
     );
   };
 
+  const scoredCount = entries.filter((e) => e.analysis?.overall_score != null).length;
+
+  let sectionNo = 0;
+  const nextNo = () => ++sectionNo;
+
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
-      {/* Back + header */}
-      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <Link to="/players" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-3">
-          <ArrowLeft className="w-4 h-4" />
-          Tillbaka
+    <div className="mx-auto max-w-[1240px] px-5 py-8 md:px-8 md:py-12">
+      {/* Breadcrumb */}
+      <motion.nav
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3, ease: EASE_OUT_QUART }}
+        aria-label="Brödsmulor"
+        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      >
+        <Link to="/" className="min-h-[44px] inline-flex items-center transition-colors hover:text-accent md:min-h-0">
+          Dashboard
         </Link>
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg icon-premium flex items-center justify-center">
-            <GitCompare className="w-4 h-4 text-primary" />
-          </div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight">Jämförelse</h1>
+        <ChevronRight className="h-3 w-3" aria-hidden="true" />
+        <Link to="/players" className="min-h-[44px] inline-flex items-center transition-colors hover:text-accent md:min-h-0">
+          Spelare
+        </Link>
+        <ChevronRight className="h-3 w-3" aria-hidden="true" />
+        <span className="font-medium text-foreground">Jämförelse</span>
+      </motion.nav>
+
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05, ease: EASE_OUT_QUART }}
+        className="mt-5 flex items-center gap-2.5"
+      >
+        <div className="flex h-9 w-9 flex-none items-center justify-center rounded-lg icon-premium">
+          <GitCompare className="h-4 w-4 text-accent" aria-hidden="true" />
+        </div>
+        <div>
+          <span className="eyebrow">Jämförelse</span>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Jämför spelare</h1>
         </div>
       </motion.div>
 
-      {playerIds.length === 0 ? (
-        <div className="card-editorial p-8 text-center">
-          <GitCompare className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Inga spelare valda. Gå till en spelarprofil och välj Jämför.</p>
-          <Link to="/players" className="inline-flex items-center gap-1.5 mt-4 text-sm text-primary hover:underline">
-            <Plus className="w-3.5 h-3.5" />
-            Hitta spelare
-          </Link>
-        </div>
-      ) : (
-        <>
-          {/* Player columns */}
-          <div className="flex gap-3 flex-wrap md:flex-nowrap">
-            {playerIds.map((pid, i) => (
-              <PlayerColumn key={pid} playerId={pid} index={i} analysisEntry={analysisEntries[i]} />
-            ))}
-          </div>
-
-          {/* Dimension comparison table */}
+      <div className="mt-10 space-y-14">
+        {playerIds.length === 0 ? (
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
+            transition={{ duration: 0.4, ease: EASE_OUT_QUART }}
+            className="card-editorial mx-auto max-w-xl p-8 text-center"
           >
-            <DimensionTable entries={analysisEntries} playerNames={playerNames} />
-          </motion.div>
-
-          {/* Save comparison */}
-          {playerIds.length >= 2 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className="card-editorial card-accent-left p-5"
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full icon-premium">
+              <GitCompare className="h-5 w-5 text-accent" aria-hidden="true" />
+            </div>
+            <h2 className="mt-4 text-xl font-bold tracking-tight text-foreground">Inga spelare valda</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Jämför upp till 3 spelare sida vid sida — betyg, dimensioner och rekommendationer i en och samma vy.
+            </p>
+            <Link
+              to="/players"
+              data-testid="comparison-empty-cta"
+              className="mt-6 inline-flex min-h-[44px] items-center gap-2 rounded-sm bg-accent px-4 text-[13px] font-bold text-accent-foreground transition-opacity hover:opacity-90"
             >
-              <span className="eyebrow mb-3">Spara jämförelse</span>
-              <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  placeholder="Titel (valfritt)"
-                  value={saveTitle}
-                  onChange={(e) => setSaveTitle(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-card/60 border border-border/40 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={createComparison.isPending || saved}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground btn-premium disabled:opacity-50 shadow-md shadow-primary/20"
-                >
-                  {createComparison.isPending ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Save className="w-3.5 h-3.5" />
-                  )}
-                  {saved ? "Sparad" : "Spara"}
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </>
-      )}
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Hitta spelare
+            </Link>
+          </motion.div>
+        ) : (
+          <>
+            {/* Spelare */}
+            <SectionShell
+              id="players"
+              index={nextNo()}
+              title="Spelare"
+              sub={
+                playerIds.length < 3
+                  ? "Välj upp till 3 spelare att jämföra sida vid sida."
+                  : "3 av 3 platser fyllda — ta bort en spelare för att byta."
+              }
+              registerRef={noopRegisterRef}
+            >
+              <ComparisonSlots entries={entries} onRemove={handleRemove} />
+              {playerIds.length === 1 && (
+                <p className="mt-3 text-[12px] text-muted-foreground/70">
+                  Lägg till minst en spelare till för att se jämförelse och helhetsbetyg.
+                </p>
+              )}
+            </SectionShell>
 
-      {/* Saved comparisons list */}
-      {!loadingComparisons && savedComparisons.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="card-editorial p-6"
-        >
-          <span className="eyebrow mb-3">Sparade jämförelser</span>
-          <ul className="space-y-2">
-            {savedComparisons.map((c) => (
-              <li key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-card/50 border border-border/30">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{c.title}</p>
-                  <p className="text-xs text-muted-foreground/60">
-                    {c.player_ids.length} spelare · {new Date(c.created_at).toLocaleDateString("sv-SE")}
-                  </p>
+            {/* Helhetsbetyg (VerdictBar) — bara vid ≥2 spelare med score */}
+            {scoredCount >= 2 && (
+              <SectionShell
+                id="verdict"
+                index={nextNo()}
+                title="Helhetsbetyg"
+                sub="Rådata bakom rekommendationen — högst betyg markeras, men avgör inte ensamt vem som passar bäst."
+                registerRef={noopRegisterRef}
+              >
+                <ComparisonVerdictBar entries={entries} />
+              </SectionShell>
+            )}
+
+            {/* Dimensioner */}
+            <SectionShell
+              id="dims"
+              index={nextNo()}
+              title="Dimensioner"
+              sub={
+                playerIds.length >= 2
+                  ? "16 dimensioner i 5 viktade grupper. Bäst i varje dimension markeras grönt — saknad data betygsätts aldrig."
+                  : "16 dimensioner i 5 viktade grupper — saknad data betygsätts aldrig."
+              }
+              registerRef={noopRegisterRef}
+            >
+              <ComparisonMatrix entries={entries} playerNames={playerNames} />
+            </SectionShell>
+
+            {/* Spara — bara vid ≥2 spelare */}
+            {playerIds.length >= 2 && (
+              <SectionShell
+                id="save"
+                index={nextNo()}
+                title="Spara jämförelse"
+                sub="Spara den här uppställningen för att snabbt öppna den igen senare."
+                registerRef={noopRegisterRef}
+              >
+                <div className="card-editorial card-accent-left p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <input
+                      type="text"
+                      placeholder="Titel (valfritt)"
+                      value={saveTitle}
+                      onChange={(e) => {
+                        setSaveTitle(e.target.value);
+                        setSaved(false);
+                      }}
+                      data-testid="comparison-save-title"
+                      className="min-h-[44px] flex-1 rounded-lg border border-border/40 bg-card/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 transition-all focus:outline-none focus:ring-2 focus:ring-accent/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={createComparison.isPending || saved}
+                      data-testid="comparison-save-button"
+                      className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground transition-opacity disabled:opacity-50"
+                    >
+                      {createComparison.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Save className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                      {saved ? "Sparad" : "Spara"}
+                    </button>
+                  </div>
+                  {createComparison.error && (
+                    <p className="mt-2 text-[12px] text-destructive">{createComparison.error.message}</p>
+                  )}
                 </div>
-                <Link
-                  to={`/comparison?ids=${c.player_ids.join(",")}`}
-                  className="text-xs text-primary hover:underline"
+              </SectionShell>
+            )}
+          </>
+        )}
+
+        {/* Sparade jämförelser — alltid tillgänglig, oavsett aktuellt urval */}
+        <SectionShell
+          id="saved"
+          index={nextNo()}
+          title="Sparade jämförelser"
+          sub="Öppna en tidigare sparad uppställning igen."
+          registerRef={noopRegisterRef}
+        >
+          {loadingComparisons ? (
+            <div className="card-editorial space-y-2.5 p-6" aria-busy="true">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-10 rounded-sm skeleton-shimmer" />
+              ))}
+            </div>
+          ) : savedComparisonsIsError ? (
+            <div
+              role="alert"
+              className="flex flex-col items-start gap-2 rounded-sm border border-destructive/25 bg-destructive/[0.07] px-4 py-3 text-sm text-destructive"
+            >
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                Kunde inte ladda sparade jämförelser
+                {savedComparisonsError instanceof Error ? `: ${savedComparisonsError.message}` : "."}
+              </div>
+              <button
+                type="button"
+                onClick={() => void refetchSavedComparisons()}
+                data-testid="comparison-saved-retry"
+                className="inline-flex min-h-[28px] items-center gap-1 text-xs font-semibold underline underline-offset-2 transition-colors hover:text-foreground"
+              >
+                Försök igen
+              </button>
+            </div>
+          ) : savedComparisons.length === 0 ? (
+            <EmptyState>Inga sparade jämförelser ännu.</EmptyState>
+          ) : (
+            <ul className="space-y-2">
+              {savedComparisons.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/30 bg-card/50 p-3"
                 >
-                  Öppna
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </motion.div>
-      )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">{c.title}</p>
+                    <p className="text-xs text-muted-foreground/60">
+                      {c.player_ids.length} spelare ·{" "}
+                      {c.created_at ? new Date(c.created_at).toLocaleDateString("sv-SE") : "—"}
+                    </p>
+                  </div>
+                  <Link
+                    to={`/comparison?ids=${c.player_ids.join(",")}`}
+                    data-testid={`comparison-open-${c.id}`}
+                    className="inline-flex min-h-[44px] flex-none items-center text-xs font-semibold text-accent hover:underline"
+                  >
+                    Öppna
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionShell>
+      </div>
     </div>
   );
 };

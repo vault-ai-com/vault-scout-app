@@ -73,7 +73,7 @@ export function CoachAnalysisPanel({ result, loading, error, onAnalyze }: CoachA
               );
             })()}
             <div className={`w-14 h-14 rounded-full border-2 flex flex-col items-center justify-center ${
-              result.overall_score >= 7 ? "border-emerald-500/60" : result.overall_score >= 4 ? "border-amber-500/60" : "border-red-500/60"
+              result.overall_score >= 7 ? "border-success/60" : result.overall_score >= 4 ? "border-warning/60" : "border-destructive/60"
             }`}>
               <span className="text-lg font-extrabold stat-gold leading-none">{Math.min(10, Math.max(0, result.overall_score)).toFixed(1)}</span>
               <span className="text-[8px] text-muted-foreground leading-none mt-0.5">
@@ -93,23 +93,23 @@ export function CoachAnalysisPanel({ result, loading, error, onAnalyze }: CoachA
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="card-editorial p-4 card-accent-left-green">
-              <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Styrkor</h3>
+              <h3 className="text-xs font-semibold text-success uppercase tracking-wider mb-2">Styrkor</h3>
               <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.strengths.map((s, i) => (
                   <motion.li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5"
                     variants={{ hidden: { opacity: 0, x: -6 }, visible: { opacity: 1, x: 0 } }}>
-                    <span className="text-emerald-400 mt-0.5">+</span> {s}
+                    <span className="text-success mt-0.5">+</span> {s}
                   </motion.li>
                 ))}
               </motion.ul>
             </div>
             <div className="card-editorial p-4 card-accent-left-red">
-              <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Svagheter</h3>
+              <h3 className="text-xs font-semibold text-destructive uppercase tracking-wider mb-2">Svagheter</h3>
               <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.weaknesses.map((w, i) => (
                   <motion.li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5"
                     variants={{ hidden: { opacity: 0, x: -6 }, visible: { opacity: 1, x: 0 } }}>
-                    <span className="text-red-400 mt-0.5">−</span> {w}
+                    <span className="text-destructive mt-0.5">−</span> {w}
                   </motion.li>
                 ))}
               </motion.ul>
@@ -118,12 +118,12 @@ export function CoachAnalysisPanel({ result, loading, error, onAnalyze }: CoachA
 
           {result.risk_factors.length > 0 && (
             <div className="card-editorial p-4 card-accent-left-gold">
-              <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Riskfaktorer</h3>
+              <h3 className="text-xs font-semibold text-warning uppercase tracking-wider mb-2">Riskfaktorer</h3>
               <motion.ul className="space-y-1" initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.05 } } }}>
                 {result.risk_factors.map((r, i) => (
                   <motion.li key={i} className="text-xs text-foreground/80 flex items-start gap-1.5"
                     variants={{ hidden: { opacity: 0, x: -6 }, visible: { opacity: 1, x: 0 } }}>
-                    <AlertTriangle className="w-3 h-3 text-amber-400 mt-0.5 flex-shrink-0" /> {r}
+                    <AlertTriangle className="w-3 h-3 text-warning mt-0.5 flex-shrink-0" /> {r}
                   </motion.li>
                 ))}
               </motion.ul>

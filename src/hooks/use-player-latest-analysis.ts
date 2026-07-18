@@ -1,32 +1,43 @@
 import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 
-interface ScoutAnalysis {
-  id: string;
-  player_id: string;
-  analysis_type: string;
-  status: string;
-  overall_score: number | null;
-  confidence: number | null;
-  recommendation: string | null;
-  strengths: string[] | null;
-  weaknesses: string[] | null;
-  risk_factors: string[] | null;
-  summary: string | null;
-  analysis_data: Record<string, unknown> | null;
-  created_at: string;
-}
+// Explicit column lists — DB ground truth verified against
+// information_schema.columns for scout_analyses / scout_scores. Never select("*").
+const SCOUT_ANALYSIS_COLUMNS =
+  "id, player_id, analysis_type, status, overall_score, confidence, recommendation, summary, strengths, weaknesses, risk_factors, analysis_data, created_at";
 
-interface ScoutScore {
-  id: string;
-  analysis_id: string;
-  player_id: string;
-  dimension_id: string;
-  dimension_name: string;
-  score: number | null;
-  confidence: number | null;
-  evidence: Record<string, unknown> | null;
-}
+const SCOUT_SCORE_COLUMNS =
+  "id, analysis_id, dimension_id, dimension_name, score, confidence, evidence, percentile";
+
+const ScoutAnalysisSchema = z.object({
+  id: z.string(),
+  player_id: z.string().nullable(),
+  analysis_type: z.string(),
+  status: z.string().nullable(),
+  overall_score: z.number().nullable(),
+  confidence: z.number().nullable(),
+  recommendation: z.string().nullable(),
+  summary: z.string().nullable(),
+  strengths: z.array(z.string()).nullable(),
+  weaknesses: z.array(z.string()).nullable(),
+  risk_factors: z.array(z.string()).nullable(),
+  analysis_data: z.record(z.unknown()).nullable(),
+  created_at: z.string().nullable(),
+});
+type ScoutAnalysis = z.infer<typeof ScoutAnalysisSchema>;
+
+const ScoutScoreSchema = z.object({
+  id: z.string(),
+  analysis_id: z.string(),
+  dimension_id: z.string(),
+  dimension_name: z.string(),
+  score: z.number(),
+  confidence: z.number().nullable(),
+  evidence: z.unknown().nullable(),
+  percentile: z.number().nullable(),
+});
+type ScoutScore = z.infer<typeof ScoutScoreSchema>;
 
 interface PlayerLatestAnalysisResult {
   analysis: ScoutAnalysis;
@@ -36,9 +47,9 @@ interface PlayerLatestAnalysisResult {
 async function fetchPlayerLatestAnalysis(
   playerId: string
 ): Promise<PlayerLatestAnalysisResult | null> {
-  const { data: analysis, error: analysisError } = await supabase
+  const { data: analysisRow, error: analysisError } = await supabase
     .from("scout_analyses")
-    .select("*")
+    .select(SCOUT_ANALYSIS_COLUMNS)
     .eq("player_id", playerId)
     .eq("status", "completed")
     .order("created_at", { ascending: false })
@@ -49,23 +60,39 @@ async function fetchPlayerLatestAnalysis(
     throw new Error(analysisError.message);
   }
 
-  if (!analysis) {
+  if (!analysisRow) {
     return null;
   }
 
-  const { data: scores, error: scoresError } = await supabase
+  // Fail-closed: a shape mismatch (schema drift, malformed row, etc.) MUST
+  // surface as an error — never silently cast/drop like the old `as ScoutAnalysis` did.
+  const analysisParsed = ScoutAnalysisSchema.safeParse(analysisRow);
+  if (!analysisParsed.success) {
+    throw new Error(
+      `Invalid scout_analyses row for player ${playerId}: ${analysisParsed.error.message}`
+    );
+  }
+
+  const { data: scoreRows, error: scoresError } = await supabase
     .from("scout_scores")
-    .select("*")
-    .eq("analysis_id", analysis.id)
+    .select(SCOUT_SCORE_COLUMNS)
+    .eq("analysis_id", analysisParsed.data.id)
     .order("dimension_id");
 
   if (scoresError) {
     throw new Error(scoresError.message);
   }
 
+  const scoresParsed = z.array(ScoutScoreSchema).safeParse(scoreRows ?? []);
+  if (!scoresParsed.success) {
+    throw new Error(
+      `Invalid scout_scores rows for analysis ${analysisParsed.data.id}: ${scoresParsed.error.message}`
+    );
+  }
+
   return {
-    analysis: analysis as ScoutAnalysis,
-    scores: (scores ?? []) as ScoutScore[],
+    analysis: analysisParsed.data,
+    scores: scoresParsed.data,
   };
 }
 
