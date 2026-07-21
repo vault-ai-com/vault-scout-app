@@ -6,6 +6,7 @@ import { useComparisonSlots } from "@/hooks/use-comparison-slots";
 import { useComparisons, useCreateComparison } from "@/hooks/use-scout-comparison";
 import { ComparisonSlots } from "@/components/comparison/ComparisonSlots";
 import { ComparisonMatrix } from "@/components/comparison/ComparisonMatrix";
+import { ComparisonRadar } from "@/components/comparison/ComparisonRadar";
 import { ComparisonVerdictBar } from "@/components/comparison/ComparisonVerdictBar";
 import { SectionShell } from "@/components/report";
 import { EmptyState } from "@/components/EmptyState";
@@ -178,7 +179,10 @@ const Comparison = () => {
               }
               registerRef={noopRegisterRef}
             >
-              <ComparisonMatrix entries={entries} playerNames={playerNames} />
+              <div className="space-y-4">
+                <ComparisonRadar entries={entries} playerNames={playerNames} />
+                <ComparisonMatrix entries={entries} playerNames={playerNames} />
+              </div>
             </SectionShell>
 
             {/* Spara — bara vid ≥2 spelare */}
