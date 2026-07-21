@@ -17,6 +17,7 @@ import { usePersonalityAnalysis } from "@/hooks/use-scout-personality";
 import { useAdvisorReview } from "@/hooks/use-advisor-review";
 import { PlayerHero } from "@/components/PlayerHero";
 import { StatGrid, type StatGridDimension } from "@/components/StatGrid";
+import { DimensionRadar } from "@/components/DimensionRadar";
 import { PersonalityPanel } from "@/components/PersonalityPanel";
 import { AdvisorReviewPanel } from "@/components/AdvisorReviewPanel";
 import { ComparablePlayersPanel } from "@/components/ComparablePlayersPanel";
@@ -530,6 +531,7 @@ const PlayerDetail = () => {
                     viktning Taktisk 22 % / Teknisk 27 % / Fysisk 18 % / Mental 23 % / Social 10 %
                   </span>
                 </div>
+                <DimensionRadar dimensions={effective.dimensions} />
                 <StatGrid dimensions={effective.dimensions} />
               </>
             ) : (
